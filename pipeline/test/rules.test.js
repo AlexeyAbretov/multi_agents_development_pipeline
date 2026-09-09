@@ -33,9 +33,13 @@ import {
   calendarDateInTimeZone,
   daysUntilDue,
   decideReleaseGate,
+  isEmptySincePreviousRelease,
   isMilestoneDueOn,
   isRegressionIssue,
+  nothingToReleaseComment,
+  previousReleaseTag,
   tagFromMilestoneTitle,
+  upsertNothingToReleaseDescription,
 } from "../dist/schedule-rules.js";
 import { uiStatusForJob } from "../dist/types.js";
 
@@ -375,6 +379,28 @@ test("decideReleaseGate calendar rules", () => {
   assert.equal(decideReleaseGate({ ...base, labels: ["regression", "in-qa"] }), "regression-not-passed");
   assert.equal(decideReleaseGate({ ...base, releaseExists: true }), "already-released");
   assert.equal(decideReleaseGate({ ...base, milestoneTitle: "v0.3" }), "bad-title");
+  assert.equal(decideReleaseGate({ ...base, nothingToRelease: true }), "nothing-to-release");
+});
+
+test("empty since previous release", () => {
+  assert.equal(isEmptySincePreviousRelease({ previousTag: null, aheadBy: 0 }), false);
+  assert.equal(isEmptySincePreviousRelease({ previousTag: "v1.0.0", aheadBy: null }), false);
+  assert.equal(isEmptySincePreviousRelease({ previousTag: "v1.0.0", aheadBy: 0 }), true);
+  assert.equal(isEmptySincePreviousRelease({ previousTag: "v1.0.0", aheadBy: 3 }), false);
+  assert.equal(
+    previousReleaseTag(
+      [
+        { tag_name: "v1.1.0", published_at: "2026-09-08T00:00:00Z" },
+        { tag_name: "v1.0.0", published_at: "2026-08-01T00:00:00Z" },
+      ],
+      "v1.1.0",
+    ),
+    "v1.0.0",
+  );
+  const note = nothingToReleaseComment("v1.2.0", "v1.0.0", 7);
+  assert.match(note, /нет новых коммитов/);
+  assert.match(upsertNothingToReleaseDescription("цель", note), /цель/);
+  assert.equal(upsertNothingToReleaseDescription(note, note), note);
 });
 
 test("uiStatusForJob maps release-manager and failures", () => {

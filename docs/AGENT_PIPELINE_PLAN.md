@@ -38,6 +38,7 @@ Merge в `main` — только после явного подтвержден�
 | P12 | `pipeline/12-extract-repo` |
 | P13 | `pipeline/13-parallel-developers` |
 | P14 | `pipeline/14-calendar-releases` |
+| P15 | `pipeline/15-empty-release-skip` |
 
 ## Обзор
 
@@ -57,9 +58,10 @@ P11 Stacked child PR + re-QA + close     ~2ч
 P12 Вынос в отдельный репозиторий        ~3ч
 P13 Параллельный разработчик и QA        ~2ч
 P14 Календарный релиз (milestone, published) ~4ч
+P15 Пустой релиз: закрыть milestone          ~1ч
 UI  Таблица джоб и логи орка              ~3ч  (после P2)
                                         ────
-                                        ~42ч
+                                        ~43ч
 ```
 
 Оценка без отладки биллинга Cursor и без полноценного E2E Ollama.
@@ -382,6 +384,27 @@ Issue → план → PR → issue-QA → merge человеком в `main` �
 - [x] Unit: feature `qa-passed` не стартует RM; `regression` + `qa-passed` даёт RM
 - [x] Unit: title `v0.3` не является release-tag; `v1.2.0` является
 - [x] Unit: `decideReleaseGate` — not-due-today / open-work / duplicate-due
+- [x] `npm test` в `pipeline/` зелёный
+
+---
+
+## P15: Пустой релиз не публиковать
+
+**Ветка:** `pipeline/15-empty-release-skip`
+
+**Цель:** если с прошлого published tag в `main` нет коммитов — не создавать GitHub Release, закрыть milestone с пометкой.
+
+### Шаги
+
+1. Compare GitHub `previousTag...main`; `ahead_by <= 0` → пусто.
+2. Schedule на T−1/T: закрыть milestone (описание + комментарий), не стартовать регресс/RM.
+3. Первый релиз (нет предыдущего tag) не пропускать.
+4. Контракт §4.
+
+### Проверка
+
+- [x] Unit: `isEmptySincePreviousRelease` / `previousReleaseTag`
+- [x] Unit: `decideReleaseGate` → `nothing-to-release`
 - [x] `npm test` в `pipeline/` зелёный
 
 ---

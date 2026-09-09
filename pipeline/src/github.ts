@@ -1,6 +1,7 @@
 import { parseOwnerRepo, type Config } from "./config.js";
 import type { GitHubRelease } from "./deploy-rules.js";
 import { prFixesIssue } from "./rules.js";
+import { isEmptySincePreviousRelease, previousReleaseTag } from "./schedule-rules.js";
 
 export type GitHubMilestoneRef = {
   id: number;
@@ -581,20 +582,93 @@ export class GitHubClient {
     }
   }
 
-  async closeMilestone(milestoneNumber: number): Promise<void> {
+  async closeMilestone(milestoneNumber: number, description?: string): Promise<void> {
     const { owner, repo } = this.repoPath();
+    const payload: { state: "closed"; description?: string } = { state: "closed" };
+    if (description !== undefined) {
+      payload.description = description;
+    }
     const response = await githubFetch(
       `https://api.github.com/repos/${owner}/${repo}/milestones/${milestoneNumber}`,
       {
         method: "PATCH",
         headers: { ...this.headers(), "Content-Type": "application/json" },
-        body: JSON.stringify({ state: "closed" }),
+        body: JSON.stringify(payload),
       },
     );
     if (!response.ok) {
       const text = await response.text();
       throw new Error(`GitHub close milestone ${response.status}: ${text.slice(0, 500)}`);
     }
+  }
+
+  async getMilestone(
+    milestoneNumber: number,
+  ): Promise<{ number: number; title: string; description: string | null; state: string }> {
+    const { owner, repo } = this.repoPath();
+    const response = await githubFetch(
+      `https://api.github.com/repos/${owner}/${repo}/milestones/${milestoneNumber}`,
+      { headers: this.headers() },
+    );
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`GitHub get milestone ${response.status}: ${text.slice(0, 500)}`);
+    }
+    const item = (await response.json()) as {
+      number: number;
+      title: string;
+      description: string | null;
+      state: string;
+    };
+    return {
+      number: item.number,
+      title: item.title,
+      description: item.description,
+      state: item.state,
+    };
+  }
+
+  /**
+   * How many commits `head` is ahead of `base` (tag or branch).
+   * `null` if compare failed (missing ref, network).
+   */
+  async commitsAhead(base: string, head: string): Promise<number | null> {
+    const { owner, repo } = this.repoPath();
+    const spec = `${encodeURIComponent(base)}...${encodeURIComponent(head)}`;
+    const response = await githubFetch(
+      `https://api.github.com/repos/${owner}/${repo}/compare/${spec}`,
+      { headers: this.headers() },
+    );
+    if (response.status === 404) {
+      return null;
+    }
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`GitHub compare ${response.status}: ${text.slice(0, 500)}`);
+    }
+    const item = (await response.json()) as { ahead_by?: number };
+    return typeof item.ahead_by === "number" ? item.ahead_by : null;
+  }
+
+  async detectEmptySincePrevious(
+    currentTag: string,
+    head: string,
+  ): Promise<{ empty: boolean; previousTag: string | null }> {
+    const releases = await this.listPublishedReleases();
+    const previousTag = previousReleaseTag(releases, currentTag);
+    if (!previousTag) {
+      return { empty: false, previousTag: null };
+    }
+    let aheadBy: number | null;
+    try {
+      aheadBy = await this.commitsAhead(previousTag, head);
+    } catch {
+      aheadBy = null;
+    }
+    return {
+      empty: isEmptySincePreviousRelease({ previousTag, aheadBy }),
+      previousTag,
+    };
   }
 
   async listOpenIssuesForMilestone(milestoneNumber: number): Promise<GitHubIssue[]> {

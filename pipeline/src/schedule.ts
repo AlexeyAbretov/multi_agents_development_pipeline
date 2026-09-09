@@ -12,10 +12,12 @@ import {
   duplicateDueComment,
   isRegressionIssue,
   isReleaseWorkIssue,
+  nothingToReleaseComment,
   regressionIssueBody,
   regressionIssueTitle,
   shouldNotifyBlockedNoRelease,
   tagFromMilestoneTitle,
+  upsertNothingToReleaseDescription,
 } from "./schedule-rules.js";
 import { ScheduleStateStore } from "./schedule-state.js";
 
@@ -86,7 +88,13 @@ async function scheduleOnce(
     await notifyDuplicateDue(config, logger, github, state, dueToday);
   }
 
+  const skipped = new Set<number>();
   for (const milestone of [...dueTomorrow, ...dueToday]) {
+    const skippedEmpty = await skipIfEmptyRelease(config, logger, github, milestone);
+    if (skippedEmpty) {
+      skipped.add(milestone.id);
+      continue;
+    }
     await ensureRegressionIssue(logger, github, milestone, dueToday.some((item) => item.id === milestone.id));
   }
 
@@ -95,7 +103,67 @@ async function scheduleOnce(
   }
 
   for (const milestone of dueToday) {
+    if (skipped.has(milestone.id)) {
+      continue;
+    }
     await handleDueToday(config, logger, github, deployStore, requests, state, milestone);
+  }
+}
+
+export async function closeEmptyRelease(
+  github: GitHubClient,
+  logger: FastifyBaseLogger,
+  milestone: { id: number; number: number; title: string },
+  previousTag: string,
+): Promise<void> {
+  const fields = {
+    issue: milestone.number,
+    role: "schedule",
+    agentId: null,
+    runId: null,
+  };
+  const comment = nothingToReleaseComment(milestone.title, previousTag, milestone.id);
+  const issues = await github.listOpenIssuesForMilestone(milestone.number);
+  const target =
+    issues.find((issue) => isRegressionIssue(issue.labels, issue.body)) ?? issues[0] ?? null;
+  if (target) {
+    await github.commentOnIssue(target.number, comment);
+    if (isRegressionIssue(target.labels, target.body)) {
+      await github.closeIssue(target.number);
+    }
+  }
+  const current = await github.getMilestone(milestone.number);
+  await github.closeMilestone(
+    milestone.number,
+    upsertNothingToReleaseDescription(current.description, comment),
+  );
+  jobLog(
+    logger,
+    fields,
+    `closed milestone ${milestone.title}: nothing to release since ${previousTag}`,
+  );
+}
+
+async function skipIfEmptyRelease(
+  config: Config,
+  logger: FastifyBaseLogger,
+  github: GitHubClient,
+  milestone: Milestone,
+): Promise<boolean> {
+  const tag = tagFromMilestoneTitle(milestone.title);
+  if (!tag) {
+    return false;
+  }
+  try {
+    const detected = await github.detectEmptySincePrevious(tag, config.CURSOR_STARTING_REF);
+    if (!detected.empty || !detected.previousTag) {
+      return false;
+    }
+    await closeEmptyRelease(github, logger, milestone, detected.previousTag);
+    return true;
+  } catch (err) {
+    logger.error({ err, milestone: milestone.title }, "empty-release check failed");
+    return false;
   }
 }
 

@@ -35,6 +35,7 @@ import {
 } from "./schedule-rules.js";
 import type { Role } from "./types.js";
 import { inFlightKey, selectJobsToLaunch, UNGATED_ROLES } from "./dispatch.js";
+import { closeEmptyRelease } from "./schedule.js";
 
 export function startPoller(
   config: Config,
@@ -362,15 +363,17 @@ async function applyPublishedRelease(
 }
 
 async function releaseStartGate(
-  config: { SCHEDULE_TZ: string },
+  config: { SCHEDULE_TZ: string; CURSOR_STARTING_REF: string },
   github: GitHubClient,
   issue: GitHubIssue,
-): Promise<{ ok: boolean; reason: string }> {
+): Promise<{ ok: boolean; reason: string; previousTag: string | null }> {
   const milestone = issue.milestone;
   const tag = milestone ? tagFromMilestoneTitle(milestone.title) : null;
   let dueTodayCount = 0;
   let hasOpenWorkItems = false;
   let releaseExists = false;
+  let nothingToRelease = false;
+  let previousTag: string | null = null;
   try {
     const open = await github.listOpenMilestones();
     dueTodayCount = open.filter(
@@ -397,6 +400,15 @@ async function releaseStartGate(
     } catch {
       releaseExists = false;
     }
+    if (!releaseExists) {
+      try {
+        const detected = await github.detectEmptySincePrevious(tag, config.CURSOR_STARTING_REF);
+        nothingToRelease = detected.empty;
+        previousTag = detected.previousTag;
+      } catch {
+        nothingToRelease = false;
+      }
+    }
   }
   const gate = decideReleaseGate({
     labels: issue.labels,
@@ -407,8 +419,9 @@ async function releaseStartGate(
     dueTodayCount,
     hasOpenWorkItems,
     releaseExists,
+    nothingToRelease,
   });
-  return { ok: gate === "ok", reason: gate };
+  return { ok: gate === "ok", reason: gate, previousTag };
 }
 
 async function handleIssue(
@@ -481,6 +494,13 @@ async function handleIssue(
   if (role === "release-manager") {
     const gate = await releaseStartGate(config, github, issue);
     if (!gate.ok) {
+      if (gate.reason === "nothing-to-release" && issue.milestone && gate.previousTag) {
+        try {
+          await closeEmptyRelease(github, logger, issue.milestone, gate.previousTag);
+        } catch (err) {
+          logger.error({ err, issue: issue.number }, "close empty milestone failed");
+        }
+      }
       jobLog(logger, fields, `skip RM: ${gate.reason}`);
       return;
     }

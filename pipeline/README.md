@@ -43,5 +43,6 @@ Volume `pipeline_data` хранит `jobs.json`, `deploys.json`, `deploy-request
 
 - `SCHEDULE_INTERVAL_MS` (по умолчанию 3600000) и `SCHEDULE_TZ` (по умолчанию `Europe/Moscow`) в `pipeline/.env`.
 - Milestone title = tag (`v1.2.0`): due завтра → служебная issue регресса `main`; due сегодня без регресса → hotfix (регресс в тот же день).
+- С прошлого tag в `main` нет коммитов → milestone закрывается с пометкой «нечего релизить», Release не создаётся.
 - Due сегодня, нет published Release и RM не может стартовать → комментарий `blocked: no release`, compose **не** трогаем.
 - Есть tag и ещё не в `deploys.json` → запись в `deploy-requests.json`; deployer выполняет один раз (идемпотентно на нескольких тиках).

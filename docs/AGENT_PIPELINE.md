@@ -123,6 +123,7 @@ Git — **только GitHub** (`origin`). Локальная Gitea не исп
 2. Tag = title milestone, без «следующего patch по догадке».
 3. Тело Release — `PIPELINE_CHANGELOG_*` (merged в `main` с прошлого tag / issues milestone).
 4. Стоп (`needs-human` / skip): title ≠ `vN.N.N`; два due сегодня; регресс не `qa-passed`; открытые `bug`/`feature` в milestone; tag/Release уже есть; CI `main` красный.
+5. С прошлого published Release в `main` нет новых коммитов (`ahead_by = 0`): GitHub Release **не** создаётся. Оркестратор пишет пометку `<!-- pipeline:nothing-to-release:… -->` (описание milestone + комментарий), закрывает milestone и служебную regression-issue. Первый релиз (нет предыдущего tag) не пропускается.
 
 Деплой по-прежнему только от **published** Release (локальный deployer).
 
@@ -140,6 +141,7 @@ Git — **только GitHub** (`origin`). Локальная Gitea не исп
 Деплой: поллинг published GitHub Releases (draft пропускаются). Режим `DEPLOY_MODE=stub` (заглушка) или `compose` (`docker compose -f docker-compose.yml up -d` в checkout продукта, смонтированном через `PRODUCT_WORKSPACE_HOST`). Статус дописывается в тело Release; на open issues отгруженного milestone — `deployed` или `deploy-failed`.
 
 **Schedule:** оркестратор раз в `SCHEDULE_INTERVAL_MS` смотрит open milestones с title `vN.N.N` (календарь `SCHEDULE_TZ`):
+- due завтра / сегодня, в `main` нет коммитов с прошлого tag → закрыть milestone с пометкой «нечего релизить», регресс и RM не стартуют;
 - due завтра → регресс (если ещё нет);
 - due сегодня → hotfix-регресс или ожидание RM;
 - due сегодня, нет published Release и RM не может стартовать (`needs-human` / открытые work-items после регресса) → комментарий `blocked: no release` (без compose).

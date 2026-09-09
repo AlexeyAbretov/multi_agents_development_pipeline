@@ -10,7 +10,7 @@
 
 1. Tag **ровно** равен title milestone (`vN.N.N`). Не придумывай другую версию и не делай «следующий patch».
 2. Changelog на русском: что в `main` с прошлого tag / issues этого milestone (включая исправления).
-3. Если в milestone ещё открыты `bug`/`feature`, регресс не `qa-passed`, CI `main` красный, tag или published Release уже есть — `needs-human`.
+3. Если в milestone ещё открыты `bug`/`feature`, регресс не `qa-passed`, CI `main` красный, tag или published Release уже есть — `needs-human`. Пустой diff с прошлого tag закрывает оркестратор сам (Release не будет).
 
 Не мержи, не деплой, не создавай draft. Published Release, tag и закрытие milestone поставит оркестратор по маркерам.
 

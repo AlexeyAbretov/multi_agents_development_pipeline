@@ -149,7 +149,8 @@ export type ReleaseGate =
   | "duplicate-due"
   | "open-work"
   | "already-released"
-  | "regression-not-passed";
+  | "regression-not-passed"
+  | "nothing-to-release";
 
 export function decideReleaseGate(params: {
   labels: string[];
@@ -160,6 +161,7 @@ export function decideReleaseGate(params: {
   dueTodayCount: number;
   hasOpenWorkItems: boolean;
   releaseExists: boolean;
+  nothingToRelease?: boolean;
   now?: Date;
 }): ReleaseGate {
   if (!isRegressionIssue(params.labels, params.body ?? null)) {
@@ -175,6 +177,9 @@ export function decideReleaseGate(params: {
   if (params.releaseExists) {
     return "already-released";
   }
+  if (params.nothingToRelease) {
+    return "nothing-to-release";
+  }
   if (params.dueTodayCount > 1) {
     return "duplicate-due";
   }
@@ -185,6 +190,65 @@ export function decideReleaseGate(params: {
     return "open-work";
   }
   return "ok";
+}
+
+export function previousReleaseTag(
+  releases: Array<{ tag_name: string; published_at: string | null }>,
+  currentTag: string,
+): string | null {
+  const others = releases
+    .filter((item) => item.tag_name !== currentTag)
+    .sort((a, b) => {
+      const aTime = a.published_at ? Date.parse(a.published_at) : 0;
+      const bTime = b.published_at ? Date.parse(b.published_at) : 0;
+      return bTime - aTime;
+    });
+  return others[0]?.tag_name ?? null;
+}
+
+/** No previous published tag → first release, not empty. Unknown aheadBy → do not skip. */
+export function isEmptySincePreviousRelease(params: {
+  previousTag: string | null;
+  aheadBy: number | null;
+}): boolean {
+  if (!params.previousTag) {
+    return false;
+  }
+  if (params.aheadBy === null) {
+    return false;
+  }
+  return params.aheadBy <= 0;
+}
+
+export function nothingToReleaseMarker(milestoneId: number): string {
+  return `<!-- pipeline:nothing-to-release:${milestoneId} -->`;
+}
+
+export function nothingToReleaseComment(
+  milestoneTitle: string,
+  previousTag: string,
+  milestoneId: number,
+): string {
+  return [
+    nothingToReleaseMarker(milestoneId),
+    `Пайплайн: с прошлого релиза \`${previousTag}\` в \`main\` **нет новых коммитов**.`,
+    `GitHub Release \`${milestoneTitle}\` не создан. Milestone закрыт.`,
+  ].join("\n");
+}
+
+export function upsertNothingToReleaseDescription(
+  existing: string | null,
+  comment: string,
+): string {
+  const markerLine = comment.split("\n")[0] ?? "";
+  if (existing && markerLine && existing.includes(markerLine)) {
+    return existing;
+  }
+  const base = (existing ?? "").trimEnd();
+  if (!base) {
+    return comment;
+  }
+  return `${base}\n\n${comment}`;
 }
 
 /** True when due today and RM cannot run — notify, but not while regression is still in progress. */
