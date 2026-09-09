@@ -4,7 +4,7 @@
 Контракт (роли, labels): [AGENT_PIPELINE.md](./AGENT_PIPELINE.md).  
 Этапы разработки: [AGENT_PIPELINE_PLAN.md](./AGENT_PIPELINE_PLAN.md).
 
-Сейчас из коробки поднимаются **P0–P12 + UI**: оркестратор, deployer, очередь на `http://127.0.0.1:3010/`.
+Сейчас из коробки поднимаются **P0–P13 + UI**: оркестратор, deployer, очередь на `http://127.0.0.1:3010/`.
 
 Checkout **целевого продукта** (каталог, API и т.д.) для оркестратора **не нужен** — Cursor Cloud клонирует его по `CURSOR_REPO_URL`. Для `DEPLOY_MODE=compose` нужен отдельный clone продукта на хосте (`PRODUCT_WORKSPACE_HOST`).
 
@@ -16,8 +16,8 @@ Checkout **целевого продукта** (каталог, API и т.д.) �
 2. На GitHub **целевого продукта** создаёте issue с labels `feature` (или `bug`) **и** `needs-plan`.
 3. В течение ~30 с оркестратор стартует Cursor Cloud: снимает `needs-plan`, ставит `in-analysis`, пишет комментарий с `agentId` / `runId`.
 4. После ответа аналитика: комментарий со статусом, **отдельный комментарий с текстом плана**, снимается `in-analysis`, ставится `ready-for-dev` или `needs-human`.
-5. На `ready-for-dev` стартует разработчик (`in-dev`). После открытого PR `Fixes #N` — `in-qa` (не merge в `main`).
-6. На `in-qa` стартует тестировщик (ревью ветки PR). CI: workflow `.github/workflows/ci.yml` **в репозитории продукта**, job `ci`.
+5. На `ready-for-dev` стартует разработчик (`in-dev`), не дожидаясь окончания других облачных агентов. Несколько `ready-for-dev` идут параллельно. После открытого PR `Fixes #N` — `in-qa` (не merge в `main`).
+6. На `in-qa` стартует тестировщик (ревью ветки PR), не дожидаясь окончания других облачных агентов. Несколько `in-qa` идут параллельно. CI: workflow `.github/workflows/ci.yml` **в репозитории продукта**, job `ci`.
 7. На `qa-passed` стартует релиз-менеджер → draft Release, assignee owner, request review, `ready-for-release`. Publish / merge — после вашей метки `release-approved`, вручную.
 8. После **Publish** Release (не draft) локальный `deployer` пишет статус в тело Release и labels `deployed` / `deploy-failed` (по умолчанию `DEPLOY_MODE=stub`).
 

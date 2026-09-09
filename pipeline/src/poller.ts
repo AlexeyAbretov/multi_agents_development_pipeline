@@ -28,6 +28,7 @@ import {
   upsertFixRoundInBody,
 } from "./rules.js";
 import type { Role } from "./types.js";
+import { inFlightKey, selectJobsToLaunch, UNGATED_ROLES } from "./dispatch.js";
 
 export function startPoller(
   config: Config,
@@ -35,16 +36,17 @@ export function startPoller(
   store: JobStore,
 ): { stop: () => void } {
   const github = new GitHubClient(config);
-  let busy = false;
+  let listing = false;
+  const inFlight = new Set<string>();
 
   const tick = (): void => {
-    if (busy) {
+    if (listing) {
       jobLog(logger, {}, "poll skip: previous tick still running");
       return;
     }
-    busy = true;
-    void pollOnce(config, logger, store, github).finally(() => {
-      busy = false;
+    listing = true;
+    void pollOnce(config, logger, store, github, inFlight).finally(() => {
+      listing = false;
     });
   };
 
@@ -72,6 +74,7 @@ async function pollOnce(
   logger: FastifyBaseLogger,
   store: JobStore,
   github: GitHubClient,
+  inFlight: Set<string>,
 ): Promise<void> {
   jobLog(logger, {}, "poll tick");
 
@@ -114,8 +117,6 @@ async function pollOnce(
   }
 
   const analystIssues = work.filter((item) => item.role === "analyst").map((item) => item.issue);
-  const otherWork = work.filter((item) => item.role !== "analyst");
-
   for (const batch of groupAnalystIssuesByParent(analystIssues)) {
     if (batch.length > 1) {
       jobLog(
@@ -129,13 +130,48 @@ async function pollOnce(
         `parallel analyst dispatch: ${batch.map((issue) => `#${issue.number}`).join(", ")}`,
       );
     }
-    await Promise.all(
-      batch.map((issue) => handleIssue(config, logger, store, github, issue, "analyst")),
+  }
+
+  for (const { issue, role } of work) {
+    if (inFlight.has(inFlightKey(issue.number, role))) {
+      jobLog(
+        logger,
+        { issue: issue.number, role, agentId: null, runId: null },
+        "skip in-flight job",
+      );
+    }
+  }
+
+  const toLaunch = selectJobsToLaunch(work, inFlight);
+  for (const role of UNGATED_ROLES) {
+    const items = toLaunch.filter((item) => item.role === role);
+    if (items.length === 0) {
+      continue;
+    }
+    jobLog(
+      logger,
+      {
+        issue: items[0]?.issue.number ?? null,
+        role,
+        agentId: null,
+        runId: null,
+      },
+      `${role} dispatch (parallel, not gated on other roles): ${items
+        .map((item) => `#${item.issue.number}`)
+        .join(", ")}`,
     );
   }
 
-  for (const { issue, role } of otherWork) {
-    await handleIssue(config, logger, store, github, issue, role);
+  for (const { issue, role } of toLaunch) {
+    const key = inFlightKey(issue.number, role);
+    inFlight.add(key);
+    void handleIssue(config, logger, store, github, issue, role)
+      .catch((err) => {
+        logger.error({ err, issue: issue.number, role }, "pipeline job failed");
+      })
+      .finally(() => {
+        inFlight.delete(key);
+      });
   }
 
   await closeMergedChildBugs(github, logger, issues);

@@ -18,7 +18,7 @@ docker compose up --build -d
 | `deployer` | `127.0.0.1:3021` | Published Release + очередь `deploy-requests.json`; docker.sock |
 | `pipeline-ui` | `127.0.0.1:3010` | Таблица джоб и деплоев (прокси `/api` → orchestrator) |
 
-Health: `/health` на 3020/3021. UI: http://127.0.0.1:3010/
+Health: `/health` на 3020/3021. UI: http://127.0.0.1:3010/ (прокси `/api` → оркестратор; nginx резолвит имя сервиса на каждый запрос, чтобы после recreate оркестратора не было 502).
 
 ## Логи
 
@@ -27,7 +27,7 @@ docker compose logs -f orchestrator
 docker compose logs -f deployer
 ```
 
-Ищите: `poll tick`, `schedule tick`, `deploy poll tick`, `blocked: no tag`, `queued deploy request`.
+Ищите: `poll tick`, `developer dispatch`, `tester dispatch`, `skip in-flight job`, `schedule tick`, `deploy poll tick`, `blocked: no tag`, `queued deploy request`.
 
 ## Остановить полл
 

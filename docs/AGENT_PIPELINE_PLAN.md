@@ -36,6 +36,7 @@ Merge в `main` — только после явного подтвержден�
 | P10 | `pipeline/10-qa-loop-hardening` |
 | P11 | `pipeline/11-stacked-child-prs` |
 | P12 | `pipeline/12-extract-repo` |
+| P13 | `pipeline/13-parallel-developers` |
 
 ## Обзор
 
@@ -53,9 +54,10 @@ P9  Дата релиза (cron) + статусы          ~2ч
 P10 Защита QA-цикла (глубина, RM, Fixes)  ~2ч
 P11 Stacked child PR + re-QA + close     ~2ч
 P12 Вынос в отдельный репозиторий        ~3ч
+P13 Параллельный разработчик и QA        ~2ч
 UI  Таблица джоб и логи орка              ~3ч  (после P2)
                                         ────
-                                        ~36ч
+                                        ~38ч
 ```
 
 Оценка без отладки биллинга Cursor и без полноценного E2E Ollama.
@@ -330,6 +332,29 @@ Issue → план → PR → проверка → draft release → апрув 
 - [x] `npm test` в `pipeline/` зелёный
 - [x] Каталог собирается без `pipeline/` в репозитории
 - [x] `DEPLOY_MODE=compose` + `PRODUCT_WORKSPACE_HOST` → compose **продукта**, не пайплайна
+
+---
+
+## P13: Параллельный разработчик и тестировщик
+
+**Ветка:** `pipeline/13-parallel-developers`
+
+**Цель:** разработчик с `ready-for-dev` и тестировщик с `in-qa` стартуют сразу, не дожидаясь `run.wait()` аналитика, RM или друг друга.
+
+### Шаги
+
+1. Полл-тик не держит lock на время облачного агента: тик только листинг GitHub + старт джоб.
+2. Несколько `ready-for-dev` / `in-qa` — параллельно; разработчик и тестировщик в очереди dispatch раньше аналитика и RM.
+3. In-flight `(issue, role)` + `jobs.json` — второй агент на ту же пару не стартует.
+4. Контракт `AGENT_PIPELINE.md` §3 / §5.
+
+### Проверка
+
+- [x] Unit: `selectJobsToLaunch` — developer при in-flight analyst/tester всё равно в запуске
+- [x] Unit: занятый developer не мешает другому `ready-for-dev`
+- [x] Unit: tester при in-flight analyst/developer всё равно в запуске
+- [x] Unit: занятый tester не мешает другому `in-qa`
+- [x] `npm test` в `pipeline/` зелёный
 
 ---
 
