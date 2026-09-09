@@ -2,14 +2,24 @@ import type { FastifyBaseLogger } from "fastify";
 import type { Config } from "./config.js";
 import { DeployRequestStore } from "./deploy-request-store.js";
 import { DeployStore } from "./deploy-store.js";
-import { GitHubClient } from "./github.js";
+import { GitHubClient, type GitHubIssue } from "./github.js";
 import { jobLog } from "./log.js";
 import {
-  blockedNoTagComment,
-  isMilestoneDueOn,
+  blockedNoReleaseComment,
+  bodyHasBlockedNoReleaseMarker,
+  calendarDateInTimeZone,
+  daysUntilDue,
+  duplicateDueComment,
+  isRegressionIssue,
+  isReleaseWorkIssue,
+  regressionIssueBody,
+  regressionIssueTitle,
+  shouldNotifyBlockedNoRelease,
   tagFromMilestoneTitle,
 } from "./schedule-rules.js";
 import { ScheduleStateStore } from "./schedule-state.js";
+
+type Milestone = { id: number; number: number; title: string; due_on: string | null };
 
 export function startSchedulePoller(
   config: Config,
@@ -56,7 +66,7 @@ async function scheduleOnce(
     return;
   }
 
-  let milestones;
+  let milestones: Milestone[];
   try {
     milestones = await github.listOpenMilestones();
   } catch (err) {
@@ -64,65 +74,134 @@ async function scheduleOnce(
     return;
   }
 
-  const due = milestones.filter((item) => isMilestoneDueOn(item.due_on));
-  if (due.length === 0) {
-    jobLog(logger, {}, "schedule: no milestones due today");
+  const releaseMilestones = milestones.filter((item) => tagFromMilestoneTitle(item.title));
+  const dueToday = releaseMilestones.filter(
+    (item) => daysUntilDue(item.due_on, config.SCHEDULE_TZ) === 0,
+  );
+  const dueTomorrow = releaseMilestones.filter(
+    (item) => daysUntilDue(item.due_on, config.SCHEDULE_TZ) === 1,
+  );
+
+  if (dueToday.length > 1) {
+    await notifyDuplicateDue(config, logger, github, state, dueToday);
+  }
+
+  for (const milestone of [...dueTomorrow, ...dueToday]) {
+    await ensureRegressionIssue(logger, github, milestone, dueToday.some((item) => item.id === milestone.id));
+  }
+
+  if (dueToday.length === 0 && dueTomorrow.length === 0) {
+    jobLog(logger, {}, "schedule: no release milestones due today or tomorrow");
+  }
+
+  for (const milestone of dueToday) {
+    await handleDueToday(config, logger, github, deployStore, requests, state, milestone);
+  }
+}
+
+async function notifyDuplicateDue(
+  config: Config,
+  logger: FastifyBaseLogger,
+  github: GitHubClient,
+  state: ScheduleStateStore,
+  dueToday: Milestone[],
+): Promise<void> {
+  const day = calendarDateInTimeZone(new Date(), config.SCHEDULE_TZ);
+  if (state.wasDuplicateDueNotified(day)) {
+    jobLog(logger, {}, `schedule: duplicate due already notified for ${day}`);
+    return;
+  }
+  const titles = dueToday.map((item) => item.title);
+  const comment = duplicateDueComment(day, titles);
+  try {
+    for (const milestone of dueToday) {
+      const issues = await github.listOpenIssuesForMilestone(milestone.number);
+      const target =
+        issues.find((issue) => isRegressionIssue(issue.labels, issue.body)) ?? issues[0];
+      if (target) {
+        await github.commentOnIssue(target.number, comment);
+      }
+    }
+    state.markDuplicateDueNotified(day);
+    jobLog(logger, {}, `blocked: duplicate due today (${titles.join(", ")}); RM will not start`);
+  } catch (err) {
+    logger.error({ err }, "duplicate-due notify failed");
+  }
+}
+
+async function ensureRegressionIssue(
+  logger: FastifyBaseLogger,
+  github: GitHubClient,
+  milestone: Milestone,
+  hotfix: boolean,
+): Promise<void> {
+  const tag = tagFromMilestoneTitle(milestone.title);
+  if (!tag) {
+    return;
+  }
+  const fields = {
+    issue: milestone.number,
+    role: "schedule",
+    agentId: null,
+    runId: null,
+  };
+  try {
+    const issues = await github.listOpenIssuesForMilestone(milestone.number);
+    const existing = issues.find((issue) => isRegressionIssue(issue.labels, issue.body));
+    if (existing) {
+      jobLog(logger, { ...fields, issue: existing.number }, `regression issue already exists #${existing.number}`);
+      return;
+    }
+    const created = await github.createIssue({
+      title: regressionIssueTitle(tag),
+      body: regressionIssueBody(milestone.id, tag),
+      labels: ["regression", "in-qa"],
+      milestone: milestone.number,
+    });
+    const kind = hotfix ? "hotfix (due today)" : "T−1";
+    await github.commentOnIssue(
+      created.number,
+      `Пайплайн: старт регресса \`main\` (${kind}) перед релизом \`${tag}\`.`,
+    );
+    jobLog(logger, { ...fields, issue: created.number }, `created regression issue #${created.number} (${kind})`);
+  } catch (err) {
+    logger.error({ err, milestone: milestone.title }, "ensure regression issue failed");
+  }
+}
+
+async function handleDueToday(
+  config: Config,
+  logger: FastifyBaseLogger,
+  github: GitHubClient,
+  deployStore: DeployStore,
+  requests: DeployRequestStore,
+  state: ScheduleStateStore,
+  milestone: Milestone,
+): Promise<void> {
+  const fields = {
+    issue: milestone.number,
+    role: "schedule",
+    agentId: null,
+    runId: null,
+  };
+  const tag = tagFromMilestoneTitle(milestone.title);
+  if (!tag) {
     return;
   }
 
-  for (const milestone of due) {
-    const fields = {
-      issue: milestone.number,
-      role: "schedule",
-      agentId: null,
-      runId: null,
-    };
-    const tag = tagFromMilestoneTitle(milestone.title);
-    let hasTag = false;
-    if (tag) {
-      try {
-        hasTag = await github.tagOrReleaseExists(tag);
-      } catch (err) {
-        logger.error({ err, milestone: milestone.title }, "tag check failed");
-        continue;
-      }
-    }
+  let hasTag = false;
+  try {
+    hasTag = await github.tagOrReleaseExists(tag);
+  } catch (err) {
+    logger.error({ err, milestone: milestone.title }, "tag check failed");
+    return;
+  }
 
-    if (!tag || !hasTag) {
-      if (state.wasBlockedNotified(milestone.id)) {
-        jobLog(logger, fields, `blocked: no tag for ${milestone.title} (already notified)`);
-        continue;
-      }
-      try {
-        const issues = await github.listOpenIssuesForMilestone(milestone.number);
-        let commented = 0;
-        for (const issue of issues) {
-          if (issue.labels.includes("deployed")) {
-            continue;
-          }
-          await github.commentOnIssue(
-            issue.number,
-            blockedNoTagComment(milestone.title, milestone.id),
-          );
-          commented += 1;
-        }
-        state.markBlockedNotified(milestone.id);
-        jobLog(
-          logger,
-          fields,
-          `blocked: no tag for milestone ${milestone.title} (${commented} comments); compose not touched`,
-        );
-      } catch (err) {
-        logger.error({ err, milestone: milestone.title }, "blocked-no-tag notify failed");
-      }
-      continue;
-    }
-
+  if (hasTag) {
     if (deployStore.hasTag(tag)) {
       jobLog(logger, fields, `schedule skip: ${tag} already in deploys.json`);
-      continue;
+      return;
     }
-
     const enqueued = requests.enqueue({
       tag,
       milestoneId: milestone.id,
@@ -133,5 +212,54 @@ async function scheduleOnce(
     } else {
       jobLog(logger, fields, `schedule: deploy request for ${tag} already pending/done`);
     }
+    return;
+  }
+
+  let issues: GitHubIssue[];
+  try {
+    issues = await github.listOpenIssuesForMilestone(milestone.number);
+  } catch (err) {
+    logger.error({ err, milestone: milestone.title }, "milestone issues failed");
+    return;
+  }
+
+  const regression = issues.find((issue) => isRegressionIssue(issue.labels, issue.body)) ?? null;
+  const hasOpenWorkItems = issues.some((issue) => isReleaseWorkIssue(issue.labels));
+  if (
+    !shouldNotifyBlockedNoRelease({
+      releaseExists: false,
+      regressionLabels: regression?.labels ?? null,
+      hasOpenWorkItems,
+    })
+  ) {
+    jobLog(logger, fields, `schedule: ${tag} waiting for regression/RM (no published release yet)`);
+    return;
+  }
+
+  if (state.wasBlockedNotified(milestone.id)) {
+    jobLog(logger, fields, `blocked: no release for ${milestone.title} (already notified)`);
+    return;
+  }
+
+  const target = regression ?? issues[0];
+  if (!target) {
+    jobLog(logger, fields, `blocked: no release for ${milestone.title} (no issues to comment)`);
+    state.markBlockedNotified(milestone.id);
+    return;
+  }
+  if (bodyHasBlockedNoReleaseMarker(target.body, milestone.id)) {
+    state.markBlockedNotified(milestone.id);
+    return;
+  }
+  try {
+    await github.commentOnIssue(target.number, blockedNoReleaseComment(milestone.title, milestone.id));
+    state.markBlockedNotified(milestone.id);
+    jobLog(
+      logger,
+      fields,
+      `blocked: no release for milestone ${milestone.title}; compose not touched`,
+    );
+  } catch (err) {
+    logger.error({ err, milestone: milestone.title }, "blocked-no-release notify failed");
   }
 }

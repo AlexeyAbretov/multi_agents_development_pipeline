@@ -5,6 +5,8 @@ const envSchema = z.object({
   POLL_INTERVAL_MS: z.coerce.number().int().positive().default(30_000),
   /** Hourly milestone due check on orchestrator (P9). */
   SCHEDULE_INTERVAL_MS: z.coerce.number().int().positive().default(3_600_000),
+  /** IANA zone for milestone due_on (T−1 / T). */
+  SCHEDULE_TZ: z.string().default("Europe/Moscow"),
   GITHUB_TOKEN: z.string().default(""),
   GITHUB_REPO: z.string().default(""),
   CURSOR_API_KEY: z.string().default(""),

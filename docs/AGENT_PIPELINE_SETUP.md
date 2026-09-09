@@ -17,9 +17,9 @@ Checkout **целевого продукта** (каталог, API и т.д.) �
 3. В течение ~30 с оркестратор стартует Cursor Cloud: снимает `needs-plan`, ставит `in-analysis`, пишет комментарий с `agentId` / `runId`.
 4. После ответа аналитика: комментарий со статусом, **отдельный комментарий с текстом плана**, снимается `in-analysis`, ставится `ready-for-dev` или `needs-human`.
 5. На `ready-for-dev` стартует разработчик (`in-dev`), не дожидаясь окончания других облачных агентов. Несколько `ready-for-dev` идут параллельно. После открытого PR `Fixes #N` — `in-qa` (не merge в `main`).
-6. На `in-qa` стартует тестировщик (ревью ветки PR), не дожидаясь окончания других облачных агентов. Несколько `in-qa` идут параллельно. CI: workflow `.github/workflows/ci.yml` **в репозитории продукта**, job `ci`.
-7. На `qa-passed` стартует релиз-менеджер → draft Release, assignee owner, request review, `ready-for-release`. Publish / merge — после вашей метки `release-approved`, вручную.
-8. После **Publish** Release (не draft) локальный `deployer` пишет статус в тело Release и labels `deployed` / `deploy-failed` (по умолчанию `DEPLOY_MODE=stub`).
+6. На `in-qa` стартует тестировщик (ревью ветки PR), не дожидаясь окончания других облачных агентов. Несколько `in-qa` идут параллельно. CI: workflow `.github/workflows/ci.yml` **в репозитории продукта**, job `ci`. После `qa-passed` merge в `main` делаете **вы**.
+7. Плановый релиз: milestone `vN.N.N` + due. За день — регресс `main`. В due — RM создаёт **published** GitHub Release (не draft). Hotfix: тот же milestone с due сегодня — регресс и Release в один день.
+8. После **published** Release локальный `deployer` пишет статус в тело Release и labels `deployed` / `deploy-failed` на issues milestone (по умолчанию `DEPLOY_MODE=stub`).
 
 Повторный полл ту же пару `(issue, role)` не запускает — состояние в volume `jobs.json`. Деплои — в `deploys.json` того же volume.
 
@@ -69,8 +69,7 @@ Issues → Labels в **репозитории продукта**. Создайт
 | `in-qa` | PR ждёт QA или исправления дефектов |
 | `qa-in-progress` | тестировщик работает |
 | `qa-passed` | QA успешно пройден |
-| `ready-for-release` | RM собрал draft, ждёт апрув |
-| `release-approved` | человек разрешил merge/Publish (ставит вручную) |
+| `regression` | служебная issue регресса `main` |
 | `deployed` | локальный деплой успешен |
 | `deploy-failed` | локальный деплой упал |
 | `needs-human` | стоп автоматики |
@@ -88,7 +87,7 @@ Issues → Labels в **репозитории продукта**. Создайт
 
 1. GitHub (тот же owner, что у **продукта**) → Settings → Developer settings → **Personal access tokens** → Fine-grained.
 2. Resource owner — владелец репо продукта. Repository access — **Only select** → ваш продукт.
-3. Repository permissions: **Issues → Read and write**, **Pull requests → Read and write** (request review), **Contents → Read and write** (draft Releases). Metadata — Read.
+3. Repository permissions: **Issues → Read and write**, **Pull requests → Read and write**, **Contents → Read and write** (published Releases и git tag). Metadata — Read.
 4. Скопируйте значение (`github_pat_...`).
 
 ---
@@ -132,6 +131,7 @@ GITHUB_REPO=owner/your-product-repo
 CURSOR_API_KEY=<секрет ключа Cursor>
 CURSOR_REPO_URL=https://github.com/owner/your-product-repo
 CURSOR_STARTING_REF=main
+SCHEDULE_TZ=Europe/Moscow
 ```
 
 `pipeline/.env` и корневой `.env` в git не коммитить.
@@ -182,7 +182,7 @@ Volume `multi_agents_development_pipeline_pipeline_data` (или `<project>_pipe
 2. Labels: **`feature` или `bug`** + **`needs-plan`**.
 3. Ждите ≤ `POLL_INTERVAL_MS` (по умолчанию 30 с).
 
-Подробнее про цикл QA, RM и deploy — см. прежние разделы контракта [AGENT_PIPELINE.md](./AGENT_PIPELINE.md) §3–§4.
+Подробнее про цикл QA, календарный релиз и deploy — [AGENT_PIPELINE.md](./AGENT_PIPELINE.md) §3–§4.
 
 ---
 

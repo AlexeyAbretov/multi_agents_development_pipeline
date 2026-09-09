@@ -27,7 +27,7 @@ docker compose logs -f orchestrator
 docker compose logs -f deployer
 ```
 
-Ищите: `poll tick`, `developer dispatch`, `tester dispatch`, `skip in-flight job`, `schedule tick`, `deploy poll tick`, `blocked: no tag`, `queued deploy request`.
+Ищите: `poll tick`, `developer dispatch`, `tester dispatch`, `skip in-flight job`, `schedule tick`, `deploy poll tick`, `blocked: no release`, `queued deploy request`.
 
 ## Остановить полл
 
@@ -39,8 +39,9 @@ docker compose down
 
 Volume `pipeline_data` хранит `jobs.json`, `deploys.json`, `deploy-requests.json`, `schedule-state.json` — `down` его не удаляет.
 
-## Schedule (P9)
+## Schedule (P14)
 
-- `SCHEDULE_INTERVAL_MS` (по умолчанию 3600000) в `pipeline/.env`.
-- Milestone **due сегодня**, title = tag (`v0.3`): нет tag → комментарий `blocked: no tag`, compose **не** трогаем.
+- `SCHEDULE_INTERVAL_MS` (по умолчанию 3600000) и `SCHEDULE_TZ` (по умолчанию `Europe/Moscow`) в `pipeline/.env`.
+- Milestone title = tag (`v1.2.0`): due завтра → служебная issue регресса `main`; due сегодня без регресса → hotfix (регресс в тот же день).
+- Due сегодня, нет published Release и RM не может стартовать → комментарий `blocked: no release`, compose **не** трогаем.
 - Есть tag и ещё не в `deploys.json` → запись в `deploy-requests.json`; deployer выполняет один раз (идемпотентно на нескольких тиках).

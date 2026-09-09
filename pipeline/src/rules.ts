@@ -1,22 +1,25 @@
 import type { Role } from "./types.js";
+import { isRegressionIssue } from "./schedule-rules.js";
 
 export type AnalystDecision = "ready-for-dev" | "needs-human";
 export type DeveloperDecision = "in-qa" | "needs-human";
 export type TesterDecision = "in-qa" | "qa-passed" | "needs-human";
-export type ReleaseManagerDecision = "ready-for-release" | "needs-human";
+export type ReleaseManagerDecision = "released" | "needs-human";
 
 export function roleForLabels(labels: string[], body: string | null = null): Role | null {
   if (labels.includes("needs-human") || labels.includes("in-analysis")) {
     return null;
   }
+  const regression = isRegressionIssue(labels, body);
   const hasType = labels.includes("bug") || labels.includes("feature");
-  if (!hasType) {
+  if (!hasType && !regression) {
     return null;
   }
-  if (labels.includes("needs-plan") && !labels.includes("ready-for-dev")) {
+  if (hasType && labels.includes("needs-plan") && !labels.includes("ready-for-dev")) {
     return "analyst";
   }
   if (
+    hasType &&
     labels.includes("ready-for-dev") &&
     !labels.includes("needs-plan") &&
     !labels.includes("in-qa")
@@ -26,20 +29,11 @@ export function roleForLabels(labels: string[], body: string | null = null): Rol
   if (
     labels.includes("in-qa") &&
     !labels.includes("qa-in-progress") &&
-    !labels.includes("qa-passed") &&
-    !labels.includes("ready-for-release")
+    !labels.includes("qa-passed")
   ) {
     return "tester";
   }
-  if (
-    labels.includes("qa-passed") &&
-    !labels.includes("ready-for-release") &&
-    !labels.includes("release-approved")
-  ) {
-    // Дочерний баг (Related to #) не идёт в релиз-менеджер — пакет только у корня.
-    if (parseRelatedParentIssue(body) !== null) {
-      return null;
-    }
+  if (regression && labels.includes("qa-passed")) {
     return "release-manager";
   }
   return null;
@@ -194,15 +188,13 @@ export function decideReleaseManagerOutcome(
   runStatus: "finished" | "error" | "startup_error",
   resultText: string | null,
   tag: string | null,
-  prNumbers: number[] | null,
   changelog: string | null,
+  expectedTag: string | null = null,
 ): ReleaseManagerDecision {
   if (runStatus !== "finished") {
     return "needs-human";
   }
-  const marker = resultText?.match(
-    /^PIPELINE_LABELS:\s*(needs-human|ready-for-release)\s*$/im,
-  );
+  const marker = resultText?.match(/^PIPELINE_LABELS:\s*(needs-human|released)\s*$/im);
   if (!marker) {
     return "needs-human";
   }
@@ -210,8 +202,8 @@ export function decideReleaseManagerOutcome(
   if (requested === "needs-human") {
     return "needs-human";
   }
-  if (tag && prNumbers !== null && changelog) {
-    return "ready-for-release";
+  if (tag && changelog && (!expectedTag || tag === expectedTag)) {
+    return "released";
   }
   return "needs-human";
 }
@@ -350,7 +342,7 @@ export function childBugStillOpen(labels: string[], state: "open" | "closed"): b
   if (state === "closed") {
     return false;
   }
-  if (labels.includes("qa-passed") || labels.includes("ready-for-release") || labels.includes("deployed")) {
+  if (labels.includes("qa-passed") || labels.includes("deployed")) {
     return false;
   }
   if (labels.includes("needs-human")) {

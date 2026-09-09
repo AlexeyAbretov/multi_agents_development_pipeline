@@ -129,7 +129,7 @@ async function processScheduleRequests(
       }
     }
     try {
-      await applyDeployLabels(github, status);
+      await applyDeployLabels(github, status, request.tag);
     } catch (err) {
       logger.error({ err, tag: request.tag }, "schedule deploy labels failed");
     }
@@ -145,19 +145,12 @@ async function processScheduleRequests(
 async function applyDeployLabels(
   github: GitHubClient,
   status: "deployed" | "deploy-failed",
+  tag: string,
 ): Promise<number[]> {
   const labeled: number[] = [];
-  const groups = await Promise.all([
-    github.listOpenIssuesByLabel("release-approved"),
-    github.listOpenIssuesByLabel("ready-for-release"),
-  ]);
-  const byNumber = new Map<number, (typeof groups)[0][0]>();
-  for (const group of groups) {
-    for (const issue of group) {
-      byNumber.set(issue.number, issue);
-    }
-  }
-  for (const issue of byNumber.values()) {
+  const milestone = await github.findMilestoneByTitle(tag);
+  const issues = milestone ? await github.listOpenIssuesForMilestone(milestone.number) : [];
+  for (const issue of issues) {
     if (issue.labels.includes("deployed") || issue.labels.includes("deploy-failed")) {
       continue;
     }
@@ -210,7 +203,7 @@ async function handleRelease(
   }
 
   try {
-    const labeled = await applyDeployLabels(github, status);
+    const labeled = await applyDeployLabels(github, status, release.tag_name);
     jobLog(
       logger,
       fields,

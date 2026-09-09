@@ -13,7 +13,10 @@ export type CursorRunOutcome = {
   resultText: string | null;
 };
 
-function loadPrompt(promptsDir: string, role: Role): string {
+function loadPrompt(promptsDir: string, role: Role, issue: GitHubIssue): string {
+  if (role === "tester" && issue.labels.includes("regression")) {
+    return readFileSync(join(promptsDir, "tester-regression.md"), "utf8");
+  }
   return readFileSync(join(promptsDir, `${role}.md`), "utf8");
 }
 
@@ -33,6 +36,14 @@ function buildMessage(
     "",
     issue.body?.trim() || "(пустое описание)",
   ];
+  if (issue.milestone) {
+    lines.push(
+      "",
+      "## Milestone",
+      `Title (tag): ${issue.milestone.title}`,
+      `Due: ${issue.milestone.due_on ?? "(нет due)"}`,
+    );
+  }
   if (pull) {
     lines.push(
       "",
@@ -84,7 +95,7 @@ export async function runCloudAgent(
     });
 
     agentId = agent.agentId;
-    const run = await agent.send(buildMessage(loadPrompt(config.PROMPTS_DIR, role), issue, pull, role));
+    const run = await agent.send(buildMessage(loadPrompt(config.PROMPTS_DIR, role, issue), issue, pull, role));
     runId = run.id;
     await onStarted({ agentId, runId });
 

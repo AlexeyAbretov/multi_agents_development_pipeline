@@ -2,12 +2,20 @@ import { parseOwnerRepo, type Config } from "./config.js";
 import type { GitHubRelease } from "./deploy-rules.js";
 import { prFixesIssue } from "./rules.js";
 
+export type GitHubMilestoneRef = {
+  id: number;
+  number: number;
+  title: string;
+  due_on: string | null;
+};
+
 export type GitHubIssue = {
   number: number;
   title: string;
   body: string | null;
   html_url: string;
   labels: string[];
+  milestone: GitHubMilestoneRef | null;
 };
 
 export type GitHubPull = {
@@ -26,10 +34,34 @@ type GitHubIssueRaw = {
   html_url: string;
   pull_request?: unknown;
   labels: Array<string | { name: string }>;
+  milestone?: {
+    id: number;
+    number: number;
+    title: string;
+    due_on: string | null;
+  } | null;
 };
 
 function labelNames(labels: GitHubIssueRaw["labels"]): string[] {
   return labels.map((label) => (typeof label === "string" ? label : label.name));
+}
+
+function toGitHubIssue(item: GitHubIssueRaw): GitHubIssue {
+  return {
+    number: item.number,
+    title: item.title,
+    body: item.body,
+    html_url: item.html_url,
+    labels: labelNames(item.labels),
+    milestone: item.milestone
+      ? {
+          id: item.milestone.id,
+          number: item.milestone.number,
+          title: item.milestone.title,
+          due_on: item.milestone.due_on,
+        }
+      : null,
+  };
 }
 
 function isTransientNetworkError(err: unknown): boolean {
@@ -102,13 +134,7 @@ export class GitHubClient {
     const items = (await response.json()) as GitHubIssueRaw[];
     return items
       .filter((item) => !item.pull_request)
-      .map((item) => ({
-        number: item.number,
-        title: item.title,
-        body: item.body,
-        html_url: item.html_url,
-        labels: labelNames(item.labels),
-      }));
+      .map(toGitHubIssue);
   }
 
   async findOpenFixPr(issue: number): Promise<GitHubPull | null> {
@@ -217,11 +243,7 @@ export class GitHubClient {
     }
     const item = (await response.json()) as GitHubIssueRaw & { state: "open" | "closed" };
     return {
-      number: item.number,
-      title: item.title,
-      body: item.body,
-      html_url: item.html_url,
-      labels: labelNames(item.labels),
+      ...toGitHubIssue(item),
       state: item.state,
     };
   }
@@ -358,18 +380,18 @@ export class GitHubClient {
   }
 
   /**
-   * Creates or updates a **draft** release. Never publishes (draft stays true).
-   * Does not create a git tag until a human publishes.
+   * Creates a **published** GitHub Release (creates the git tag). Never draft.
+   * If a published release with this tag already exists, returns it unchanged.
    */
-  async upsertDraftRelease(params: {
+  async createPublishedRelease(params: {
     tag: string;
     name: string;
     body: string;
-  }): Promise<{ id: number; html_url: string }> {
+  }): Promise<{ id: number; html_url: string; created: boolean }> {
     const { owner, repo } = this.repoPath();
     const existing = await this.findReleaseByTag(params.tag);
     if (existing && !existing.draft) {
-      throw new Error(`Release ${params.tag} already published; refusing to modify`);
+      return { id: existing.id, html_url: existing.html_url, created: false };
     }
     if (existing?.draft) {
       const response = await githubFetch(
@@ -381,17 +403,17 @@ export class GitHubClient {
             tag_name: params.tag,
             name: params.name,
             body: params.body,
-            draft: true,
+            draft: false,
             prerelease: false,
           }),
         },
       );
       if (!response.ok) {
         const text = await response.text();
-        throw new Error(`GitHub update draft release ${response.status}: ${text.slice(0, 500)}`);
+        throw new Error(`GitHub publish draft release ${response.status}: ${text.slice(0, 500)}`);
       }
       const item = (await response.json()) as { id: number; html_url: string };
-      return { id: item.id, html_url: item.html_url };
+      return { id: item.id, html_url: item.html_url, created: true };
     }
 
     const response = await githubFetch(
@@ -403,7 +425,7 @@ export class GitHubClient {
           tag_name: params.tag,
           name: params.name,
           body: params.body,
-          draft: true,
+          draft: false,
           prerelease: false,
           generate_release_notes: false,
         }),
@@ -411,10 +433,10 @@ export class GitHubClient {
     );
     if (!response.ok) {
       const text = await response.text();
-      throw new Error(`GitHub create draft release ${response.status}: ${text.slice(0, 500)}`);
+      throw new Error(`GitHub create release ${response.status}: ${text.slice(0, 500)}`);
     }
     const item = (await response.json()) as { id: number; html_url: string };
-    return { id: item.id, html_url: item.html_url };
+    return { id: item.id, html_url: item.html_url, created: true };
   }
 
   /** Non-draft releases (published), including prereleases. Drafts are omitted by this filter. */
@@ -493,6 +515,88 @@ export class GitHubClient {
     }));
   }
 
+  async findMilestoneByTitle(
+    title: string,
+  ): Promise<{ id: number; number: number; title: string; due_on: string | null; state: string } | null> {
+    const { owner, repo } = this.repoPath();
+    const url = new URL(`https://api.github.com/repos/${owner}/${repo}/milestones`);
+    url.searchParams.set("state", "all");
+    url.searchParams.set("per_page", "100");
+    const response = await githubFetch(url, { headers: this.headers() });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`GitHub milestones ${response.status}: ${text.slice(0, 500)}`);
+    }
+    const items = (await response.json()) as Array<{
+      id: number;
+      number: number;
+      title: string;
+      due_on: string | null;
+      state: string;
+    }>;
+    return items.find((item) => item.title === title) ?? null;
+  }
+
+  async createIssue(params: {
+    title: string;
+    body: string;
+    labels: string[];
+    milestone: number;
+  }): Promise<GitHubIssue> {
+    const { owner, repo } = this.repoPath();
+    const response = await githubFetch(
+      `https://api.github.com/repos/${owner}/${repo}/issues`,
+      {
+        method: "POST",
+        headers: { ...this.headers(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: params.title,
+          body: params.body,
+          labels: params.labels,
+          milestone: params.milestone,
+        }),
+      },
+    );
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`GitHub create issue ${response.status}: ${text.slice(0, 500)}`);
+    }
+    const item = (await response.json()) as GitHubIssueRaw;
+    return toGitHubIssue(item);
+  }
+
+  async setIssueMilestone(issue: number, milestone: number): Promise<void> {
+    const { owner, repo } = this.repoPath();
+    const response = await githubFetch(
+      `https://api.github.com/repos/${owner}/${repo}/issues/${issue}`,
+      {
+        method: "PATCH",
+        headers: { ...this.headers(), "Content-Type": "application/json" },
+        body: JSON.stringify({ milestone }),
+      },
+    );
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`GitHub set issue milestone ${response.status}: ${text.slice(0, 500)}`);
+    }
+  }
+
+  async closeMilestone(milestoneNumber: number): Promise<void> {
+    const { owner, repo } = this.repoPath();
+    const response = await githubFetch(
+      `https://api.github.com/repos/${owner}/${repo}/milestones/${milestoneNumber}`,
+      {
+        method: "PATCH",
+        headers: { ...this.headers(), "Content-Type": "application/json" },
+        body: JSON.stringify({ state: "closed" }),
+      },
+    );
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`GitHub close milestone ${response.status}: ${text.slice(0, 500)}`);
+    }
+  }
+
   async listOpenIssuesForMilestone(milestoneNumber: number): Promise<GitHubIssue[]> {
     const { owner, repo } = this.repoPath();
     const url = new URL(`https://api.github.com/repos/${owner}/${repo}/issues`);
@@ -507,13 +611,7 @@ export class GitHubClient {
     const items = (await response.json()) as GitHubIssueRaw[];
     return items
       .filter((item) => !item.pull_request)
-      .map((item) => ({
-        number: item.number,
-        title: item.title,
-        body: item.body,
-        html_url: item.html_url,
-        labels: labelNames(item.labels),
-      }));
+      .map(toGitHubIssue);
   }
 
   /** True if git tag exists or a release (draft/published) uses this tag_name. */

@@ -71,8 +71,6 @@ export function App() {
     };
   }, []);
 
-  const waiting = data?.jobs.filter((job) => job.uiStatus === "waiting-approval") ?? [];
-
   return (
     <div className="mx-auto min-h-screen max-w-6xl px-4 py-10 sm:px-6">
       <header className="mb-10 border-b border-ink-200 pb-8">
@@ -80,8 +78,8 @@ export function App() {
           Пайплайн
         </p>
         <p className="mt-3 max-w-xl text-base text-ink-700">
-          Очередь облачных ролей и деплоев. Апрув релиза — только в GitHub (
-          <code className="text-sm">release-approved</code>), здесь лишь статус.
+          Очередь облачных ролей и деплоев. Релиз публикует релиз-менеджер по milestone
+          (<code className="text-sm">vN.N.N</code>), здесь лишь статус.
         </p>
         <dl className="mt-6 flex flex-wrap gap-x-8 gap-y-2 text-sm text-ink-700">
           <div>
@@ -91,10 +89,6 @@ export function App() {
           <div>
             <dt className="inline text-ink-200">последний полл </dt>
             <dd className="inline font-medium text-ink-900">{formatTime(data?.lastPollAt ?? null)}</dd>
-          </div>
-          <div>
-            <dt className="inline text-ink-200">ожидают апрува </dt>
-            <dd className="inline font-medium text-accent">{waiting.length}</dd>
           </div>
         </dl>
       </header>

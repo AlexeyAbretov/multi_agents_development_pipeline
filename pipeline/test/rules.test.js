@@ -28,9 +28,13 @@ import {
   upsertFixRoundInBody,
 } from "../dist/rules.js";
 import {
-  blockedNoTagComment,
-  bodyHasBlockedNoTagMarker,
+  blockedNoReleaseComment,
+  bodyHasBlockedNoReleaseMarker,
+  calendarDateInTimeZone,
+  daysUntilDue,
+  decideReleaseGate,
   isMilestoneDueOn,
+  isRegressionIssue,
   tagFromMilestoneTitle,
 } from "../dist/schedule-rules.js";
 import { uiStatusForJob } from "../dist/types.js";
@@ -88,7 +92,7 @@ test("tester protocol mismatch needs human", () => {
 test("QA in progress and passed states do not retrigger tester", () => {
   assert.equal(roleForLabels(["bug", "in-qa"]), "tester");
   assert.equal(roleForLabels(["bug", "in-qa", "qa-in-progress"]), null);
-  assert.equal(roleForLabels(["bug", "qa-passed"]), "release-manager");
+  assert.equal(roleForLabels(["bug", "qa-passed"]), null);
 });
 
 test("analyst starts on needs-plan and skips while in-analysis", () => {
@@ -100,59 +104,67 @@ test("analyst starts on needs-plan and skips while in-analysis", () => {
   assert.equal(roleForLabels(["bug", "needs-plan", "needs-human"]), null);
 });
 
-test("release-manager starts on qa-passed only", () => {
-  assert.equal(roleForLabels(["feature", "qa-passed"]), "release-manager");
-  assert.equal(roleForLabels(["feature", "qa-passed", "ready-for-release"]), null);
-  assert.equal(roleForLabels(["feature", "qa-passed", "release-approved"]), null);
-  assert.equal(roleForLabels(["feature", "qa-passed", "needs-human"]), null);
+test("release-manager starts on regression qa-passed only", () => {
+  assert.equal(roleForLabels(["feature", "qa-passed"]), null);
+  assert.equal(roleForLabels(["regression", "qa-passed"]), "release-manager");
+  assert.equal(roleForLabels(["regression", "in-qa"]), "tester");
+  assert.equal(roleForLabels(["regression", "qa-passed", "needs-human"]), null);
 });
 
-test("release-manager does not start on child bugs", () => {
+test("release-manager does not start on feature or child bugs", () => {
   assert.equal(
     roleForLabels(["bug", "qa-passed"], "Related to #14\nfix-round: 1"),
     null,
   );
-  assert.equal(roleForLabels(["bug", "qa-passed"], "корневой баг без родителя"), "release-manager");
-  assert.equal(roleForLabels(["feature", "qa-passed"], null), "release-manager");
+  assert.equal(roleForLabels(["bug", "qa-passed"], "корневой баг без родителя"), null);
+  assert.equal(roleForLabels(["feature", "qa-passed"], null), null);
 });
 
-test("release markers parse tag, PRs and changelog", () => {
+test("release markers parse tag and changelog", () => {
   const text = [
     "Чеклист",
-    "PIPELINE_RELEASE_TAG: 0.3.0",
-    "PIPELINE_PR_NUMBERS: #15, 16,15",
+    "PIPELINE_RELEASE_TAG: 1.2.0",
     "PIPELINE_CHANGELOG_BEGIN",
     "## Что вошло",
     "- stage 1",
     "PIPELINE_CHANGELOG_END",
-    "PIPELINE_LABELS: ready-for-release",
+    "PIPELINE_LABELS: released",
   ].join("\n");
-  assert.equal(releaseTag(text), "v0.3.0");
-  assert.deepEqual(releasePrNumbers(text), [15, 16]);
+  assert.equal(releaseTag(text), "v1.2.0");
+  assert.deepEqual(releasePrNumbers(text), null);
   assert.equal(releaseChangelog(text), "## Что вошло\n- stage 1");
   assert.equal(
-    decideReleaseManagerOutcome("finished", text, "v0.3.0", [15, 16], "## Что вошло\n- stage 1"),
-    "ready-for-release",
+    decideReleaseManagerOutcome("finished", text, "v1.2.0", "## Что вошло\n- stage 1", "v1.2.0"),
+    "released",
   );
 });
 
 test("release-manager protocol mismatch needs human", () => {
   assert.equal(
-    decideReleaseManagerOutcome("finished", "PIPELINE_LABELS: ready-for-release", null, [], "x"),
+    decideReleaseManagerOutcome("finished", "PIPELINE_LABELS: released", null, "x"),
     "needs-human",
   );
   assert.equal(
     decideReleaseManagerOutcome(
       "finished",
-      "PIPELINE_RELEASE_TAG: v1.0.0\nPIPELINE_PR_NUMBERS: none\nPIPELINE_LABELS: ready-for-release",
+      "PIPELINE_RELEASE_TAG: v1.0.0\nPIPELINE_LABELS: released",
       "v1.0.0",
-      [],
       null,
     ),
     "needs-human",
   );
   assert.equal(
-    decideReleaseManagerOutcome("error", "PIPELINE_LABELS: ready-for-release", "v1.0.0", [], "body"),
+    decideReleaseManagerOutcome(
+      "finished",
+      "PIPELINE_RELEASE_TAG: v1.0.0\nPIPELINE_CHANGELOG_BEGIN\nnotes\nPIPELINE_CHANGELOG_END\nPIPELINE_LABELS: released",
+      "v1.0.0",
+      "notes",
+      "v1.2.0",
+    ),
+    "needs-human",
+  );
+  assert.equal(
+    decideReleaseManagerOutcome("error", "PIPELINE_LABELS: released", "v1.0.0", "body"),
     "needs-human",
   );
 });
@@ -328,26 +340,53 @@ test("groupAnalystIssuesByParent batches sibling child bugs", () => {
 });
 
 test("milestone due and tag from title", () => {
-  assert.equal(isMilestoneDueOn("2026-09-08", new Date("2026-09-08T12:00:00Z")), true);
-  assert.equal(isMilestoneDueOn("2026-09-07", new Date("2026-09-08T12:00:00Z")), false);
+  assert.equal(isMilestoneDueOn("2026-09-08", new Date("2026-09-08T12:00:00Z"), "UTC"), true);
+  assert.equal(isMilestoneDueOn("2026-09-07", new Date("2026-09-08T12:00:00Z"), "UTC"), false);
   assert.equal(isMilestoneDueOn(null), false);
-  assert.equal(tagFromMilestoneTitle("v0.3"), "v0.3");
-  assert.equal(tagFromMilestoneTitle("0.3.1"), "v0.3.1");
+  assert.equal(tagFromMilestoneTitle("v0.3"), null);
+  assert.equal(tagFromMilestoneTitle("0.3.1"), null);
+  assert.equal(tagFromMilestoneTitle("v1.2.0"), "v1.2.0");
   assert.equal(tagFromMilestoneTitle("Release party"), null);
-  assert.match(blockedNoTagComment("v0.3", 99), /blocked: no tag/);
-  assert.equal(bodyHasBlockedNoTagMarker(blockedNoTagComment("v0.3", 99), 99), true);
+  assert.match(blockedNoReleaseComment("v1.2.0", 99), /blocked: no release/);
+  assert.equal(bodyHasBlockedNoReleaseMarker(blockedNoReleaseComment("v1.2.0", 99), 99), true);
+  assert.equal(daysUntilDue("2026-09-09T00:00:00Z", "UTC", new Date("2026-09-08T12:00:00Z")), 1);
+  assert.equal(daysUntilDue("2026-09-08T00:00:00Z", "UTC", new Date("2026-09-08T12:00:00Z")), 0);
+  assert.equal(isRegressionIssue(["regression"], null), true);
+  assert.equal(isRegressionIssue(["bug"], "<!-- pipeline:regression:12 -->"), true);
+  assert.equal(calendarDateInTimeZone(new Date("2026-09-08T22:00:00Z"), "Europe/Moscow"), "2026-09-09");
 });
 
-test("uiStatusForJob maps release-manager approval and failures", () => {
+test("decideReleaseGate calendar rules", () => {
+  const base = {
+    labels: ["regression", "qa-passed"],
+    milestoneTitle: "v1.2.0",
+    dueOn: "2026-09-08T00:00:00Z",
+    timeZone: "UTC",
+    dueTodayCount: 1,
+    hasOpenWorkItems: false,
+    releaseExists: false,
+    now: new Date("2026-09-08T12:00:00Z"),
+  };
+  assert.equal(decideReleaseGate(base), "ok");
+  assert.equal(decideReleaseGate({ ...base, dueTodayCount: 2 }), "duplicate-due");
+  assert.equal(decideReleaseGate({ ...base, hasOpenWorkItems: true }), "open-work");
+  assert.equal(decideReleaseGate({ ...base, dueOn: "2026-09-09T00:00:00Z" }), "not-due-today");
+  assert.equal(decideReleaseGate({ ...base, labels: ["feature", "qa-passed"] }), "not-regression");
+  assert.equal(decideReleaseGate({ ...base, labels: ["regression", "in-qa"] }), "regression-not-passed");
+  assert.equal(decideReleaseGate({ ...base, releaseExists: true }), "already-released");
+  assert.equal(decideReleaseGate({ ...base, milestoneTitle: "v0.3" }), "bad-title");
+});
+
+test("uiStatusForJob maps release-manager and failures", () => {
   assert.equal(uiStatusForJob({ status: "queued", decision: null, role: "analyst" }), "queued");
   assert.equal(uiStatusForJob({ status: "running", decision: null, role: "developer" }), "running");
   assert.equal(
     uiStatusForJob({
       status: "finished",
-      decision: "ready-for-release",
+      decision: "released",
       role: "release-manager",
     }),
-    "waiting-approval",
+    "finished",
   );
   assert.equal(
     uiStatusForJob({ status: "finished", decision: "needs-human", role: "tester" }),

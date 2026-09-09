@@ -10,7 +10,7 @@ export type Job = {
   agentId: string | null;
   runId: string | null;
   error: string | null;
-  /** Итог оркестратора: ready-for-dev, in-qa, qa-passed, ready-for-release, needs-human, … */
+  /** Итог оркестратора: ready-for-dev, in-qa, qa-passed, released, needs-human, … */
   decision: string | null;
   createdAt: string;
   updatedAt: string;
@@ -28,12 +28,6 @@ export function uiStatusForJob(job: Pick<Job, "status" | "decision" | "role">): 
   }
   if (job.status === "error" || job.status === "startup_error") {
     return "failed";
-  }
-  if (
-    job.role === "release-manager" &&
-    job.decision === "ready-for-release"
-  ) {
-    return "waiting-approval";
   }
   if (job.decision === "needs-human") {
     return "failed";

@@ -1,7 +1,7 @@
 # План: агентный пайплайн
 
 > Пошаговая реализация процесса: GitHub → облачные агенты → локальный деплой.  
-> Контракт (labels, роли, апрув, UI): [AGENT_PIPELINE.md](./AGENT_PIPELINE.md).
+> Контракт (labels, роли, релиз, UI): [AGENT_PIPELINE.md](./AGENT_PIPELINE.md).
 
 Это **отдельный трек** от MVP каталога. Ветки не пересекаются:
 
@@ -37,6 +37,7 @@ Merge в `main` — только после явного подтвержден�
 | P11 | `pipeline/11-stacked-child-prs` |
 | P12 | `pipeline/12-extract-repo` |
 | P13 | `pipeline/13-parallel-developers` |
+| P14 | `pipeline/14-calendar-releases` |
 
 ## Обзор
 
@@ -55,16 +56,17 @@ P10 Защита QA-цикла (глубина, RM, Fixes)  ~2ч
 P11 Stacked child PR + re-QA + close     ~2ч
 P12 Вынос в отдельный репозиторий        ~3ч
 P13 Параллельный разработчик и QA        ~2ч
+P14 Календарный релиз (milestone, published) ~4ч
 UI  Таблица джоб и логи орка              ~3ч  (после P2)
                                         ────
-                                        ~38ч
+                                        ~42ч
 ```
 
 Оценка без отладки биллинга Cursor и без полноценного E2E Ollama.
 
 ### В scope первой волны
 
-Issue → план → PR → проверка → draft release → апрув человека → tag → локальный `docker compose` каталога. Поллинг GitHub. UI очереди после P2.
+Issue → план → PR → issue-QA → merge человеком в `main` → milestone due → регресс `main` → published Release → локальный `docker compose` каталога. Поллинг GitHub. UI очереди после P2.
 
 ### Вне scope первой волны
 
@@ -358,6 +360,32 @@ Issue → план → PR → проверка → draft release → апрув 
 
 ---
 
+## P14: Календарный релиз
+
+**Ветка:** `pipeline/14-calendar-releases`
+
+**Цель:** RM публикует Release по дате milestone; draft и per-issue RM убрать.
+
+### Шаги
+
+1. Конституция P4/P9 и контракт §3–4.
+2. `tagFromMilestoneTitle` — только `vN.N.N`; календарь `SCHEDULE_TZ`.
+3. Schedule: due завтра / сегодня → regression-issue + tester-regression / RM.
+4. `roleForLabels`: `qa-passed` на bug/feature **не** даёт `release-manager`; RM только с `regression` + `qa-passed` + due сегодня.
+5. Published Release вместо draft; закрытие milestone.
+6. Промпты `release-manager.md`, `tester-regression.md`.
+7. Удалить использование `ready-for-release` / `release-approved`.
+8. Deployer: labels на issues milestone, не на ready-for-release.
+
+### Проверка
+
+- [x] Unit: feature `qa-passed` не стартует RM; `regression` + `qa-passed` даёт RM
+- [x] Unit: title `v0.3` не является release-tag; `v1.2.0` является
+- [x] Unit: `decideReleaseGate` — not-due-today / open-work / duplicate-due
+- [x] `npm test` в `pipeline/` зелёный
+
+---
+
 ## UI: очередь джоб и логи
 
 **Ветка:** `pipeline/ui-jobs`
@@ -368,7 +396,7 @@ Issue → план → PR → проверка → draft release → апрув 
 1. Сервис `pipeline-ui` (React + Vite + TS + Tailwind), порт `127.0.0.1:3010`.
 2. API оркестратора: `GET /api/jobs`, `GET /api/deploys` (данные из volume, не docker logs).
 3. Таблица: issue, роль, UI-статус (`queued` / `running` / `waiting-approval` / `failed` / `finished`), ссылки GitHub и Cursor.
-4. Полный транскрипт — ссылка на Cursor (`agentId`); апрув релиза только в GitHub.
+4. Полный транскрипт — ссылка на Cursor (`agentId`); Publish релиза — RM по milestone, не кнопка в UI.
 5. Compose: `pipeline-ui` + nginx proxy `/api` → orchestrator.
 
 ### Проверка
@@ -398,6 +426,6 @@ P5/P7 полноценно оживают после scaffold каталога (
 ## Backlog пайплайна (не делать без запроса)
 
 - Автоmerge в `main`
-- Telegram/почта при `waiting-approval`
+- Telegram/почта при ошибке релиза / `needs-human`
 - Webhook + туннель вместо поллинга
 - Вынос Ollama в Docker / деплой на VPS

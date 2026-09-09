@@ -20,13 +20,19 @@ import {
   parseRelatedParentIssue,
   shouldCloseMergedChildIssue,
   releaseChangelog,
-  releasePrNumbers,
   releaseTag,
   roleForLabels,
   testerBugIssues,
   upsertChildBugIssuesInBody,
   upsertFixRoundInBody,
 } from "./rules.js";
+import {
+  decideReleaseGate,
+  daysUntilDue,
+  isRegressionIssue,
+  isReleaseWorkIssue,
+  tagFromMilestoneTitle,
+} from "./schedule-rules.js";
 import type { Role } from "./types.js";
 import { inFlightKey, selectJobsToLaunch, UNGATED_ROLES } from "./dispatch.js";
 
@@ -109,7 +115,9 @@ async function pollOnce(
         { issue: issue.number, role: null, agentId: null, runId: null },
         parent && issue.labels.includes("qa-passed")
           ? `skip RM: child bug Related to #${parent}`
-          : "skip: labels do not match a pipeline role trigger",
+          : issue.labels.includes("qa-passed")
+            ? "skip RM: qa-passed is issue-QA, not a calendar release"
+            : "skip: labels do not match a pipeline role trigger",
       );
       continue;
     }
@@ -228,6 +236,13 @@ async function labelTesterBugs(
     await github.removeIssueLabel(issue, "qa-in-progress");
     await github.removeIssueLabel(issue, "qa-passed");
     await github.addIssueLabels(issue, ["bug", "needs-plan"]);
+    if (parent.milestone) {
+      try {
+        await github.setIssueMilestone(issue, parent.milestone.number);
+      } catch {
+        // Milestone on child is best-effort; labels still stand.
+      }
+    }
   }
   const merged = [...new Set([...parseChildBugIssues(parent.body), ...children])];
   await github.updateIssueBody(
@@ -324,25 +339,76 @@ async function retargetChildPullIfNeeded(
   }
 }
 
-async function applyReleasePackage(
+async function applyPublishedRelease(
   github: GitHubClient,
-  issue: number,
+  issue: GitHubIssue,
   tag: string,
-  prNumbers: number[],
   changelog: string,
 ): Promise<string> {
-  const owner = github.releaseOwnerLogin();
-  await github.setIssueAssignees(issue, [owner]);
-  for (const pr of prNumbers) {
-    await github.requestPullReviewers(pr, [owner]);
-  }
-  const release = await github.upsertDraftRelease({
+  const release = await github.createPublishedRelease({
     tag,
     name: tag,
     body: changelog,
   });
-  await github.addIssueLabels(issue, ["ready-for-release"]);
+  if (issue.milestone) {
+    await github.closeMilestone(issue.milestone.number);
+  }
+  await github.commentOnIssue(
+    issue.number,
+    `Пайплайн: published Release ${tag}: ${release.html_url}`,
+  );
+  await github.closeIssue(issue.number);
   return release.html_url;
+}
+
+async function releaseStartGate(
+  config: { SCHEDULE_TZ: string },
+  github: GitHubClient,
+  issue: GitHubIssue,
+): Promise<{ ok: boolean; reason: string }> {
+  const milestone = issue.milestone;
+  const tag = milestone ? tagFromMilestoneTitle(milestone.title) : null;
+  let dueTodayCount = 0;
+  let hasOpenWorkItems = false;
+  let releaseExists = false;
+  try {
+    const open = await github.listOpenMilestones();
+    dueTodayCount = open.filter(
+      (item) =>
+        Boolean(tagFromMilestoneTitle(item.title)) &&
+        daysUntilDue(item.due_on, config.SCHEDULE_TZ) === 0,
+    ).length;
+  } catch {
+    dueTodayCount = 1;
+  }
+  if (milestone) {
+    try {
+      const issues = await github.listOpenIssuesForMilestone(milestone.number);
+      hasOpenWorkItems = issues.some(
+        (item) => item.number !== issue.number && isReleaseWorkIssue(item.labels),
+      );
+    } catch {
+      hasOpenWorkItems = true;
+    }
+  }
+  if (tag) {
+    try {
+      releaseExists = await github.tagOrReleaseExists(tag);
+    } catch {
+      releaseExists = false;
+    }
+  }
+  const gate = decideReleaseGate({
+    labels: issue.labels,
+    body: issue.body,
+    milestoneTitle: milestone?.title ?? null,
+    dueOn: milestone?.due_on ?? null,
+    timeZone: config.SCHEDULE_TZ,
+    dueTodayCount,
+    hasOpenWorkItems,
+    releaseExists,
+  });
+  return { ok: gate === "ok", reason: gate };
 }
 
 async function handleIssue(
@@ -390,7 +456,8 @@ async function handleIssue(
   }
 
   let linkedPull: GitHubPull | undefined;
-  if (role === "tester" || role === "release-manager") {
+  const regression = isRegressionIssue(issue.labels, issue.body);
+  if ((role === "tester" || role === "release-manager") && !regression) {
     try {
       linkedPull = (await github.findOpenFixPr(issue.number)) ?? undefined;
     } catch (err) {
@@ -408,6 +475,13 @@ async function handleIssue(
       } catch (err) {
         logger.error({ err, issue: issue.number }, "tester missing PR labels failed");
       }
+      return;
+    }
+  }
+  if (role === "release-manager") {
+    const gate = await releaseStartGate(config, github, issue);
+    if (!gate.ok) {
+      jobLog(logger, fields, `skip RM: ${gate.reason}`);
       return;
     }
   }
@@ -701,24 +775,18 @@ async function handleIssue(
 
   if (role === "release-manager") {
     const tag = releaseTag(outcome.resultText);
-    const prNumbers = releasePrNumbers(outcome.resultText);
     const changelog = releaseChangelog(outcome.resultText);
+    const expectedTag = issue.milestone ? tagFromMilestoneTitle(issue.milestone.title) : null;
     let releaseDecision = decideReleaseManagerOutcome(
       outcome.status,
       outcome.resultText,
       tag,
-      prNumbers,
       changelog,
+      expectedTag,
     );
-    if (releaseDecision === "ready-for-release" && tag && prNumbers && changelog) {
+    if (releaseDecision === "released" && tag && changelog) {
       try {
-        const releaseUrl = await applyReleasePackage(
-          github,
-          issue.number,
-          tag,
-          prNumbers,
-          changelog,
-        );
+        const releaseUrl = await applyPublishedRelease(github, issue, tag, changelog);
         jobLog(
           logger,
           {
@@ -727,7 +795,7 @@ async function handleIssue(
             agentId: outcome.agentId,
             runId: outcome.runId,
           },
-          `draft release ${tag}: ${releaseUrl}; +ready-for-release`,
+          `published release ${tag}: ${releaseUrl}`,
         );
       } catch (err) {
         releaseDecision = "needs-human";
