@@ -91,6 +91,15 @@ test("QA in progress and passed states do not retrigger tester", () => {
   assert.equal(roleForLabels(["bug", "qa-passed"]), "release-manager");
 });
 
+test("analyst starts on needs-plan and skips while in-analysis", () => {
+  assert.equal(roleForLabels(["bug", "needs-plan"]), "analyst");
+  assert.equal(roleForLabels(["feature", "needs-plan"]), "analyst");
+  assert.equal(roleForLabels(["bug", "in-analysis"]), null);
+  assert.equal(roleForLabels(["bug", "needs-plan", "in-analysis"]), null);
+  assert.equal(roleForLabels(["bug", "ready-for-dev"]), "developer");
+  assert.equal(roleForLabels(["bug", "needs-plan", "needs-human"]), null);
+});
+
 test("release-manager starts on qa-passed only", () => {
   assert.equal(roleForLabels(["feature", "qa-passed"]), "release-manager");
   assert.equal(roleForLabels(["feature", "qa-passed", "ready-for-release"]), null);
@@ -216,6 +225,7 @@ test("child bug markers and open detection", () => {
   const body = upsertChildBugIssuesInBody("parent", [17, 18, 17]);
   assert.deepEqual(parseChildBugIssues(body), [17, 18]);
   assert.equal(childBugStillOpen(["bug", "needs-plan"], "open"), true);
+  assert.equal(childBugStillOpen(["bug", "in-analysis"], "open"), true);
   assert.equal(childBugStillOpen(["bug", "qa-passed"], "open"), false);
   assert.equal(childBugStillOpen(["bug", "in-qa"], "closed"), false);
   assert.equal(childBugStillOpen(["bug", "needs-human"], "open"), false);

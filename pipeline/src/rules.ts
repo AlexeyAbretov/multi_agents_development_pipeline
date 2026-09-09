@@ -6,7 +6,7 @@ export type TesterDecision = "in-qa" | "qa-passed" | "needs-human";
 export type ReleaseManagerDecision = "ready-for-release" | "needs-human";
 
 export function roleForLabels(labels: string[], body: string | null = null): Role | null {
-  if (labels.includes("needs-human")) {
+  if (labels.includes("needs-human") || labels.includes("in-analysis")) {
     return null;
   }
   const hasType = labels.includes("bug") || labels.includes("feature");

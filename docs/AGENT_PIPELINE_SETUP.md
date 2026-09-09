@@ -14,8 +14,8 @@ Checkout **целевого продукта** (каталог, API и т.д.) �
 
 1. Контейнер слушает `http://127.0.0.1:3020/health` → `{"status":"ok"}`.
 2. На GitHub **целевого продукта** создаёте issue с labels `feature` (или `bug`) **и** `needs-plan`.
-3. В течение ~30 с оркестратор стартует Cursor Cloud, пишет комментарий с `agentId` / `runId`.
-4. После ответа аналитика: комментарий со статусом, **отдельный комментарий с текстом плана**, снимается `needs-plan`, ставится `ready-for-dev` или `needs-human`.
+3. В течение ~30 с оркестратор стартует Cursor Cloud: снимает `needs-plan`, ставит `in-analysis`, пишет комментарий с `agentId` / `runId`.
+4. После ответа аналитика: комментарий со статусом, **отдельный комментарий с текстом плана**, снимается `in-analysis`, ставится `ready-for-dev` или `needs-human`.
 5. На `ready-for-dev` стартует разработчик (`in-dev`). После открытого PR `Fixes #N` — `in-qa` (не merge в `main`).
 6. На `in-qa` стартует тестировщик (ревью ветки PR). CI: workflow `.github/workflows/ci.yml` **в репозитории продукта**, job `ci`.
 7. На `qa-passed` стартует релиз-менеджер → draft Release, assignee owner, request review, `ready-for-release`. Publish / merge — после вашей метки `release-approved`, вручную.
@@ -63,6 +63,7 @@ Issues → Labels в **репозитории продукта**. Создайт
 | `bug` | тип |
 | `feature` | тип |
 | `needs-plan` | очередь аналитика |
+| `in-analysis` | аналитик работает |
 | `ready-for-dev` | план принят, очередь разработчика |
 | `in-dev` | разработчик работает |
 | `in-qa` | PR ждёт QA или исправления дефектов |

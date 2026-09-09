@@ -142,6 +142,16 @@ async function pollOnce(
   await store.setLastPollAt(pollStartedAt);
 }
 
+async function applyAnalystLabels(
+  github: GitHubClient,
+  issue: number,
+  decision: "ready-for-dev" | "needs-human",
+): Promise<void> {
+  await github.removeIssueLabel(issue, "in-analysis");
+  await github.removeIssueLabel(issue, "needs-plan");
+  await github.addIssueLabels(issue, [decision]);
+}
+
 async function applyDeveloperLabels(
   github: GitHubClient,
   issue: number,
@@ -175,6 +185,7 @@ async function labelTesterBugs(
   for (const issue of children) {
     // Новый круг плана: сбросить джобы и state-метки, только bug + needs-plan.
     await store.removeRoles(issue, ["analyst", "developer", "tester", "release-manager"]);
+    await github.removeIssueLabel(issue, "in-analysis");
     await github.removeIssueLabel(issue, "ready-for-dev");
     await github.removeIssueLabel(issue, "in-dev");
     await github.removeIssueLabel(issue, "in-qa");
@@ -426,6 +437,25 @@ async function handleIssue(
   }
 
   await store.update(job.id, { status: "running" });
+  if (role === "analyst") {
+    try {
+      await github.removeIssueLabel(issue.number, "needs-plan");
+      await github.addIssueLabels(issue.number, ["in-analysis"]);
+      jobLog(logger, fields, "labels: -needs-plan +in-analysis");
+    } catch (err) {
+      await store.update(job.id, {
+        status: "startup_error",
+        error: "failed to set in-analysis",
+      });
+      logger.error({ err, issue: issue.number }, "github analyst labels failed");
+      try {
+        await applyAnalystLabels(github, issue.number, "needs-human");
+      } catch (labelErr) {
+        logger.error({ err: labelErr, issue: issue.number }, "github fallback labels failed");
+      }
+      return;
+    }
+  }
   if (role === "developer") {
     const nextRound = (parseFixRound(issue.body) ?? 0) + 1;
     try {
@@ -516,10 +546,10 @@ async function handleIssue(
 
   let decision: string | null = null;
   if (role === "analyst") {
-    decision = decideAnalystOutcome(outcome.status, outcome.resultText);
+    const analystDecision = decideAnalystOutcome(outcome.status, outcome.resultText);
+    decision = analystDecision;
     try {
-      await github.removeIssueLabel(issue.number, "needs-plan");
-      await github.addIssueLabels(issue.number, [decision]);
+      await applyAnalystLabels(github, issue.number, analystDecision);
       jobLog(
         logger,
         {
@@ -528,7 +558,7 @@ async function handleIssue(
           agentId: outcome.agentId,
           runId: outcome.runId,
         },
-        `labels: -needs-plan +${decision}`,
+        `labels: -in-analysis +${decision}`,
       );
     } catch (err) {
       logger.error({ err, issue: issue.number }, "github labels failed");

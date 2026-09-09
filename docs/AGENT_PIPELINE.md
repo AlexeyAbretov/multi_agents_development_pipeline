@@ -52,6 +52,7 @@ Git — **только GitHub** (`origin`). Локальная Gitea не исп
 | Label | Смысл |
 |-------|--------|
 | `needs-plan` | Ждёт аналитика |
+| `in-analysis` | Аналитик работает |
 | `ready-for-dev` | План есть, можно кодить |
 | `in-dev` | Разработчик работает |
 | `in-qa` | Есть PR, ждёт QA или исправления найденных дефектов |
@@ -65,7 +66,7 @@ Git — **только GitHub** (`origin`). Локальная Gitea не исп
 
 **Milestone** = версия (`v0.3`) + due date (дата релиза).
 
-Старт аналитика: labels `bug` или `feature` **и** `needs-plan`. После прогона оркестратор снимает `needs-plan` и ставит `ready-for-dev` или `needs-human` (по маркеру `PIPELINE_LABELS:` в ответе агента или при ошибке Cursor).
+Старт аналитика: labels `bug` или `feature` **и** `needs-plan`. Перед запуском: `needs-plan` → `in-analysis`. После прогона оркестратор снимает `in-analysis` и ставит `ready-for-dev` или `needs-human` (по маркеру `PIPELINE_LABELS:` в ответе агента или при ошибке Cursor).
 
 Старт разработчика: `bug` или `feature` **и** `ready-for-dev`, нет открытого PR `Fixes #N` (или ветки `issue/<n>-…`). При старте оркестратор ставит `in-dev`. Дочерний баг (`Related to #N`): `startingRef` = head открытого PR родителя; после PR оркестратор сменяет base на эту ветку, если Cursor открыл PR в `main`. После PR: снимает `ready-for-dev` и `in-dev`, ставит `in-qa`. Если агент упал или PR нет — `needs-human`. Если PR уже открыт, агент не стартует, только метка `in-qa` (base всё равно поправляется).
 
