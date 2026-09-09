@@ -1,5 +1,6 @@
 # Запуск агентного пайплайна с нуля
 
+Конституция: [CONSTITUTION.md](./CONSTITUTION.md).  
 Контракт (роли, labels): [AGENT_PIPELINE.md](./AGENT_PIPELINE.md).  
 Этапы разработки: [AGENT_PIPELINE_PLAN.md](./AGENT_PIPELINE_PLAN.md).
 

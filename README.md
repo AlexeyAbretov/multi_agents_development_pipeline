@@ -23,6 +23,7 @@ UI очереди: http://127.0.0.1:3010/
 
 | Файл | Содержание |
 |------|------------|
+| [docs/CONSTITUTION.md](docs/CONSTITUTION.md) | Конституция (принципы, git-workflow, запреты) |
 | [docs/AGENT_PIPELINE.md](docs/AGENT_PIPELINE.md) | Контракт (labels, роли, апрув) |
 | [docs/AGENT_PIPELINE_SETUP.md](docs/AGENT_PIPELINE_SETUP.md) | Запуск с нуля |
 | [docs/AGENT_PIPELINE_PLAN.md](docs/AGENT_PIPELINE_PLAN.md) | Этапы `pipeline/N-…` |

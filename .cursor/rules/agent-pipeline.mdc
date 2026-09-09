@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Агентный пайплайн (репозиторий оркестратора)
 
-Контракт: `docs/AGENT_PIPELINE.md`. Запуск: `docs/AGENT_PIPELINE_SETUP.md`. Этапы: `docs/AGENT_PIPELINE_PLAN.md`.
+Конституция: `docs/CONSTITUTION.md`. Контракт: `docs/AGENT_PIPELINE.md`. Запуск: `docs/AGENT_PIPELINE_SETUP.md`. Этапы: `docs/AGENT_PIPELINE_PLAN.md`.
 
 ## Независимость от продукта
 
