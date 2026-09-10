@@ -47,3 +47,19 @@ Volume `pipeline_data` хранит `jobs.json`, `deploys.json`, `deploy-request
 - С прошлого tag в `main` нет коммитов → milestone закрывается с пометкой «нечего релизить», Release не создаётся.
 - Due сегодня, нет published Release и RM не может стартовать → комментарий `blocked: no release`, compose **не** трогаем.
 - Есть tag и ещё не в `deploys.json` → запись в `deploy-requests.json`; deployer выполняет один раз (идемпотентно на нескольких тиках).
+
+## Локальный запуск (без Docker)
+
+Нужен Node ≥ 22. Не держите одновременно контейнер `orchestrator` и локальный процесс на `:3020`.
+
+```powershell
+cd pipeline
+copy .env.local.example .env.local   # DATA_DIR=./data, PROMPTS_DIR=./prompts
+npm ci
+npm run build
+npm start
+```
+
+VSCode: Run and Debug → **Orchestrator** (`tsx` + `.env.local`). `npm run dev` `.env.local` не читает.
+
+Подробнее: [`docs/AGENT_PIPELINE_SETUP.md`](../docs/AGENT_PIPELINE_SETUP.md) §10.

@@ -28,7 +28,7 @@ UI очереди: http://127.0.0.1:3010/
 | [docs/AGENT_PIPELINE_ARCHITECTURE.md](docs/AGENT_PIPELINE_ARCHITECTURE.md) | Статусная модель, файлы `pipeline/src`, расширение |
 | [docs/AGENT_PIPELINE_SETUP.md](docs/AGENT_PIPELINE_SETUP.md) | Запуск с нуля |
 | [docs/AGENT_PIPELINE_PLAN.md](docs/AGENT_PIPELINE_PLAN.md) | Этапы `pipeline/N-…` |
-| [pipeline/README.md](pipeline/README.md) | Логи, stop полла, schedule |
+| [pipeline/README.md](pipeline/README.md) | Логи, stop полла, schedule, локальный npm |
 | [AGENTS.md](AGENTS.md) | Команды для AI-агента |
 
 ## Тесты
@@ -36,3 +36,5 @@ UI очереди: http://127.0.0.1:3010/
 ```bash
 cd pipeline && npm ci && npm run build && npm test
 ```
+
+Локальный оркестратор без Docker: скопируйте `pipeline/.env.local.example` → `pipeline/.env.local`, затем `npm start` или VSCode **Orchestrator**. См. [SETUP §10](docs/AGENT_PIPELINE_SETUP.md).

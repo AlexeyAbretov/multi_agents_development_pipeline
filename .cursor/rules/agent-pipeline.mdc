@@ -22,5 +22,5 @@ alwaysApply: true
 
 - Merge в `main` без апрува человека
 - Деплой с облачной VM
-- Коммитить секреты (`.env`, `pipeline/.env`)
+- Коммитить секреты (`.env`, `.env.local`, `pipeline/.env`, `pipeline/.env.local`)
 - Hardcode URL конкретного продукта в коде (только плейсхолдеры в `.env.example`)

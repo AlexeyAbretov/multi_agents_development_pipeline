@@ -9,6 +9,7 @@ build/
 .env
 .env.local
 pipeline/.env
+pipeline/.env.local
 pipeline/data/
 
 # Logs

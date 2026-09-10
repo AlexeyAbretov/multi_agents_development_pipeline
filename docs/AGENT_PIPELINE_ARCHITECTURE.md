@@ -149,6 +149,7 @@ queued → running → finished | error | startup_error
 | **@cursor/sdk** | Cloud Agent: `Agent.create({ cloud: { repos } })`. Local runtime запрещён конституцией (P1). |
 | **Node ≥ 22** | Встроенный `fetch` к GitHub API, ESM, `await using` для агента. |
 | **tsx / typescript** | Dev-watch и сборка в `dist/`. Тесты: `node --test` по скомпилированному JS. |
+| **tsc-alias** | После `tsc` переписывает алиасы (`@routes`) в относительные импорты в `dist/`. Без этого `node dist/index.js` в Docker не резолвит `@routes`. Сборка: `npm run clean && tsc && tsc-alias`. |
 
 Чего нет намеренно:
 
@@ -181,7 +182,8 @@ React + Vite + Tailwind. UI только читает `GET /api/jobs` и `/api/d
 index.ts                    deployer.ts
   │ config, JobStore          │ config, DeployStore
   │ Fastify /health           │ Fastify /health
-  ├─ api.ts ── jobs + deploys │
+  ├─ routes/ (@routes)        │
+  │    jobs + deploys         │
   ├─ poller.ts                ├── GitHubClient, runCloudAgent
   │    ├─ rules.ts            │
   │    ├─ dispatch.ts         │
@@ -204,7 +206,8 @@ index.ts                    deployer.ts
 | `pipeline/src/cursor.ts` | Промпт + issue/PR, `Agent.create` cloud, `run.wait()`. `tester-regression.md` если label `regression`. |
 | `pipeline/src/github.ts` | REST GitHub: issues, labels, PR `Fixes #`, releases, milestones. |
 | `pipeline/src/jobs.ts` | `jobs.json`, идемпотентность, сброс ролей, drop после рестарта. |
-| `pipeline/src/api.ts` | Чтение сторов для UI. |
+| `pipeline/src/routes/routes.ts` | HTTP `GET /api/jobs`, `/api/deploys` для UI. |
+| `pipeline/src/routes/index.ts` | Реэкспорт; алиас `@routes` в `tsconfig.json` (`paths`). |
 | `pipeline/src/log.ts` | Структурные поля `issue` / `role` / `agentId` / `runId`. |
 | `pipeline/src/schedule.ts` | Тик `SCHEDULE_INTERVAL_MS`: T−1/T, regression-issue, `blocked: no release`, очередь деплоя. |
 | `pipeline/src/schedule-state.ts` | Не спамить одинаковыми комментариями каждый час. |
@@ -216,6 +219,7 @@ index.ts                    deployer.ts
 | `pipeline/src/deploy-request-store.ts` | `deploy-requests.json` (очередь от schedule). |
 | `pipeline/prompts/*.md` | Контракт с агентом: что писать в маркерах. |
 | `pipeline/test/rules.test.js`, `dispatch.test.js` | Правила без GitHub/Cursor. |
+| `.vscode/launch.json` | Отладка оркестратора: `tsx` + `pipeline/.env.local`. |
 
 Поток одного feature-тика:
 
@@ -226,6 +230,24 @@ index.ts                    deployer.ts
 5. UI читает джоб; GitHub показывает labels.
 
 Листинг полла **не** включает все labels контракта. Trigger-label, которого нет в `listOpenIssuesByLabel`, тик не увидит.
+
+### 3.1. Сборка и локальный запуск
+
+Прод: `docker compose up` из корня (см. [SETUP](./AGENT_PIPELINE_SETUP.md)). Контейнер оркестратора: `node dist/index.js`, env из `pipeline/.env`, `DATA_DIR=/data`, `PROMPTS_DIR=/app/prompts`.
+
+Локально (без Docker), из `pipeline/`:
+
+| Способ | Что делает |
+|--------|------------|
+| VSCode **Run and Debug → Orchestrator** | `tsx` + `.env.local` (собирать `dist/` не нужно) |
+| `npm start` | `node --use-env-proxy --env-file=.env.local dist/index.js` (нужен `npm run build`) |
+| `npm run dev` | `tsx watch` **без** `.env.local` — переменные только из окружения процесса |
+
+`--use-env-proxy` читает `HTTP_PROXY` / `HTTPS_PROXY` (корпоративный прокси). Не поднимайте локальный оркестратор на `:3020`, пока тот же порт занят контейнером.
+
+`.env.local`: `DATA_DIR=./data`, `PROMPTS_DIR=./prompts` (docker-пути `/data` и `/app/prompts` на хосте не существуют). Файл в git не коммитить; шаблон — `pipeline/.env.local.example`.
+
+Новый TS-алиас: `compilerOptions.paths` в `pipeline/tsconfig.json` + импорт + сборка обязана остаться `tsc && tsc-alias`.
 
 ---
 
@@ -279,10 +301,15 @@ index.ts                    deployer.ts
 
 Новый режим — enum `DEPLOY_MODE` в zod + ветка в `deploy-run.ts`. Идемпотентность: `deploys.json` + HTML-маркер в теле Release. Labels `deployed`/`deploy-failed` трогает только deployer.
 
-### 4.6. Новый внешний пакет
+### 4.6. Новый HTTP-маршрут UI
+
+Регистрация только в `registerApiRoutes` (`pipeline/src/routes/routes.ts`). Оркестратор подключает её через алиас `@routes` в `index.ts`. Не возвращать секреты и полный транскрипт Cursor — в UI достаточно ссылки на `agentId`.
+
+### 4.7. Новый внешний пакет
 
 Только если текущего слоя не хватает:
 
 - GitHub: сначала метод в `GitHubClient`, не Octokit «заодно»
 - Очередь/БД: сейчас файлы + `synchronized()`; менять, если появятся два писателя на один JSON без этой цепочки
 - Webhook вместо полла — смена конституции P3
+- Новый TS-алиас — только вместе с `tsc-alias` (см. §3.1)

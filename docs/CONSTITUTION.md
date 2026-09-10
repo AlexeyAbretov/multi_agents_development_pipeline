@@ -20,8 +20,8 @@
 
 | Переменная | Где | Зачем |
 |------------|-----|--------|
-| `GITHUB_REPO` | `pipeline/.env` | Issues / PR / Releases продукта |
-| `CURSOR_REPO_URL` | `pipeline/.env` | Что клонирует Cursor Cloud |
+| `GITHUB_REPO` | `pipeline/.env` (Docker) или `pipeline/.env.local` | Issues / PR / Releases продукта |
+| `CURSOR_REPO_URL` | `pipeline/.env` (Docker) или `pipeline/.env.local` | Что клонирует Cursor Cloud |
 | `PRODUCT_WORKSPACE_HOST` | корневой `.env` | Checkout продукта для `deployer` |
 
 ---
@@ -56,7 +56,7 @@
 
 ### P5. Секреты не в git
 
-Не коммитить `.env`, `pipeline/.env`, токены, ключи. В репозитории только `.env.example` с плейсхолдерами.
+Не коммитить `.env`, `.env.local`, `pipeline/.env`, `pipeline/.env.local`, токены, ключи. В репозитории только `.env.example` / `.env.local.example` с плейсхолдерами.
 
 ### P6. docker.sock только у deployer
 
@@ -106,7 +106,7 @@
 |-------|------------|
 | Оркестратор / deployer | Node ≥ 22, TypeScript, Fastify, Zod, `@cursor/sdk` (явно `cloud`) |
 | UI | React, Vite, TypeScript, Tailwind; порт `127.0.0.1:3010` |
-| Прогон | Docker Compose из корня; `orchestrator` `:3020`, `deployer` `:3021` |
+| Прогон | Docker Compose из корня; `orchestrator` `:3020`, `deployer` `:3021`. Локально: `pipeline/.env.local`, VSCode **Orchestrator** |
 | Язык | Промпты, комментарии GitHub, коммиты — **русский**. Код — TypeScript |
 
 Порты оркестратора и UI не смешивать с портами продукта. Ollama не входит в compose пайплайна.

@@ -410,6 +410,18 @@ Issue → план → PR → issue-QA → merge человеком в `main` �
 
 ---
 
+## Локальная отладка оркестратора
+
+Не отдельный этап плана. После P15 в репозитории:
+
+- `.vscode/launch.json` — конфигурация **Orchestrator** (`tsx` + `pipeline/.env.local`)
+- `npm start` — `node --use-env-proxy --env-file=.env.local dist/index.js`
+- HTTP API вынесен в `pipeline/src/routes/` (алиас `@routes`, сборка через `tsc-alias`)
+
+Запуск: [AGENT_PIPELINE_SETUP.md](./AGENT_PIPELINE_SETUP.md) §10. Карта файлов: [AGENT_PIPELINE_ARCHITECTURE.md](./AGENT_PIPELINE_ARCHITECTURE.md) §3.1.
+
+---
+
 ## UI: очередь джоб и логи
 
 **Ветка:** `pipeline/ui-jobs`

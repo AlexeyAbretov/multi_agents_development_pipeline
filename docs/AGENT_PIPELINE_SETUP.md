@@ -5,7 +5,7 @@
 Архитектура кода: [AGENT_PIPELINE_ARCHITECTURE.md](./AGENT_PIPELINE_ARCHITECTURE.md).  
 Этапы разработки: [AGENT_PIPELINE_PLAN.md](./AGENT_PIPELINE_PLAN.md).
 
-Сейчас из коробки поднимаются **P0–P13 + UI**: оркестратор, deployer, очередь на `http://127.0.0.1:3010/`.
+Сейчас из коробки поднимаются **P0–P15 + UI**: оркестратор, deployer, очередь на `http://127.0.0.1:3010/`. Локальная отладка оркестратора (VSCode / `npm start`) — §10.
 
 Checkout **целевого продукта** (каталог, API и т.д.) для оркестратора **не нужен** — Cursor Cloud клонирует его по `CURSOR_REPO_URL`. Для `DEPLOY_MODE=compose` нужен отдельный clone продукта на хосте (`PRODUCT_WORKSPACE_HOST`).
 
@@ -29,6 +29,7 @@ Checkout **целевого продукта** (каталог, API и т.д.) �
 ## 0. Требования
 
 - Docker Desktop (Windows) или Docker Engine + Compose v2.
+- Для локальной отладки оркестратора без Docker — **Node ≥ 22** (§10).
 - Репозиторий **целевого продукта** на **вашем** GitHub (owner), не только collaborator. Cloud Agents видят репо через GitHub App владельца.
 - Аккаунт Cursor, у которого в Cloud Agents в **Default Repository** виден репозиторий продукта.
 - Регион, где Cursor Cloud Agents разрешены (иначе `Cursor is not available in your region`).
@@ -116,6 +117,8 @@ Issues → Labels в **репозитории продукта**. Создайт
 ```powershell
 copy .env.example .env
 copy pipeline\.env.example pipeline\.env
+# локально без Docker:
+copy pipeline\.env.local.example pipeline\.env.local
 ```
 
 Корневой `.env` (для compose):
@@ -135,7 +138,9 @@ CURSOR_STARTING_REF=main
 SCHEDULE_TZ=Europe/Moscow
 ```
 
-`pipeline/.env` и корневой `.env` в git не коммитить.
+`pipeline/.env`, `pipeline/.env.local` и корневой `.env` в git не коммитить.
+
+Для **локального** запуска (не Docker) скопируйте `pipeline/.env.local.example` → `pipeline/.env.local` и поставьте хостовые пути (`DATA_DIR=./data`, `PROMPTS_DIR=./prompts`). Подробнее — §10.
 
 ---
 
@@ -207,11 +212,38 @@ docker compose up -d
 
 | Симптом | Что делать |
 |---------|------------|
-| `poll skip: GITHUB_TOKEN or GITHUB_REPO empty` | Ключи в **`pipeline/.env`**; `--force-recreate` |
+| `poll skip: GITHUB_TOKEN or GITHUB_REPO empty` | Ключи в **`pipeline/.env`** (Docker) или **`pipeline/.env.local`** (локально); Docker: `--force-recreate` |
 | `set PRODUCT_WORKSPACE_HOST in .env` | Создайте корневой `.env` из `.env.example` |
 | compose failed: no such file | `PRODUCT_WORKSPACE_HOST` указывает на clone продукта с `docker-compose.yml` |
+| `ENOENT` / `DATA_DIR` `/data` при `npm start` | В `.env.local` нужны хостовые пути: `DATA_DIR=./data`, `PROMPTS_DIR=./prompts` |
+| `EADDRINUSE` `:3020` | Остановите контейнер `orchestrator` или не запускайте локально параллельно с compose |
 | `Cursor is not available in your region` | Cloud Agents недоступны; оркестратор тут ни при чём |
+| GitHub/Cursor `ECONNREFUSED` / timeout за прокси | `HTTP_PROXY`/`HTTPS_PROXY` в `.env.local`; `npm start` уже передаёт `--use-env-proxy` |
 
 Кратко про логи и stop: [pipeline/README.md](../pipeline/README.md). UI: `http://127.0.0.1:3010/`.
 
 Промпты ролей: `pipeline/prompts/`.
+
+---
+
+## 10. Локальный запуск оркестратора (без Docker)
+
+Нужен **Node ≥ 22**. Docker-compose при этом можно не поднимать (или остановить `orchestrator`, чтобы не занять `:3020`).
+
+```powershell
+cd pipeline
+copy .env.local.example .env.local
+# Заполните GITHUB_TOKEN, GITHUB_REPO, CURSOR_API_KEY (как в §5).
+# DATA_DIR=./data и PROMPTS_DIR=./prompts уже в шаблоне.
+npm ci
+npm run build
+npm start
+```
+
+Отладка в VSCode: конфигурация **Orchestrator** (`.vscode/launch.json`) — `tsx` + `pipeline/.env.local`, без предварительного `npm run build`.
+
+`npm run dev` (`tsx watch`) **не** читает `.env.local`. Для отладки используйте F5 или `npm start`.
+
+`--use-env-proxy` в `npm start` включает системный/файловый `HTTP_PROXY` / `HTTPS_PROXY`. Deployer локально: `npm run start:deployer` (порт по умолчанию тоже `3020`, задайте `PORT=3021` в окружении).
+
+Каталог `pipeline/data/` в git не коммитится. Карта файлов и алиасы: [AGENT_PIPELINE_ARCHITECTURE.md](./AGENT_PIPELINE_ARCHITECTURE.md) §3.1.

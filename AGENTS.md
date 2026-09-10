@@ -13,7 +13,7 @@
 | [docs/AGENT_PIPELINE_ARCHITECTURE.md](docs/AGENT_PIPELINE_ARCHITECTURE.md) | Статусная модель, код, точки расширения |
 | [docs/AGENT_PIPELINE_PLAN.md](docs/AGENT_PIPELINE_PLAN.md) | Этапы `pipeline/N-…` |
 | [docs/AGENT_PIPELINE_SETUP.md](docs/AGENT_PIPELINE_SETUP.md) | Запуск оркестратора |
-| [pipeline/README.md](pipeline/README.md) | Логи, UI :3010 |
+| [pipeline/README.md](pipeline/README.md) | Логи, UI :3010, локальный npm |
 | [.cursor/rules/](.cursor/rules/) | Правила для Cursor |
 
 ## Git-workflow
@@ -34,4 +34,6 @@ docker compose logs -f orchestrator
 docker compose down
 ```
 
-Целевой продукт настраивается в `pipeline/.env` (`GITHUB_REPO`, `CURSOR_REPO_URL`). Для деплоя — `PRODUCT_WORKSPACE_HOST` в корневом `.env`.
+Локально без Docker (оркестратор): `copy pipeline\.env.local.example pipeline\.env.local` → заполнить секреты → `cd pipeline && npm ci && npm start`. Отладка: VSCode **Orchestrator**. Подробнее: [docs/AGENT_PIPELINE_SETUP.md](docs/AGENT_PIPELINE_SETUP.md) §10.
+
+Целевой продукт настраивается в `pipeline/.env` или `pipeline/.env.local` (`GITHUB_REPO`, `CURSOR_REPO_URL`). Для деплоя — `PRODUCT_WORKSPACE_HOST` в корневом `.env`.
