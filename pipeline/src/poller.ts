@@ -34,7 +34,7 @@ import {
   tagFromMilestoneTitle,
 } from "./schedule-rules.js";
 import type { Role } from "./types.js";
-import { inFlightKey, selectJobsToLaunch, UNGATED_ROLES } from "./dispatch.js";
+import { inFlightKey, selectJobsToLaunch } from "./dispatch.js";
 import { closeEmptyRelease } from "./schedule.js";
 
 export function startPoller(
@@ -152,22 +152,22 @@ async function pollOnce(
   }
 
   const toLaunch = selectJobsToLaunch(work, inFlight);
-  for (const role of UNGATED_ROLES) {
-    const items = toLaunch.filter((item) => item.role === role);
-    if (items.length === 0) {
-      continue;
-    }
+  const launchedByRole = new Map<Role, number[]>();
+  for (const { issue, role } of toLaunch) {
+    const numbers = launchedByRole.get(role) ?? [];
+    numbers.push(issue.number);
+    launchedByRole.set(role, numbers);
+  }
+  for (const [role, numbers] of launchedByRole) {
     jobLog(
       logger,
       {
-        issue: items[0]?.issue.number ?? null,
+        issue: numbers[0] ?? null,
         role,
         agentId: null,
         runId: null,
       },
-      `${role} dispatch (parallel, not gated on other roles): ${items
-        .map((item) => `#${item.issue.number}`)
-        .join(", ")}`,
+      `${role} dispatch (parallel): ${numbers.map((number) => `#${number}`).join(", ")}`,
     );
   }
 

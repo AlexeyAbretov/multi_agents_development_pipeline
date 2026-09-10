@@ -22,7 +22,7 @@ Checkout **целевого продукта** (каталог, API и т.д.) �
 7. Плановый релиз: milestone `vN.N.N` + due. За день — регресс `main`. В due — RM создаёт **published** GitHub Release (не draft). Hotfix: тот же milestone с due сегодня — регресс и Release в один день.
 8. После **published** Release локальный `deployer` пишет статус в тело Release и labels `deployed` / `deploy-failed` на issues milestone (по умолчанию `DEPLOY_MODE=stub`).
 
-Повторный полл ту же пару `(issue, role)` не запускает — состояние в volume `jobs.json`. Деплои — в `deploys.json` того же volume.
+Повторный полл ту же пару `(issue, role)` не запускает — состояние в volume `jobs.json`. Деплои — в `deploys.json` того же volume. В одном poll-тике eligible задачи всех ролей стартуют параллельно и не ждут друг друга.
 
 ---
 

@@ -199,7 +199,7 @@ index.ts                    deployer.ts
 | `pipeline/src/types.ts` | `Role`, `Job`, `JobStatus`, проекция в UI-статус. |
 | `pipeline/src/rules.ts` | Статусная модель issue: роль по labels, исход прогона, fix-round, дерево QA, маркеры ответа. |
 | `pipeline/src/schedule-rules.ts` | Календарь milestone, tag `vN.N.N`, gate RM, пустой релиз, маркеры в комментариях. |
-| `pipeline/src/dispatch.ts` | Порядок ролей в тике (dev/tester раньше analyst/RM), in-flight `(issue, role)`. |
+| `pipeline/src/dispatch.ts` | Eligible пары `(issue, role)` в тике; роли не гейтят друг друга; skip только in-flight. |
 | `pipeline/src/poller.ts` | Тик `POLL_INTERVAL_MS`: список issues → роль → гейты → Cursor → смена labels. |
 | `pipeline/src/cursor.ts` | Промпт + issue/PR, `Agent.create` cloud, `run.wait()`. `tester-regression.md` если label `regression`. |
 | `pipeline/src/github.ts` | REST GitHub: issues, labels, PR `Fixes #`, releases, milestones. |
@@ -258,12 +258,12 @@ index.ts                    deployer.ts
 Пример: отдельный ревьюер.
 
 1. Тип `Role` в `types.ts`.
-2. `ROLE_DISPATCH_ORDER` и при необходимости `UNGATED_ROLES` в `dispatch.ts` (параллельный старт vs ждать других).
+2. `selectJobsToLaunch` в `dispatch.ts` — новая роль стартует в том же тике, что и остальные (роли не гейтят друг друга).
 3. Ветка в `roleForLabels` — уникальный набор labels.
 4. Промпт `pipeline/prompts/<role>.md` — `cursor.ts` грузит `${role}.md` (исключение только `tester` + label `regression` → `tester-regression.md`).
 5. В `handleIssue`: pre-labels, гейты, `decide*Outcome`, `apply*Labels`, комментарии.
 6. Если роль должна повторяться — `store.remove` по событию (как tester после детей).
-7. Тесты dispatch: новая роль не должна блокировать/блокироваться вопреки задумке.
+7. Тесты dispatch: новая роль стартует вместе с остальными; skip только in-flight `(issue, role)`.
 
 Роль без нового trigger-label не заведётся: полл выбирает работу **только** через labels.
 

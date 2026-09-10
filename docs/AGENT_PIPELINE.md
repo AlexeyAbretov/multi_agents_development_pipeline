@@ -78,7 +78,7 @@ Git — **только GitHub** (`origin`). Локальная Gitea не исп
 
 Два open milestone с due сегодня и валидным title → `needs-human`, RM не стартует.
 
-Старт аналитика: labels `bug` или `feature` **и** `needs-plan`. Перед запуском: `needs-plan` → `in-analysis`. После прогона оркестратор снимает `in-analysis` и ставит `ready-for-dev` или `needs-human` (по маркеру `PIPELINE_LABELS:` в ответе агента или при ошибке Cursor).
+Старт аналитика: labels `bug` или `feature` **и** `needs-plan`. Перед запуском: `needs-plan` → `in-analysis`. Несколько таких issue стартуют **параллельно** и не ждут окончания других ролей. После прогона оркестратор снимает `in-analysis` и ставит `ready-for-dev` или `needs-human` (по маркеру `PIPELINE_LABELS:` в ответе агента или при ошибке Cursor).
 
 Старт разработчика: `bug` или `feature` **и** `ready-for-dev`, нет открытого PR `Fixes #N` (или ветки `issue/<n>-…`). При старте оркестратор ставит `in-dev`. Несколько таких issue стартуют **параллельно** и не ждут окончания других ролей. Дочерний баг (`Related to #N`): `startingRef` = head открытого PR родителя; после PR оркестратор сменяет base на эту ветку, если Cursor открыл PR в `main`. После PR: снимает `ready-for-dev` и `in-dev`, ставит `in-qa`. Если агент упал или PR нет — `needs-human`. Если PR уже открыт, агент не стартует, только метка `in-qa` (base всё равно поправляется).
 
@@ -134,7 +134,7 @@ Git — **только GitHub** (`origin`). Локальная Gitea не исп
 - Связь с GitHub: **поллинг** (без входящего webhook и без туннеля).
 - Опционально позже: self-hosted GitHub Actions runner только для деплоя.
 - Секреты оркестратора в `pipeline/.env`, не в git: `GITHUB_TOKEN` (лучше раздельные read vs release), `CURSOR_API_KEY`. Каталог — корневой `.env` (Mongo, Ollama).
-- Идемпотентность: одно активное облачное задание на пару `(issue, role)`. Регресс и RM — на служебной regression-issue, не на feature/bug. При старте оркестратора джобы `running`/`queued` из прошлого процесса удаляются (агент после recreate контейнера уже мёртв). Полл **не** ждёт завершения Cursor `run.wait()`: тик только находит работу и стартует агентов. Несколько пар могут быть `running` одновременно. **Разработчик** на `ready-for-dev` и **тестировщик** на `in-qa` стартуют сразу — не дожидаются аналитика, RM или друг друга на другой issue. Повторный тик ту же пару не дублирует (`jobs.json` + in-flight).
+- Идемпотентность: одно активное облачное задание на пару `(issue, role)`. Регресс и RM — на служебной regression-issue, не на feature/bug. При старте оркестратора джобы `running`/`queued` из прошлого процесса удаляются (агент после recreate контейнера уже мёртв). Полл **не** ждёт завершения Cursor `run.wait()`: тик только находит работу и стартует агентов. Несколько пар могут быть `running` одновременно. Все eligible роли (analyst, developer, tester, RM) стартуют в одном тике **параллельно** и не гейтят друг друга. Повторный тик ту же пару не дублирует (`jobs.json` + in-flight). Гейты самой issue (PR, fix-round, дети, календарь RM) остаются.
 - В записи джоба обязательно: `cursorAgentId`, `cursorRunId`, URL issue/PR, статус, timestamps.
 
 Контейнер оркестратора **не** монтирует docker.sock. Сокет только у `deployer` (`docker-compose.yml` в репозитории пайплайна, health `http://127.0.0.1:3021/health`).

@@ -1,22 +1,27 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  inFlightKey,
-  orderWorkForDispatch,
-  selectJobsToLaunch,
-} from "../dist/dispatch.js";
+import { inFlightKey, selectJobsToLaunch } from "../dist/dispatch.js";
 
-test("orderWorkForDispatch puts developers and testers before other roles", () => {
-  const ordered = orderWorkForDispatch([
-    { issue: { number: 1 }, role: "analyst" },
-    { issue: { number: 2 }, role: "tester" },
-    { issue: { number: 3 }, role: "developer" },
-    { issue: { number: 4 }, role: "release-manager" },
-    { issue: { number: 5 }, role: "developer" },
-  ]);
+test("selectJobsToLaunch starts every eligible role in the same tick", () => {
+  const launched = selectJobsToLaunch(
+    [
+      { issue: { number: 1 }, role: "analyst" },
+      { issue: { number: 2 }, role: "tester" },
+      { issue: { number: 3 }, role: "developer" },
+      { issue: { number: 4 }, role: "release-manager" },
+      { issue: { number: 5 }, role: "developer" },
+    ],
+    new Set(),
+  );
   assert.deepEqual(
-    ordered.map((item) => `${item.role}:${item.issue.number}`),
-    ["developer:3", "developer:5", "tester:2", "analyst:1", "release-manager:4"],
+    launched.map((item) => `${item.role}:${item.issue.number}`),
+    [
+      "analyst:1",
+      "tester:2",
+      "developer:3",
+      "release-manager:4",
+      "developer:5",
+    ],
   );
 });
 

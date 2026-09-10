@@ -349,13 +349,13 @@ Issue → план → PR → issue-QA → merge человеком в `main` �
 ### Шаги
 
 1. Полл-тик не держит lock на время облачного агента: тик только листинг GitHub + старт джоб.
-2. Несколько `ready-for-dev` / `in-qa` — параллельно; разработчик и тестировщик в очереди dispatch раньше аналитика и RM.
+2. Несколько eligible issue любых ролей — параллельно в одном тике; роли друг друга не гейтят (порядок в очереди dispatch не важен).
 3. In-flight `(issue, role)` + `jobs.json` — второй агент на ту же пару не стартует.
 4. Контракт `AGENT_PIPELINE.md` §3 / §5.
 
 ### Проверка
 
-- [x] Unit: `selectJobsToLaunch` — developer при in-flight analyst/tester всё равно в запуске
+- [x] Unit: `selectJobsToLaunch` — все eligible роли в одном тике, skip только in-flight `(issue, role)`
 - [x] Unit: занятый developer не мешает другому `ready-for-dev`
 - [x] Unit: tester при in-flight analyst/developer всё равно в запуске
 - [x] Unit: занятый tester не мешает другому `in-qa`
