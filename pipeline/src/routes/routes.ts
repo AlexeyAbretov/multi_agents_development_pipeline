@@ -1,9 +1,9 @@
 import type { FastifyInstance } from "fastify";
-import type { Config } from "./config.js";
-import { DeployRequestStore } from "./deploy-request-store.js";
-import { DeployStore } from "./deploy-store.js";
-import type { JobStore } from "./jobs.js";
-import { uiStatusForJob } from "./types.js";
+import type { Config } from "../config.js";
+import { DeployRequestStore } from "../deploy-request-store.js";
+import { DeployStore } from "../deploy-store.js";
+import type { JobStore } from "../jobs.js";
+import { uiStatusForJob } from "../types.js";
 
 export function registerApiRoutes(
   app: FastifyInstance,

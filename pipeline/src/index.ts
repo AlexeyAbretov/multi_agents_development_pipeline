@@ -1,5 +1,5 @@
 import Fastify from "fastify";
-import { registerApiRoutes } from "./api.js";
+import { registerApiRoutes } from "@routes";
 import { loadConfig } from "./config.js";
 import { JobStore } from "./jobs.js";
 import { startPoller } from "./poller.js";
