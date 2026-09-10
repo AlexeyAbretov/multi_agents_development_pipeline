@@ -1,6 +1,7 @@
 # Пайплайн: оркестратор и deployer
 
 Контракт: [`docs/AGENT_PIPELINE.md`](../docs/AGENT_PIPELINE.md).  
+Архитектура (`pipeline/src`, статусы, расширение): [`docs/AGENT_PIPELINE_ARCHITECTURE.md`](../docs/AGENT_PIPELINE_ARCHITECTURE.md).  
 Запуск с нуля: [`docs/AGENT_PIPELINE_SETUP.md`](../docs/AGENT_PIPELINE_SETUP.md).
 
 ## Сервисы

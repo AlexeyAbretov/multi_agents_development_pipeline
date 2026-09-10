@@ -121,6 +121,7 @@
 |----------|------|
 | Этот файл | Принципы; меняет только человек |
 | [AGENT_PIPELINE.md](./AGENT_PIPELINE.md) | Контракт процесса; агенты не переписывают без `needs-human` |
+| [AGENT_PIPELINE_ARCHITECTURE.md](./AGENT_PIPELINE_ARCHITECTURE.md) | Код оркестратора: статусы, файлы, как расширять |
 | [AGENT_PIPELINE_PLAN.md](./AGENT_PIPELINE_PLAN.md) | Чеклист этапов `pipeline/N-…` |
 | [AGENT_PIPELINE_SETUP.md](./AGENT_PIPELINE_SETUP.md) | Запуск с нуля |
 | [AGENTS.md](../AGENTS.md) | Команды для агента, работающего **в этом** репо |

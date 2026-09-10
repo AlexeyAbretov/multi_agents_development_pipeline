@@ -2,6 +2,7 @@
 
 Конституция: [CONSTITUTION.md](./CONSTITUTION.md).  
 Контракт (роли, labels): [AGENT_PIPELINE.md](./AGENT_PIPELINE.md).  
+Архитектура кода: [AGENT_PIPELINE_ARCHITECTURE.md](./AGENT_PIPELINE_ARCHITECTURE.md).  
 Этапы разработки: [AGENT_PIPELINE_PLAN.md](./AGENT_PIPELINE_PLAN.md).
 
 Сейчас из коробки поднимаются **P0–P13 + UI**: оркестратор, deployer, очередь на `http://127.0.0.1:3010/`.

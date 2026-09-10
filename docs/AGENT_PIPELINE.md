@@ -5,7 +5,8 @@
 
 Полный план этапов: [AGENT_PIPELINE_PLAN.md](./AGENT_PIPELINE_PLAN.md).  
 Запуск с нуля: [AGENT_PIPELINE_SETUP.md](./AGENT_PIPELINE_SETUP.md).  
-Конституция: [CONSTITUTION.md](./CONSTITUTION.md).
+Конституция: [CONSTITUTION.md](./CONSTITUTION.md).  
+Архитектура кода (статусы, файлы, расширение): [AGENT_PIPELINE_ARCHITECTURE.md](./AGENT_PIPELINE_ARCHITECTURE.md).
 
 ## 1. Целевая схема
 
@@ -129,7 +130,7 @@ Git — **только GitHub** (`origin`). Локальная Gitea не исп
 
 ## 5. Оркестратор
 
-- Каталог кода: репозиторий [`multi_agents_development_pipeline`](https://github.com/AlexeyAbretov/multi_agents_development_pipeline) — сервис `pipeline/` (Fastify + TypeScript), compose **отдельный** от продукта.
+- Каталог кода: репозиторий [`multi_agents_development_pipeline`](https://github.com/AlexeyAbretov/multi_agents_development_pipeline) — сервис `pipeline/` (Fastify + TypeScript), compose **отдельный** от продукта. Карта файлов и статусная модель: [AGENT_PIPELINE_ARCHITECTURE.md](./AGENT_PIPELINE_ARCHITECTURE.md).
 - Связь с GitHub: **поллинг** (без входящего webhook и без туннеля).
 - Опционально позже: self-hosted GitHub Actions runner только для деплоя.
 - Секреты оркестратора в `pipeline/.env`, не в git: `GITHUB_TOKEN` (лучше раздельные read vs release), `CURSOR_API_KEY`. Каталог — корневой `.env` (Mongo, Ollama).

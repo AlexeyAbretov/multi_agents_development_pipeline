@@ -1,7 +1,8 @@
 # План: агентный пайплайн
 
 > Пошаговая реализация процесса: GitHub → облачные агенты → локальный деплой.  
-> Контракт (labels, роли, релиз, UI): [AGENT_PIPELINE.md](./AGENT_PIPELINE.md).
+> Контракт (labels, роли, релиз, UI): [AGENT_PIPELINE.md](./AGENT_PIPELINE.md).  
+> Архитектура кода: [AGENT_PIPELINE_ARCHITECTURE.md](./AGENT_PIPELINE_ARCHITECTURE.md).
 
 Это **отдельный трек** от MVP каталога. Ветки не пересекаются:
 

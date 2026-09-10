@@ -10,6 +10,7 @@
 |------|------------|
 | [docs/CONSTITUTION.md](docs/CONSTITUTION.md) | Конституция (принципы, запреты) |
 | [docs/AGENT_PIPELINE.md](docs/AGENT_PIPELINE.md) | Контракт пайплайна |
+| [docs/AGENT_PIPELINE_ARCHITECTURE.md](docs/AGENT_PIPELINE_ARCHITECTURE.md) | Статусная модель, код, точки расширения |
 | [docs/AGENT_PIPELINE_PLAN.md](docs/AGENT_PIPELINE_PLAN.md) | Этапы `pipeline/N-…` |
 | [docs/AGENT_PIPELINE_SETUP.md](docs/AGENT_PIPELINE_SETUP.md) | Запуск оркестратора |
 | [pipeline/README.md](pipeline/README.md) | Логи, UI :3010 |
