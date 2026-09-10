@@ -17,7 +17,7 @@ Checkout **целевого продукта** (каталог, API и т.д.) �
 2. На GitHub **целевого продукта** создаёте issue с labels `feature` (или `bug`) **и** `needs-plan`.
 3. В течение ~30 с оркестратор стартует Cursor Cloud: снимает `needs-plan`, ставит `in-analysis`, пишет комментарий с `agentId` / `runId`.
 4. После ответа аналитика: комментарий со статусом, **отдельный комментарий с текстом плана**, снимается `in-analysis`, ставится `ready-for-dev` или `needs-human`.
-5. На `ready-for-dev` стартует разработчик (`in-dev`), не дожидаясь окончания других облачных агентов. Несколько `ready-for-dev` идут параллельно. После открытого PR `Fixes #N` — `in-qa` (не merge в `main`).
+5. На `ready-for-dev` стартует разработчик: снимается `ready-for-dev`, ставится `in-dev`, не дожидаясь окончания других облачных агентов. Несколько очередей разработчика идут параллельно. После открытого PR `Fixes #N` — `in-qa` (не merge в `main`).
 6. На `in-qa` стартует тестировщик (ревью ветки PR), не дожидаясь окончания других облачных агентов. Несколько `in-qa` идут параллельно. CI: workflow `.github/workflows/ci.yml` **в репозитории продукта**, job `ci`. После `qa-passed` merge в `main` делаете **вы**.
 7. Плановый релиз: milestone `vN.N.N` + due. За день — регресс `main`. В due — RM создаёт **published** GitHub Release (не draft). Hotfix: тот же milestone с due сегодня — регресс и Release в один день.
 8. После **published** Release локальный `deployer` пишет статус в тело Release и labels `deployed` / `deploy-failed` на issues milestone (по умолчанию `DEPLOY_MODE=stub`).

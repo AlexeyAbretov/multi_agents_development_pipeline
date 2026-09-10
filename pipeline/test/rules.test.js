@@ -105,6 +105,8 @@ test("analyst starts on needs-plan and skips while in-analysis", () => {
   assert.equal(roleForLabels(["bug", "in-analysis"]), null);
   assert.equal(roleForLabels(["bug", "needs-plan", "in-analysis"]), null);
   assert.equal(roleForLabels(["bug", "ready-for-dev"]), "developer");
+  assert.equal(roleForLabels(["bug", "in-dev"]), null);
+  assert.equal(roleForLabels(["bug", "ready-for-dev", "in-dev"]), null);
   assert.equal(roleForLabels(["bug", "needs-plan", "needs-human"]), null);
 });
 

@@ -38,7 +38,7 @@ GitHub labels          Job.status / Job.decision          UI (таблица :30
 
 `needs-human` — стоп-кран: `roleForLabels` возвращает `null`, никакая роль не стартует.
 
-Промежуточные `in-analysis`, `in-dev`, `qa-in-progress` — замки «агент работает». Пока они висят, та же роль повторно не выбирается (`in-analysis` режет все роли; `qa-in-progress` режет tester).
+Промежуточные `in-analysis`, `in-dev`, `qa-in-progress` — замки «агент работает». Пока они висят, та же роль повторно не выбирается (`in-analysis` режет все роли; `in-dev` режет developer; `qa-in-progress` режет tester). При старте разработчика оркестратор снимает `ready-for-dev` и ставит `in-dev` (как аналитик: `needs-plan` → `in-analysis`).
 
 `deployed` / `deploy-failed` ставит **deployer**, не оркестратор ролей. `roleForLabels` их не читает.
 

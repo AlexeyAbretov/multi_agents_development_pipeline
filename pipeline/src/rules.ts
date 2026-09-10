@@ -22,6 +22,7 @@ export function roleForLabels(labels: string[], body: string | null = null): Rol
     hasType &&
     labels.includes("ready-for-dev") &&
     !labels.includes("needs-plan") &&
+    !labels.includes("in-dev") &&
     !labels.includes("in-qa")
   ) {
     return "developer";

@@ -604,10 +604,21 @@ async function handleIssue(
       return;
     }
     try {
+      await github.removeIssueLabel(issue.number, "ready-for-dev");
       await github.addIssueLabels(issue.number, ["in-dev"]);
-      jobLog(logger, fields, "labels: +in-dev");
+      jobLog(logger, fields, "labels: -ready-for-dev +in-dev");
     } catch (err) {
-      logger.error({ err, issue: issue.number }, "github labels failed");
+      await store.update(job.id, {
+        status: "startup_error",
+        error: "failed to set in-dev",
+      });
+      logger.error({ err, issue: issue.number }, "github developer labels failed");
+      try {
+        await applyDeveloperLabels(github, issue.number, "needs-human");
+      } catch (labelErr) {
+        logger.error({ err: labelErr, issue: issue.number }, "github fallback labels failed");
+      }
+      return;
     }
   }
   if (role === "tester") {
@@ -714,7 +725,7 @@ async function handleIssue(
           agentId: outcome.agentId,
           runId: outcome.runId,
         },
-        `labels: -ready-for-dev -in-dev +${decision}`,
+        `labels: -in-dev +${decision}`,
       );
     } catch (err) {
       logger.error({ err, issue: issue.number }, "github labels failed");

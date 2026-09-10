@@ -167,7 +167,7 @@ Issue → план → PR → issue-QA → merge человеком в `main` �
 
 1. Триггер: `ready-for-dev`, нет открытого PR `Fixes #N`.
 2. Ветка `issue/<n>-short`, `autoCreatePR` или PR руками агента.
-3. Labels: `in-dev` → после PR `in-qa`.
+3. Labels: снять `ready-for-dev`, поставить `in-dev` → после PR `in-qa`.
 4. Запрет merge и деплоя в промпте.
 
 Задачи **каталога** по-прежнему идут в `stage/N-…`, если это этап MVP продукта. Пайплайнные баги/фичи продукта после MVP — `issue/<n>-…`. Не смешивать имена веток двух треков без явной пометки в issue.
@@ -406,6 +406,26 @@ Issue → план → PR → issue-QA → merge человеком в `main` �
 
 - [x] Unit: `isEmptySincePreviousRelease` / `previousReleaseTag`
 - [x] Unit: `decideReleaseGate` → `nothing-to-release`
+- [x] `npm test` в `pipeline/` зелёный
+
+---
+
+## P16: Снять `ready-for-dev` при переходе в `in-dev`
+
+**Ветка:** `pipeline/16-in-dev-drops-ready-for-dev`
+
+**Цель:** `ready-for-dev` и `in-dev` не висят вместе. Как у аналитика (`needs-plan` → `in-analysis`): при старте разработчика снимается очередь, ставится замок.
+
+### Шаги
+
+1. Старт developer: `-ready-for-dev` `+in-dev`. Ошибка смены меток → `startup_error` и `needs-human`.
+2. `roleForLabels`: `in-dev` не даёт повторный старт developer, даже если `ready-for-dev` ещё есть.
+3. После PR / ошибке: снять `in-dev`, поставить `in-qa` или `needs-human`. Уже открытый PR: снять `ready-for-dev`, поставить `in-qa` без агента.
+4. Контракт §3.
+
+### Проверка
+
+- [x] Unit: `ready-for-dev` → developer; `in-dev` и `ready-for-dev`+`in-dev` → null
 - [x] `npm test` в `pipeline/` зелёный
 
 ---
