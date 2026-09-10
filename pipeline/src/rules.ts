@@ -122,7 +122,7 @@ export function classifyTesterBugHandoff(
   return "ok";
 }
 
-export function testerBugIssues(resultText: string | null): number[] | null {
+export function extractTesterBugIssues(resultText: string | null): number[] | null {
   const marker = resultText?.match(
     /^PIPELINE_BUG_ISSUES:\s*(none|(?:#?\d+(?:\s*,\s*#?\d+)*))\s*$/im,
   );
@@ -142,7 +142,7 @@ export function testerBugIssues(resultText: string | null): number[] | null {
   ];
 }
 
-export function releaseTag(resultText: string | null): string | null {
+export function extractReleaseTag(resultText: string | null): string | null {
   const marker = resultText?.match(/^PIPELINE_RELEASE_TAG:\s*(v?[0-9]+\.[0-9]+\.[0-9]+)\s*$/im);
   if (!marker) {
     return null;
@@ -151,7 +151,7 @@ export function releaseTag(resultText: string | null): string | null {
   return tag.startsWith("v") ? tag : `v${tag}`;
 }
 
-export function releasePrNumbers(resultText: string | null): number[] | null {
+export function extractReleasePrNumbers(resultText: string | null): number[] | null {
   const marker = resultText?.match(
     /^PIPELINE_PR_NUMBERS:\s*(none|(?:#?\d+(?:\s*,\s*#?\d+)*))\s*$/im,
   );
@@ -171,7 +171,7 @@ export function releasePrNumbers(resultText: string | null): number[] | null {
   ];
 }
 
-export function releaseChangelog(resultText: string | null): string | null {
+export function extractReleaseChangelog(resultText: string | null): string | null {
   if (!resultText) {
     return null;
   }

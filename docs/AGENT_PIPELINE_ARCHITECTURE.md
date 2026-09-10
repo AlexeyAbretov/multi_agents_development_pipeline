@@ -168,9 +168,9 @@ React + Vite + Tailwind. UI только читает `GET /api/jobs` и `/api/d
 | Маркер | Кто пишет | Кто читает |
 |--------|-----------|------------|
 | `PIPELINE_LABELS:` | все роли | `decide*Outcome` в `rules.ts` |
-| `PIPELINE_BUG_ISSUES:` | tester | `testerBugIssues` |
-| `PIPELINE_RELEASE_TAG:` | RM | `releaseTag` |
-| `PIPELINE_CHANGELOG_BEGIN` … `END` | RM | `releaseChangelog` |
+| `PIPELINE_BUG_ISSUES:` | tester | `extractTesterBugIssues` |
+| `PIPELINE_RELEASE_TAG:` | RM | `extractReleaseTag` |
+| `PIPELINE_CHANGELOG_BEGIN` … `END` | RM | `extractReleaseChangelog` |
 
 Оркестратор парсит маркеры и **сам** меняет labels / создаёт Release. Агенту нельзя доверять GitHub labels напрямую.
 
@@ -291,7 +291,7 @@ index.ts                    deployer.ts
 
 ### 4.3. Новые маркеры протокола
 
-Не ломать существующие regex (у tester/RM `PIPELINE_LABELS` — строка целиком). Добавить парсер рядом с `testerBugIssues` / `releaseTag`, вызвать из `handleIssue`, покрыть unit-тестом. Промпт и контракт — в том же изменении.
+Не ломать существующие regex (у tester/RM `PIPELINE_LABELS` — строка целиком). Добавить парсер рядом с `extractTesterBugIssues` / `extractReleaseTag`, вызвать из `handleIssue`, покрыть unit-тестом. Промпт и контракт — в том же изменении.
 
 ### 4.4. Schedule / релиз
 

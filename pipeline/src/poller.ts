@@ -19,10 +19,10 @@ import {
   parseFixRound,
   parseRelatedParentIssue,
   shouldCloseMergedChildIssue,
-  releaseChangelog,
-  releaseTag,
+  extractReleaseChangelog,
+  extractReleaseTag,
   roleForLabels,
-  testerBugIssues,
+  extractTesterBugIssues,
   upsertChildBugIssuesInBody,
   upsertFixRoundInBody,
 } from "./rules.js";
@@ -736,7 +736,7 @@ async function handleIssue(
   }
 
   if (role === "tester") {
-    const bugIssues = testerBugIssues(outcome.resultText);
+    const bugIssues = extractTesterBugIssues(outcome.resultText);
     let testerDecision = decideTesterOutcome(
       outcome.status,
       outcome.resultText,
@@ -805,8 +805,8 @@ async function handleIssue(
   }
 
   if (role === "release-manager") {
-    const tag = releaseTag(outcome.resultText);
-    const changelog = releaseChangelog(outcome.resultText);
+    const tag = extractReleaseTag(outcome.resultText);
+    const changelog = extractReleaseChangelog(outcome.resultText);
     const expectedTag = issue.milestone ? tagFromMilestoneTitle(issue.milestone.title) : null;
     let releaseDecision = decideReleaseManagerOutcome(
       outcome.status,

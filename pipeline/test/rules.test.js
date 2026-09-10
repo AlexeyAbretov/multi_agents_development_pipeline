@@ -19,11 +19,11 @@ import {
   parseFixRound,
   parseRelatedParentIssue,
   shouldCloseMergedChildIssue,
-  releaseChangelog,
-  releasePrNumbers,
-  releaseTag,
+  extractReleaseChangelog,
+  extractReleasePrNumbers,
+  extractReleaseTag,
   roleForLabels,
-  testerBugIssues,
+  extractTesterBugIssues,
   upsertChildBugIssuesInBody,
   upsertFixRoundInBody,
 } from "../dist/rules.js";
@@ -43,23 +43,23 @@ import {
 } from "../dist/schedule-rules.js";
 import { uiStatusForJob } from "../dist/types.js";
 
-test("testerBugIssues parses issue numbers and removes duplicates", () => {
+test("extractTesterBugIssues parses issue numbers and removes duplicates", () => {
   assert.deepEqual(
-    testerBugIssues("Результат\nPIPELINE_BUG_ISSUES: #17, 18,17\nPIPELINE_LABELS: in-qa"),
+    extractTesterBugIssues("Результат\nPIPELINE_BUG_ISSUES: #17, 18,17\nPIPELINE_LABELS: in-qa"),
     [17, 18],
   );
 });
 
-test("testerBugIssues accepts none", () => {
+test("extractTesterBugIssues accepts none", () => {
   assert.deepEqual(
-    testerBugIssues("PIPELINE_BUG_ISSUES: none\nPIPELINE_LABELS: in-qa"),
+    extractTesterBugIssues("PIPELINE_BUG_ISSUES: none\nPIPELINE_LABELS: in-qa"),
     [],
   );
 });
 
-test("testerBugIssues rejects a missing or malformed marker", () => {
-  assert.equal(testerBugIssues("PIPELINE_LABELS: in-qa"), null);
-  assert.equal(testerBugIssues("PIPELINE_BUG_ISSUES: 17 and 18"), null);
+test("extractTesterBugIssues rejects a missing or malformed marker", () => {
+  assert.equal(extractTesterBugIssues("PIPELINE_LABELS: in-qa"), null);
+  assert.equal(extractTesterBugIssues("PIPELINE_BUG_ISSUES: 17 and 18"), null);
 });
 
 test("tester passes QA only with no bugs and matching marker", () => {
@@ -136,9 +136,9 @@ test("release markers parse tag and changelog", () => {
     "PIPELINE_CHANGELOG_END",
     "PIPELINE_LABELS: released",
   ].join("\n");
-  assert.equal(releaseTag(text), "v1.2.0");
-  assert.deepEqual(releasePrNumbers(text), null);
-  assert.equal(releaseChangelog(text), "## Что вошло\n- stage 1");
+  assert.equal(extractReleaseTag(text), "v1.2.0");
+  assert.deepEqual(extractReleasePrNumbers(text), null);
+  assert.equal(extractReleaseChangelog(text), "## Что вошло\n- stage 1");
   assert.equal(
     decideReleaseManagerOutcome("finished", text, "v1.2.0", "## Что вошло\n- stage 1", "v1.2.0"),
     "released",
