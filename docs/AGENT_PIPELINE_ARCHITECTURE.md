@@ -147,7 +147,7 @@ queued → running → finished | error | startup_error
 | **@cursor/sdk** | Cloud Agent: `Agent.create({ cloud: { repos } })`. Local runtime запрещён конституцией (P1). |
 | **Node ≥ 22** | Встроенный `fetch` к GitHub API, ESM, `await using` для агента. |
 | **tsx / typescript** | Dev-watch и сборка в `dist/`. Тесты: `node --test` по скомпилированному JS. |
-| **tsc-alias** | После `tsc` переписывает алиасы (`@routes`) в относительные импорты в `dist/`. Без этого `node dist/index.js` в Docker не резолвит `@routes`. Сборка: `npm run clean && tsc && tsc-alias`. |
+| **tsc-alias** | После `tsc` переписывает алиасы (`@routes`) и дописывает `.js` к относительным импортам в `dist/` (`resolveFullPaths`). Без этого `node dist/index.js` в Docker не резолвит `@routes` и ESM-пути без расширения. Сборка: `npm run clean && tsc && tsc-alias`. Источники — `module`/`moduleResolution`: `ES2022`/`bundler`, импорты без `.js`. |
 
 Чего нет намеренно:
 
@@ -245,7 +245,7 @@ index.ts                    deployer.ts
 
 `.env.local`: `DATA_DIR=./data`, `PROMPTS_DIR=./prompts` (docker-пути `/data` и `/app/prompts` на хосте не существуют). Файл в git не коммитить; шаблон — `pipeline/.env.local.example`.
 
-Новый TS-алиас: `compilerOptions.paths` в `pipeline/tsconfig.json` + импорт + сборка обязана остаться `tsc && tsc-alias`.
+Новый TS-алиас: `compilerOptions.paths` в `pipeline/tsconfig.json` + импорт + сборка обязана остаться `tsc && tsc-alias` (`resolveFullPaths` дописывает `.js` в `dist/`).
 
 ---
 

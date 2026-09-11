@@ -1,9 +1,9 @@
 import type { FastifyBaseLogger } from "fastify";
-import type { Config } from "./config.js";
-import { DeployRequestStore } from "./deploy-request-store.js";
-import { DeployStore } from "./deploy-store.js";
-import { GitHubClient, type GitHubIssue } from "./github.js";
-import { jobLog } from "./log.js";
+import type { Config } from "./config";
+import { DeployRequestStore } from "./deploy-request-store";
+import { DeployStore } from "./deploy-store";
+import { GitHubClient, type GitHubIssue } from "./providers";
+import { jobLog } from "./log";
 import {
   blockedNoReleaseComment,
   bodyHasBlockedNoReleaseMarker,
@@ -18,8 +18,8 @@ import {
   shouldNotifyBlockedNoRelease,
   tagFromMilestoneTitle,
   upsertNothingToReleaseDescription,
-} from "./schedule-rules.js";
-import { ScheduleStateStore } from "./schedule-state.js";
+} from "./schedule-rules";
+import { ScheduleStateStore } from "./schedule-state";
 
 type Milestone = { id: number; number: number; title: string; due_on: string | null };
 

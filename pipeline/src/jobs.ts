@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import type { Job, Role } from "./types.js";
+import type { Job, Role } from "./types";
 
 type StoreFile = {
   lastPollAt: string | null;

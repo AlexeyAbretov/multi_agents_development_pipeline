@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Agent, CursorAgentError } from "@cursor/sdk";
-import type { Config } from "./config.js";
-import type { GitHubIssue, GitHubPull } from "./github.js";
-import type { Role } from "./types.js";
+import type { Config } from "./config";
+import type { GitHubIssue, GitHubPull } from "./providers";
+import type { Role } from "./types";
 
 type CursorRunResult = {
   agentId: string | null;

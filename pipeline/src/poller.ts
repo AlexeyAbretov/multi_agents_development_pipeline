@@ -1,9 +1,9 @@
 import type { FastifyBaseLogger } from "fastify";
-import type { Config } from "./config.js";
-import { runCloudAgent } from "./cursor.js";
-import { GitHubClient, agentResultComment, jobComment, type GitHubIssue, type GitHubPull } from "./github.js";
-import { JobStore } from "./jobs.js";
-import { jobLog } from "./log.js";
+import type { Config } from "./config";
+import { runCloudAgent } from "./cursor";
+import { GitHubClient, agentResultComment, jobComment, type GitHubIssue, type GitHubPull } from "./providers";
+import { JobStore } from "./jobs";
+import { jobLog } from "./log";
 import {
   childBlocksParentReQa,
   classifyTesterBugHandoff,
@@ -25,17 +25,17 @@ import {
   extractTesterBugIssues,
   upsertChildBugIssuesInBody,
   upsertFixRoundInBody,
-} from "./rules.js";
+} from "./rules";
 import {
   decideReleaseGate,
   daysUntilDue,
   isRegressionIssue,
   isReleaseWorkIssue,
   tagFromMilestoneTitle,
-} from "./schedule-rules.js";
-import type { Role } from "./types.js";
-import { inFlightKey, selectJobsToLaunch } from "./dispatch.js";
-import { closeEmptyRelease } from "./schedule.js";
+} from "./schedule-rules";
+import type { Role } from "./types";
+import { inFlightKey, selectJobsToLaunch } from "./dispatch";
+import { closeEmptyRelease } from "./schedule";
 
 export function startPoller(
   config: Config,

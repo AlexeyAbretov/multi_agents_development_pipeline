@@ -1,7 +1,7 @@
 import Fastify from "fastify";
-import { loadConfig } from "./config.js";
-import { startDeployPoller } from "./deploy-poller.js";
-import { DeployStore } from "./deploy-store.js";
+import { loadConfig } from "./config";
+import { startDeployPoller } from "./deploy-poller";
+import { DeployStore } from "./deploy-store";
 
 const config = loadConfig();
 const store = new DeployStore(config.DATA_DIR);

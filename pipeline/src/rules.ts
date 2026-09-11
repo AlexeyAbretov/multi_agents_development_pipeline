@@ -1,5 +1,5 @@
-import type { Job, Role, UiJobStatus } from "./types.js";
-import { isRegressionIssue } from "./schedule-rules.js";
+import type { Job, Role, UiJobStatus } from "./types";
+import { isRegressionIssue } from "./schedule-rules";
 
 export type AnalystDecision = "ready-for-dev" | "needs-human";
 export type DeveloperDecision = "in-qa" | "needs-human";
@@ -248,7 +248,7 @@ export function decideReleaseManagerOutcome(
   return "needs-human";
 }
 
-export function prFixesIssue(pr: {
+export function fixIssueWithPR(pr: {
   title: string;
   body: string | null;
   headRef: string;

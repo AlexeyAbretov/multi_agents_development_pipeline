@@ -1,47 +1,9 @@
-import { parseOwnerRepo, type Config } from "./config.js";
-import type { GitHubRelease } from "./deploy-rules.js";
-import { prFixesIssue } from "./rules.js";
-import { isEmptySincePreviousRelease, previousReleaseTag } from "./schedule-rules.js";
-
-export type GitHubMilestoneRef = {
-  id: number;
-  number: number;
-  title: string;
-  due_on: string | null;
-};
-
-export type GitHubIssue = {
-  number: number;
-  title: string;
-  body: string | null;
-  html_url: string;
-  labels: string[];
-  milestone: GitHubMilestoneRef | null;
-};
-
-export type GitHubPull = {
-  number: number;
-  title: string;
-  body: string | null;
-  html_url: string;
-  headRef: string;
-  baseRef: string;
-};
-
-type GitHubIssueRaw = {
-  number: number;
-  title: string;
-  body: string | null;
-  html_url: string;
-  pull_request?: unknown;
-  labels: Array<string | { name: string }>;
-  milestone?: {
-    id: number;
-    number: number;
-    title: string;
-    due_on: string | null;
-  } | null;
-};
+import { parseOwnerRepo, type Config } from "../../config";
+import type { GitHubRelease } from "../../deploy-rules";
+import { fixIssueWithPR } from "../../rules";
+import { isEmptySincePreviousRelease, previousReleaseTag } from "../../schedule-rules";
+import { GITHUB_COMMENT_MAX } from "./GithubProvider.constants";
+import type { GitHubIssue, GitHubIssueRaw, GitHubPull } from "./GithubProvider.types";
 
 function labelNames(labels: GitHubIssueRaw["labels"]): string[] {
   return labels.map((label) => (typeof label === "string" ? label : label.name));
@@ -153,13 +115,13 @@ export class GitHubClient {
   async findOpenFixPr(issue: number): Promise<GitHubPull | null> {
     const items = await this.listPulls("open");
 
-    return items.find((pr) => prFixesIssue(pr, issue)) ?? null;
+    return items.find((pr) => fixIssueWithPR(pr, issue)) ?? null;
   }
 
   async findMergedFixPr(issue: number): Promise<GitHubPull | null> {
     const items = await this.listPulls("closed");
 
-    return items.find((pr) => pr.merged && prFixesIssue(pr, issue)) ?? null;
+    return items.find((pr) => pr.merged && fixIssueWithPR(pr, issue)) ?? null;
   }
 
   async hasOpenFixPr(issue: number): Promise<boolean> {
@@ -845,8 +807,6 @@ export function jobComment(params: {
 
   return lines.join("\n");
 }
-
-const GITHUB_COMMENT_MAX = 60_000;
 
 export function agentResultComment(role: string, text: string): string {
   const header = `## Результат: ${role}\n\n`;

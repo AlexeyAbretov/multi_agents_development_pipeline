@@ -1,15 +1,15 @@
 import type { FastifyBaseLogger } from "fastify";
-import type { Config } from "./config.js";
-import { DeployRequestStore } from "./deploy-request-store.js";
+import type { Config } from "./config";
+import { DeployRequestStore } from "./deploy-request-store";
 import {
   appendDeployNote,
   releaseBodyHasDeployMarker,
   releasesToDeploy,
-} from "./deploy-rules.js";
-import { runProductDeploy } from "./deploy-run.js";
-import { DeployStore } from "./deploy-store.js";
-import { GitHubClient } from "./github.js";
-import { jobLog } from "./log.js";
+} from "./deploy-rules";
+import { runProductDeploy } from "./deploy-run";
+import { DeployStore } from "./deploy-store";
+import { GitHubClient } from "./providers";
+import { jobLog } from "./log";
 
 export function startDeployPoller(
   config: Config,
