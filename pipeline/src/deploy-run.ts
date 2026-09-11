@@ -19,6 +19,7 @@ export async function runProductDeploy(config: Config, tag: string): Promise<Dep
 
   const composeFile = config.DEPLOY_COMPOSE_FILE;
   const cwd = config.WORKSPACE_DIR;
+
   try {
     const { stdout, stderr } = await execFileAsync(
       "docker",
@@ -31,16 +32,17 @@ export async function runProductDeploy(config: Config, tag: string): Promise<Dep
       },
     );
     const out = `${stdout}\n${stderr}`.trim();
+
     return {
       ok: true,
       detail: `compose up -d (\`${composeFile}\`, tag \`${tag}\`):\n\`\`\`\n${out.slice(0, 3500)}\n\`\`\``,
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    const stdout =
-      err && typeof err === "object" && "stdout" in err ? String((err as { stdout: unknown }).stdout) : "";
-    const stderr =
-      err && typeof err === "object" && "stderr" in err ? String((err as { stderr: unknown }).stderr) : "";
+    const execErr = err as { stdout?: unknown; stderr?: unknown };
+    const stdout = String(execErr?.stdout ?? "");
+    const stderr = String(execErr?.stderr ?? "");
+
     return {
       ok: false,
       detail: `compose failed (tag \`${tag}\`): ${message}\n\`\`\`\n${`${stdout}\n${stderr}`.trim().slice(0, 3500)}\n\`\`\``,

@@ -24,8 +24,6 @@ GitHub labels          Job.status / Job.decision          UI (таблица :30
 | `JobStatus` | volume `jobs.json` | Не запустить второго агента на ту же пару |
 | `UiJobStatus` | `GET /api/jobs` | Человеку в таблице |
 
-`waiting-approval` в типе UI **зарезервирован**, но `uiStatusForJob` его не выставляет (остаток старого draft-релиза).
-
 ### 1.1. Оси labels
 
 Три независимые оси (имена — [контракт §3](./AGENT_PIPELINE.md#3-labels-и-milestone)):
@@ -117,7 +115,7 @@ queued → running → finished | error | startup_error
 
 `needs-human` на issue блокирует роли. `decision === "needs-human"` на джобе в UI — `failed`.
 
-Проекция UI (`types.ts` → `uiStatusForJob`):
+Проекция UI (`rules.ts` → `mapJobToUiStatus`):
 
 | Job | UI |
 |-----|-----|
@@ -198,8 +196,8 @@ index.ts                    deployer.ts
 | Файл | Назначение |
 |------|------------|
 | `pipeline/src/config.ts` | Env → типизированный `Config` (`GITHUB_REPO`, `CURSOR_*`, интервалы, `DEPLOY_MODE`). |
-| `pipeline/src/types.ts` | `Role`, `Job`, `JobStatus`, проекция в UI-статус. |
-| `pipeline/src/rules.ts` | Статусная модель issue: роль по labels, исход прогона, fix-round, дерево QA, маркеры ответа. |
+| `pipeline/src/types.ts` | `Role`, `Job`, `JobStatus`, `UiJobStatus`. |
+| `pipeline/src/rules.ts` | Статусная модель issue: роль по labels, исход прогона, fix-round, дерево QA, маркеры ответа, проекция джоба в UI-статус. |
 | `pipeline/src/schedule-rules.ts` | Календарь milestone, tag `vN.N.N`, gate RM, пустой релиз, маркеры в комментариях. |
 | `pipeline/src/dispatch.ts` | Eligible пары `(issue, role)` в тике; роли не гейтят друг друга; skip только in-flight. |
 | `pipeline/src/poller.ts` | Тик `POLL_INTERVAL_MS`: список issues → роль → гейты → Cursor → смена labels. |

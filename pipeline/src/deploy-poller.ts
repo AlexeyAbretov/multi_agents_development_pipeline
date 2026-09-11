@@ -23,8 +23,10 @@ export function startDeployPoller(
   const tick = (): void => {
     if (busy) {
       jobLog(logger, {}, "deploy poll skip: previous tick still running");
+
       return;
     }
+
     busy = true;
     void pollOnce(config, logger, store, requests, github).finally(() => {
       busy = false;
@@ -33,6 +35,7 @@ export function startDeployPoller(
 
   tick();
   const timer = setInterval(tick, config.POLL_INTERVAL_MS);
+
   return {
     stop: () => {
       clearInterval(timer);
@@ -51,16 +54,19 @@ async function pollOnce(
 
   if (!config.GITHUB_TOKEN || !config.GITHUB_REPO) {
     jobLog(logger, {}, "deploy poll skip: GITHUB_TOKEN or GITHUB_REPO empty");
+
     return;
   }
 
   await processScheduleRequests(config, logger, store, requests, github);
 
   let releases;
+
   try {
     releases = await github.listPublishedReleases();
   } catch (err) {
     logger.error({ err }, "github list releases failed");
+
     return;
   }
 
@@ -71,6 +77,7 @@ async function pollOnce(
 
   if (pending.length === 0) {
     jobLog(logger, {}, "deploy: no new published releases");
+
     return;
   }
 
@@ -88,6 +95,7 @@ async function processScheduleRequests(
 ): Promise<void> {
   for (const request of requests.pending()) {
     const fields = { issue: request.milestoneId, role: "deployer", agentId: null, runId: null };
+
     if (store.hasTag(request.tag)) {
       requests.mark(request.tag, request.requestedAt, "skipped");
       jobLog(logger, fields, `schedule request skip: ${request.tag} already deployed`);
@@ -95,9 +103,11 @@ async function processScheduleRequests(
     }
 
     const existing = await github.findReleaseByTag(request.tag);
+
     if (existing && !existing.draft) {
       // Prefer full release handle if published release exists.
       const published = (await github.listPublishedReleases()).find((item) => item.id === existing.id);
+
       if (published) {
         await handleRelease(config, logger, store, github, published);
         requests.mark(request.tag, request.requestedAt, "done");
@@ -108,6 +118,7 @@ async function processScheduleRequests(
     jobLog(logger, fields, `schedule deploy start: ${request.tag}`);
     const result = await runProductDeploy(config, request.tag);
     const status = result.ok ? "deployed" : "deploy-failed";
+
     store.record({
       releaseId: existing?.id ?? 0,
       tag: request.tag,
@@ -116,10 +127,12 @@ async function processScheduleRequests(
       detail: `${result.detail}\n(source: schedule milestone ${request.milestoneTitle})`,
       at: new Date().toISOString(),
     });
+
     if (existing) {
       try {
         const full = (await github.listPublishedReleases()).find((item) => item.id === existing.id);
         const body = full?.body ?? null;
+
         await github.updateReleaseBody(
           existing.id,
           appendDeployNote(body, existing.id, status, result.detail),
@@ -128,11 +141,13 @@ async function processScheduleRequests(
         logger.error({ err, tag: request.tag }, "schedule release body update failed");
       }
     }
+
     try {
       await applyDeployLabels(github, status, request.tag);
     } catch (err) {
       logger.error({ err, tag: request.tag }, "schedule deploy labels failed");
     }
+
     requests.mark(request.tag, request.requestedAt, "done");
     jobLog(
       logger,
@@ -150,14 +165,17 @@ async function applyDeployLabels(
   const labeled: number[] = [];
   const milestone = await github.findMilestoneByTitle(tag);
   const issues = milestone ? await github.listOpenIssuesForMilestone(milestone.number) : [];
+
   for (const issue of issues) {
     if (issue.labels.includes("deployed") || issue.labels.includes("deploy-failed")) {
       continue;
     }
+
     await github.removeIssueLabel(issue.number, status === "deployed" ? "deploy-failed" : "deployed");
     await github.addIssueLabels(issue.number, [status]);
     labeled.push(issue.number);
   }
+
   return labeled;
 }
 
@@ -174,8 +192,10 @@ async function handleRelease(
   },
 ): Promise<void> {
   const fields = { issue: release.id, role: "deployer", agentId: null, runId: null };
+
   if (store.hasTag(release.tag_name) || store.has(release.id)) {
     jobLog(logger, fields, `deploy skip idempotent: ${release.tag_name}`);
+
     return;
   }
 
@@ -204,6 +224,7 @@ async function handleRelease(
 
   try {
     const labeled = await applyDeployLabels(github, status, release.tag_name);
+
     jobLog(
       logger,
       fields,

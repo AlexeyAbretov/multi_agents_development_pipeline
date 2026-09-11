@@ -17,20 +17,4 @@ export type Job = {
 };
 
 /** UI-статус очереди (контракт AGENT_PIPELINE_PLAN UI). */
-export type UiJobStatus = "queued" | "running" | "waiting-approval" | "failed" | "finished";
-
-export function uiStatusForJob(job: Pick<Job, "status" | "decision" | "role">): UiJobStatus {
-  if (job.status === "queued") {
-    return "queued";
-  }
-  if (job.status === "running") {
-    return "running";
-  }
-  if (job.status === "error" || job.status === "startup_error") {
-    return "failed";
-  }
-  if (job.decision === "needs-human") {
-    return "failed";
-  }
-  return "finished";
-}
+export type UiJobStatus = "queued" | "running" | "failed" | "finished";

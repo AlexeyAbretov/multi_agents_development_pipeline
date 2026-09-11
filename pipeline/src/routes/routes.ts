@@ -3,7 +3,7 @@ import type { Config } from "../config.js";
 import { DeployRequestStore } from "../deploy-request-store.js";
 import { DeployStore } from "../deploy-store.js";
 import type { JobStore } from "../jobs.js";
-import { uiStatusForJob } from "../types.js";
+import { mapJobToUiStatus } from "../rules.js";
 
 export function registerApiRoutes(
   app: FastifyInstance,
@@ -16,7 +16,7 @@ export function registerApiRoutes(
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
       .map((job) => ({
         ...job,
-        uiStatus: uiStatusForJob(job),
+        uiStatus: mapJobToUiStatus(job),
         issueUrl: config.GITHUB_REPO
           ? `https://github.com/${config.GITHUB_REPO}/issues/${job.issue}`
           : null,
@@ -24,6 +24,7 @@ export function registerApiRoutes(
           ? `https://cursor.com/agents/${encodeURIComponent(job.agentId)}`
           : null,
       }));
+
     return {
       lastPollAt: snap.lastPollAt,
       githubRepo: config.GITHUB_REPO || null,
@@ -34,6 +35,7 @@ export function registerApiRoutes(
   app.get("/api/deploys", async () => {
     const deploys = new DeployStore(config.DATA_DIR).load().deploys;
     const requests = new DeployRequestStore(config.DATA_DIR).load().requests;
+
     return {
       deploys: [...deploys].sort((a, b) => b.at.localeCompare(a.at)),
       requests: [...requests].sort((a, b) => b.requestedAt.localeCompare(a.requestedAt)),

@@ -19,6 +19,7 @@ export class ScheduleStateStore {
   load(): StoreFile {
     try {
       const parsed = JSON.parse(readFileSync(this.filePath, "utf8")) as Partial<StoreFile>;
+
       return {
         blockedNotified: parsed.blockedNotified ?? [],
         duplicateDueNotified: parsed.duplicateDueNotified ?? [],
@@ -30,6 +31,7 @@ export class ScheduleStateStore {
 
   private save(data: StoreFile): void {
     const tmp = `${this.filePath}.tmp`;
+
     writeFileSync(tmp, JSON.stringify(data, null, 2), "utf8");
     renameSync(tmp, this.filePath);
   }
@@ -40,6 +42,7 @@ export class ScheduleStateStore {
 
   markBlockedNotified(milestoneId: number): void {
     const data = this.load();
+
     if (!data.blockedNotified.includes(milestoneId)) {
       data.blockedNotified.push(milestoneId);
       this.save(data);
@@ -52,6 +55,7 @@ export class ScheduleStateStore {
 
   markDuplicateDueNotified(day: string): void {
     const data = this.load();
+
     if (!data.duplicateDueNotified.includes(day)) {
       data.duplicateDueNotified.push(day);
       this.save(data);

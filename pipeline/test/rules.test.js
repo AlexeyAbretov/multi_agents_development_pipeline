@@ -24,6 +24,7 @@ import {
   extractReleaseTag,
   roleForLabels,
   extractTesterBugIssues,
+  mapJobToUiStatus,
   upsertChildBugIssuesInBody,
   upsertFixRoundInBody,
 } from "../dist/rules.js";
@@ -41,7 +42,6 @@ import {
   tagFromMilestoneTitle,
   upsertNothingToReleaseDescription,
 } from "../dist/schedule-rules.js";
-import { uiStatusForJob } from "../dist/types.js";
 
 test("extractTesterBugIssues parses issue numbers and removes duplicates", () => {
   assert.deepEqual(
@@ -405,20 +405,19 @@ test("empty since previous release", () => {
   assert.equal(upsertNothingToReleaseDescription(note, note), note);
 });
 
-test("uiStatusForJob maps release-manager and failures", () => {
-  assert.equal(uiStatusForJob({ status: "queued", decision: null, role: "analyst" }), "queued");
-  assert.equal(uiStatusForJob({ status: "running", decision: null, role: "developer" }), "running");
+test("mapJobToUiStatus maps release-manager and failures", () => {
+  assert.equal(mapJobToUiStatus({ status: "queued", decision: null }), "queued");
+  assert.equal(mapJobToUiStatus({ status: "running", decision: null }), "running");
   assert.equal(
-    uiStatusForJob({
+    mapJobToUiStatus({
       status: "finished",
       decision: "released",
-      role: "release-manager",
     }),
     "finished",
   );
   assert.equal(
-    uiStatusForJob({ status: "finished", decision: "needs-human", role: "tester" }),
+    mapJobToUiStatus({ status: "finished", decision: "needs-human" }),
     "failed",
   );
-  assert.equal(uiStatusForJob({ status: "error", decision: null, role: "analyst" }), "failed");
+  assert.equal(mapJobToUiStatus({ status: "error", decision: null }), "failed");
 });

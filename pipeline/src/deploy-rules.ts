@@ -24,6 +24,7 @@ export function releasesToDeploy(
     .sort((a, b) => {
       const aTime = a.published_at ? Date.parse(a.published_at) : 0;
       const bTime = b.published_at ? Date.parse(b.published_at) : 0;
+
       return aTime - bTime;
     });
 }
@@ -36,6 +37,7 @@ export function releaseBodyHasDeployMarker(body: string | null, releaseId: numbe
   if (!body) {
     return false;
   }
+
   return body.includes(deployMarker(releaseId));
 }
 
@@ -54,8 +56,10 @@ export function appendDeployNote(
     `Локальный деплой: \`${status}\`.`,
     detail.trim(),
   ].join("\n");
+
   if (releaseBodyHasDeployMarker(body, releaseId)) {
     return `${base}${block}`;
   }
+
   return `${base}${block}`;
 }

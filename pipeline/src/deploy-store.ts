@@ -33,6 +33,7 @@ export class DeployStore {
 
   private save(data: StoreFile): void {
     const tmp = `${this.filePath}.tmp`;
+
     writeFileSync(tmp, JSON.stringify(data, null, 2), "utf8");
     renameSync(tmp, this.filePath);
   }
@@ -41,6 +42,7 @@ export class DeployStore {
     if (releaseId === 0) {
       return false;
     }
+
     return this.load().deploys.some((item) => item.releaseId === releaseId);
   }
 
@@ -62,13 +64,16 @@ export class DeployStore {
 
   record(entry: DeployRecord): void {
     const data = this.load();
+
     data.deploys = data.deploys.filter((item) => {
       if (entry.releaseId !== 0 && item.releaseId === entry.releaseId) {
         return false;
       }
+
       if (item.tag === entry.tag) {
         return false;
       }
+
       return true;
     });
     data.deploys.push(entry);

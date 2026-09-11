@@ -1,0 +1,40 @@
+---
+description: Стиль TypeScript-функций в оркестраторе (declaration, 1tbs, padding, Elvis)
+globs: pipeline/**/*.ts
+alwaysApply: false
+---
+
+# Стиль функций
+
+Именованные и экспортируемые функции — `function`, не стрелки. Скобка `{` на той же строке (1tbs). У `if` / `for` / `while` всегда `{}`. Пустая строка между логическими блоками (объявления, ветвление, `return`). Не вставляй пустые строки в начало и конец блока. Отступ 2 пробела.
+
+Вложенные поля и «нет значения → дефолт» — через Elvis: `?.` и `??`. Не через `"x" in obj`, цепочки `&&` и тернарники. Пустую строку / `0` как «нет значения» по-прежнему обрабатывай через `||`.
+
+Линтер: `cd pipeline && npm run lint` (правка: `npm run lint:fix`). Elvis: `@typescript-eslint/prefer-optional-chain`, `prefer-nullish-coalescing`.
+
+```typescript
+// ❌ BAD
+export const parseOwnerRepo = (repo: string) => {
+  const [owner, name] = repo.split("/");
+  if (!owner || !name) return null;
+  return { owner, repo: name };
+};
+
+const stdout =
+  err && typeof err === "object" && "stdout" in err
+    ? String((err as { stdout: unknown }).stdout)
+    : "";
+
+// ✅ GOOD
+export function parseOwnerRepo(repo: string): OwnerRepo {
+  const [owner, name] = repo.split("/");
+
+  if (!owner || !name || repo.split("/").length !== 2) {
+    return null;
+  }
+
+  return { owner, repo: name };
+}
+
+const stdout = String((err as { stdout?: unknown })?.stdout ?? "");
+```

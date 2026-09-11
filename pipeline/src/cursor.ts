@@ -5,18 +5,19 @@ import type { Config } from "./config.js";
 import type { GitHubIssue, GitHubPull } from "./github.js";
 import type { Role } from "./types.js";
 
-export type CursorRunOutcome = {
+type CursorRunResult = {
   agentId: string | null;
   runId: string | null;
   status: "finished" | "error" | "startup_error";
   error: string | null;
-  resultText: string | null;
+  text: string | null;
 };
 
 function loadPrompt(promptsDir: string, role: Role, issue: GitHubIssue): string {
   if (role === "tester" && issue.labels.includes("regression")) {
     return readFileSync(join(promptsDir, "tester-regression.md"), "utf8");
   }
+
   return readFileSync(join(promptsDir, `${role}.md`), "utf8");
 }
 
@@ -36,6 +37,7 @@ function buildMessage(
     "",
     issue.body?.trim() || "(пустое описание)",
   ];
+
   if (issue.milestone) {
     lines.push(
       "",
@@ -44,6 +46,7 @@ function buildMessage(
       `Due: ${issue.milestone.due_on ?? "(нет due)"}`,
     );
   }
+
   if (pull) {
     lines.push(
       "",
@@ -53,6 +56,7 @@ function buildMessage(
       `Ветка: ${pull.headRef}`,
       `Заголовок: ${pull.title}`,
     );
+
     if (role === "developer") {
       lines.push(
         "",
@@ -61,6 +65,7 @@ function buildMessage(
       );
     }
   }
+
   return lines.join("\n");
 }
 
@@ -70,7 +75,7 @@ export async function runCloudAgent(
   issue: GitHubIssue,
   onStarted: (ids: { agentId: string; runId: string }) => Promise<void>,
   pull?: GitHubPull,
-): Promise<CursorRunOutcome> {
+): Promise<CursorRunResult> {
   let agentId: string | null = null;
   let runId: string | null = null;
 
@@ -96,46 +101,51 @@ export async function runCloudAgent(
 
     agentId = agent.agentId;
     const run = await agent.send(buildMessage(loadPrompt(config.PROMPTS_DIR, role, issue), issue, pull, role));
+
     runId = run.id;
     await onStarted({ agentId, runId });
 
     const result = await run.wait();
+
     if (result.status === "error") {
       return {
         agentId,
         runId,
         status: "error",
         error: result.error?.message ?? "run.status=error",
-        resultText: result.result ?? null,
+        text: result.result ?? null,
       };
     }
+
     if (result.status === "cancelled") {
       return {
         agentId,
         runId,
         status: "error",
         error: "run cancelled",
-        resultText: result.result ?? null,
+        text: result.result ?? null,
       };
     }
+
     return {
       agentId,
       runId,
       status: "finished",
       error: null,
-      resultText: result.result ?? null,
+      text: result.result ?? null,
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const retryable =
       err instanceof CursorAgentError ? ` retryable=${String(err.isRetryable)}` : "";
     const status = runId ? "error" : "startup_error";
+
     return {
       agentId,
       runId,
       status,
       error: `${message}${retryable}`,
-      resultText: null,
+      text: null,
     };
   }
 }

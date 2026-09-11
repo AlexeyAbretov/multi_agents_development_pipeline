@@ -56,11 +56,11 @@ function toGitHubIssue(item: GitHubIssueRaw): GitHubIssue {
     labels: labelNames(item.labels),
     milestone: item.milestone
       ? {
-          id: item.milestone.id,
-          number: item.milestone.number,
-          title: item.milestone.title,
-          due_on: item.milestone.due_on,
-        }
+        id: item.milestone.id,
+        number: item.milestone.number,
+        title: item.milestone.title,
+        due_on: item.milestone.due_on,
+      }
       : null,
   };
 }
@@ -68,6 +68,7 @@ function toGitHubIssue(item: GitHubIssueRaw): GitHubIssue {
 function isTransientNetworkError(err: unknown): boolean {
   const parts: string[] = [];
   let current: unknown = err;
+
   for (let i = 0; i < 4 && current; i++) {
     if (current instanceof Error) {
       parts.push(current.message, current.name);
@@ -77,6 +78,7 @@ function isTransientNetworkError(err: unknown): boolean {
       break;
     }
   }
+
   return /ENOTFOUND|EAI_AGAIN|ECONNRESET|ETIMEDOUT|UND_ERR_SOCKET|fetch failed/i.test(
     parts.join(" "),
   );
@@ -85,17 +87,21 @@ function isTransientNetworkError(err: unknown): boolean {
 async function githubFetch(url: string | URL, init?: RequestInit): Promise<Response> {
   const attempts = 3;
   let last: unknown;
+
   for (let i = 0; i < attempts; i++) {
     try {
       return await fetch(url, init);
     } catch (err) {
       last = err;
+
       if (!isTransientNetworkError(err) || i === attempts - 1) {
         throw err;
       }
+
       await new Promise((resolve) => setTimeout(resolve, 400 * (i + 1)));
     }
   }
+
   throw last;
 }
 
@@ -104,9 +110,11 @@ export class GitHubClient {
 
   private repoPath(): { owner: string; repo: string } {
     const parsed = parseOwnerRepo(this.config.GITHUB_REPO);
+
     if (!parsed) {
       throw new Error(`Invalid GITHUB_REPO: ${this.config.GITHUB_REPO}`);
     }
+
     return parsed;
   }
 
@@ -122,17 +130,21 @@ export class GitHubClient {
   async listOpenIssuesByLabel(label: string): Promise<GitHubIssue[]> {
     const { owner, repo } = this.repoPath();
     const url = new URL(`https://api.github.com/repos/${owner}/${repo}/issues`);
+
     url.searchParams.set("state", "open");
     url.searchParams.set("labels", label);
     url.searchParams.set("per_page", "50");
 
     const response = await githubFetch(url, { headers: this.headers() });
+
     if (!response.ok) {
       const text = await response.text();
+
       throw new Error(`GitHub issues ${response.status}: ${text.slice(0, 500)}`);
     }
 
     const items = (await response.json()) as GitHubIssueRaw[];
+
     return items
       .filter((item) => !item.pull_request)
       .map(toGitHubIssue);
@@ -140,11 +152,13 @@ export class GitHubClient {
 
   async findOpenFixPr(issue: number): Promise<GitHubPull | null> {
     const items = await this.listPulls("open");
+
     return items.find((pr) => prFixesIssue(pr, issue)) ?? null;
   }
 
   async findMergedFixPr(issue: number): Promise<GitHubPull | null> {
     const items = await this.listPulls("closed");
+
     return items.find((pr) => pr.merged && prFixesIssue(pr, issue)) ?? null;
   }
 
@@ -162,8 +176,10 @@ export class GitHubClient {
         body: JSON.stringify({ base }),
       },
     );
+
     if (!response.ok) {
       const text = await response.text();
+
       throw new Error(`GitHub retarget PR ${response.status}: ${text.slice(0, 500)}`);
     }
   }
@@ -178,8 +194,10 @@ export class GitHubClient {
         body: JSON.stringify({ state: "closed" }),
       },
     );
+
     if (!response.ok) {
       const text = await response.text();
+
       throw new Error(`GitHub close issue ${response.status}: ${text.slice(0, 500)}`);
     }
   }
@@ -187,12 +205,15 @@ export class GitHubClient {
   private async listPulls(state: "open" | "closed"): Promise<Array<GitHubPull & { merged: boolean }>> {
     const { owner, repo } = this.repoPath();
     const url = new URL(`https://api.github.com/repos/${owner}/${repo}/pulls`);
+
     url.searchParams.set("state", state);
     url.searchParams.set("per_page", "50");
 
     const response = await githubFetch(url, { headers: this.headers() });
+
     if (!response.ok) {
       const text = await response.text();
+
       throw new Error(`GitHub pulls ${response.status}: ${text.slice(0, 500)}`);
     }
 
@@ -205,6 +226,7 @@ export class GitHubClient {
       head?: { ref?: string };
       base?: { ref?: string };
     }>;
+
     return items.map((pr) => ({
       number: pr.number,
       title: pr.title,
@@ -226,8 +248,10 @@ export class GitHubClient {
         body: JSON.stringify({ body }),
       },
     );
+
     if (!response.ok) {
       const text = await response.text();
+
       throw new Error(`GitHub comment ${response.status}: ${text.slice(0, 500)}`);
     }
   }
@@ -238,11 +262,15 @@ export class GitHubClient {
       `https://api.github.com/repos/${owner}/${repo}/issues/${issue}`,
       { headers: this.headers() },
     );
+
     if (!response.ok) {
       const text = await response.text();
+
       throw new Error(`GitHub get issue ${response.status}: ${text.slice(0, 500)}`);
     }
+
     const item = (await response.json()) as GitHubIssueRaw & { state: "open" | "closed" };
+
     return {
       ...toGitHubIssue(item),
       state: item.state,
@@ -259,8 +287,10 @@ export class GitHubClient {
         body: JSON.stringify({ body }),
       },
     );
+
     if (!response.ok) {
       const text = await response.text();
+
       throw new Error(`GitHub update issue ${response.status}: ${text.slice(0, 500)}`);
     }
   }
@@ -269,6 +299,7 @@ export class GitHubClient {
     if (labels.length === 0) {
       return;
     }
+
     const { owner, repo } = this.repoPath();
     const response = await githubFetch(
       `https://api.github.com/repos/${owner}/${repo}/issues/${issue}/labels`,
@@ -278,8 +309,10 @@ export class GitHubClient {
         body: JSON.stringify({ labels }),
       },
     );
+
     if (!response.ok) {
       const text = await response.text();
+
       throw new Error(`GitHub add labels ${response.status}: ${text.slice(0, 500)}`);
     }
   }
@@ -291,11 +324,14 @@ export class GitHubClient {
       `https://api.github.com/repos/${owner}/${repo}/issues/${issue}/labels/${encoded}`,
       { method: "DELETE", headers: this.headers() },
     );
+
     if (response.status === 404) {
       return;
     }
+
     if (!response.ok) {
       const text = await response.text();
+
       throw new Error(`GitHub remove label ${response.status}: ${text.slice(0, 500)}`);
     }
   }
@@ -310,8 +346,10 @@ export class GitHubClient {
         body: JSON.stringify({ assignees }),
       },
     );
+
     if (!response.ok) {
       const text = await response.text();
+
       throw new Error(`GitHub assignees ${response.status}: ${text.slice(0, 500)}`);
     }
   }
@@ -325,6 +363,7 @@ export class GitHubClient {
     if (reviewers.length === 0) {
       return;
     }
+
     const { owner, repo } = this.repoPath();
     const response = await githubFetch(
       `https://api.github.com/repos/${owner}/${repo}/pulls/${pr}/requested_reviewers`,
@@ -334,12 +373,15 @@ export class GitHubClient {
         body: JSON.stringify({ reviewers }),
       },
     );
+
     // Author cannot review own PR — treat as soft skip.
     if (response.status === 422) {
       return;
     }
+
     if (!response.ok) {
       const text = await response.text();
+
       throw new Error(`GitHub request review ${response.status}: ${text.slice(0, 500)}`);
     }
   }
@@ -350,23 +392,31 @@ export class GitHubClient {
       `https://api.github.com/repos/${owner}/${repo}/releases/tags/${encodeURIComponent(tag)}`,
       { headers: this.headers() },
     );
+
     if (published.ok) {
       const item = (await published.json()) as { id: number; draft: boolean; html_url: string };
+
       return { id: item.id, draft: item.draft, html_url: item.html_url };
     }
+
     if (published.status !== 404) {
       const text = await published.text();
+
       throw new Error(`GitHub release by tag ${published.status}: ${text.slice(0, 500)}`);
     }
 
     // Drafts are not returned by /releases/tags/{tag} — list and match tag_name.
     const url = new URL(`https://api.github.com/repos/${owner}/${repo}/releases`);
+
     url.searchParams.set("per_page", "50");
     const listed = await githubFetch(url, { headers: this.headers() });
+
     if (!listed.ok) {
       const text = await listed.text();
+
       throw new Error(`GitHub list releases ${listed.status}: ${text.slice(0, 500)}`);
     }
+
     const items = (await listed.json()) as Array<{
       id: number;
       draft: boolean;
@@ -374,9 +424,11 @@ export class GitHubClient {
       tag_name: string;
     }>;
     const found = items.find((item) => item.tag_name === tag);
+
     if (!found) {
       return null;
     }
+
     return { id: found.id, draft: found.draft, html_url: found.html_url };
   }
 
@@ -391,9 +443,11 @@ export class GitHubClient {
   }): Promise<{ id: number; html_url: string; created: boolean }> {
     const { owner, repo } = this.repoPath();
     const existing = await this.findReleaseByTag(params.tag);
+
     if (existing && !existing.draft) {
       return { id: existing.id, html_url: existing.html_url, created: false };
     }
+
     if (existing?.draft) {
       const response = await githubFetch(
         `https://api.github.com/repos/${owner}/${repo}/releases/${existing.id}`,
@@ -409,11 +463,15 @@ export class GitHubClient {
           }),
         },
       );
+
       if (!response.ok) {
         const text = await response.text();
+
         throw new Error(`GitHub publish draft release ${response.status}: ${text.slice(0, 500)}`);
       }
+
       const item = (await response.json()) as { id: number; html_url: string };
+
       return { id: item.id, html_url: item.html_url, created: true };
     }
 
@@ -432,11 +490,15 @@ export class GitHubClient {
         }),
       },
     );
+
     if (!response.ok) {
       const text = await response.text();
+
       throw new Error(`GitHub create release ${response.status}: ${text.slice(0, 500)}`);
     }
+
     const item = (await response.json()) as { id: number; html_url: string };
+
     return { id: item.id, html_url: item.html_url, created: true };
   }
 
@@ -444,12 +506,16 @@ export class GitHubClient {
   async listPublishedReleases(): Promise<GitHubRelease[]> {
     const { owner, repo } = this.repoPath();
     const url = new URL(`https://api.github.com/repos/${owner}/${repo}/releases`);
+
     url.searchParams.set("per_page", "20");
     const response = await githubFetch(url, { headers: this.headers() });
+
     if (!response.ok) {
       const text = await response.text();
+
       throw new Error(`GitHub list releases ${response.status}: ${text.slice(0, 500)}`);
     }
+
     const items = (await response.json()) as Array<{
       id: number;
       tag_name: string;
@@ -460,6 +526,7 @@ export class GitHubClient {
       prerelease: boolean;
       published_at: string | null;
     }>;
+
     return items
       .filter((item) => !item.draft)
       .map((item) => ({
@@ -484,8 +551,10 @@ export class GitHubClient {
         body: JSON.stringify({ body }),
       },
     );
+
     if (!response.ok) {
       const text = await response.text();
+
       throw new Error(`GitHub update release ${response.status}: ${text.slice(0, 500)}`);
     }
   }
@@ -495,19 +564,24 @@ export class GitHubClient {
   > {
     const { owner, repo } = this.repoPath();
     const url = new URL(`https://api.github.com/repos/${owner}/${repo}/milestones`);
+
     url.searchParams.set("state", "open");
     url.searchParams.set("per_page", "50");
     const response = await githubFetch(url, { headers: this.headers() });
+
     if (!response.ok) {
       const text = await response.text();
+
       throw new Error(`GitHub milestones ${response.status}: ${text.slice(0, 500)}`);
     }
+
     const items = (await response.json()) as Array<{
       id: number;
       number: number;
       title: string;
       due_on: string | null;
     }>;
+
     return items.map((item) => ({
       id: item.id,
       number: item.number,
@@ -521,13 +595,17 @@ export class GitHubClient {
   ): Promise<{ id: number; number: number; title: string; due_on: string | null; state: string } | null> {
     const { owner, repo } = this.repoPath();
     const url = new URL(`https://api.github.com/repos/${owner}/${repo}/milestones`);
+
     url.searchParams.set("state", "all");
     url.searchParams.set("per_page", "100");
     const response = await githubFetch(url, { headers: this.headers() });
+
     if (!response.ok) {
       const text = await response.text();
+
       throw new Error(`GitHub milestones ${response.status}: ${text.slice(0, 500)}`);
     }
+
     const items = (await response.json()) as Array<{
       id: number;
       number: number;
@@ -535,6 +613,7 @@ export class GitHubClient {
       due_on: string | null;
       state: string;
     }>;
+
     return items.find((item) => item.title === title) ?? null;
   }
 
@@ -558,11 +637,15 @@ export class GitHubClient {
         }),
       },
     );
+
     if (!response.ok) {
       const text = await response.text();
+
       throw new Error(`GitHub create issue ${response.status}: ${text.slice(0, 500)}`);
     }
+
     const item = (await response.json()) as GitHubIssueRaw;
+
     return toGitHubIssue(item);
   }
 
@@ -576,8 +659,10 @@ export class GitHubClient {
         body: JSON.stringify({ milestone }),
       },
     );
+
     if (!response.ok) {
       const text = await response.text();
+
       throw new Error(`GitHub set issue milestone ${response.status}: ${text.slice(0, 500)}`);
     }
   }
@@ -585,9 +670,11 @@ export class GitHubClient {
   async closeMilestone(milestoneNumber: number, description?: string): Promise<void> {
     const { owner, repo } = this.repoPath();
     const payload: { state: "closed"; description?: string } = { state: "closed" };
+
     if (description !== undefined) {
       payload.description = description;
     }
+
     const response = await githubFetch(
       `https://api.github.com/repos/${owner}/${repo}/milestones/${milestoneNumber}`,
       {
@@ -596,8 +683,10 @@ export class GitHubClient {
         body: JSON.stringify(payload),
       },
     );
+
     if (!response.ok) {
       const text = await response.text();
+
       throw new Error(`GitHub close milestone ${response.status}: ${text.slice(0, 500)}`);
     }
   }
@@ -610,16 +699,20 @@ export class GitHubClient {
       `https://api.github.com/repos/${owner}/${repo}/milestones/${milestoneNumber}`,
       { headers: this.headers() },
     );
+
     if (!response.ok) {
       const text = await response.text();
+
       throw new Error(`GitHub get milestone ${response.status}: ${text.slice(0, 500)}`);
     }
+
     const item = (await response.json()) as {
       number: number;
       title: string;
       description: string | null;
       state: string;
     };
+
     return {
       number: item.number,
       title: item.title,
@@ -639,14 +732,19 @@ export class GitHubClient {
       `https://api.github.com/repos/${owner}/${repo}/compare/${spec}`,
       { headers: this.headers() },
     );
+
     if (response.status === 404) {
       return null;
     }
+
     if (!response.ok) {
       const text = await response.text();
+
       throw new Error(`GitHub compare ${response.status}: ${text.slice(0, 500)}`);
     }
+
     const item = (await response.json()) as { ahead_by?: number };
+
     return typeof item.ahead_by === "number" ? item.ahead_by : null;
   }
 
@@ -656,15 +754,19 @@ export class GitHubClient {
   ): Promise<{ empty: boolean; previousTag: string | null }> {
     const releases = await this.listPublishedReleases();
     const previousTag = previousReleaseTag(releases, currentTag);
+
     if (!previousTag) {
       return { empty: false, previousTag: null };
     }
+
     let aheadBy: number | null;
+
     try {
       aheadBy = await this.commitsAhead(previousTag, head);
     } catch {
       aheadBy = null;
     }
+
     return {
       empty: isEmptySincePreviousRelease({ previousTag, aheadBy }),
       previousTag,
@@ -674,15 +776,20 @@ export class GitHubClient {
   async listOpenIssuesForMilestone(milestoneNumber: number): Promise<GitHubIssue[]> {
     const { owner, repo } = this.repoPath();
     const url = new URL(`https://api.github.com/repos/${owner}/${repo}/issues`);
+
     url.searchParams.set("state", "open");
     url.searchParams.set("milestone", String(milestoneNumber));
     url.searchParams.set("per_page", "50");
     const response = await githubFetch(url, { headers: this.headers() });
+
     if (!response.ok) {
       const text = await response.text();
+
       throw new Error(`GitHub milestone issues ${response.status}: ${text.slice(0, 500)}`);
     }
+
     const items = (await response.json()) as GitHubIssueRaw[];
+
     return items
       .filter((item) => !item.pull_request)
       .map(toGitHubIssue);
@@ -695,14 +802,19 @@ export class GitHubClient {
       `https://api.github.com/repos/${owner}/${repo}/git/ref/tags/${encodeURIComponent(tag)}`,
       { headers: this.headers() },
     );
+
     if (ref.ok) {
       return true;
     }
+
     if (ref.status !== 404) {
       const text = await ref.text();
+
       throw new Error(`GitHub tag ref ${ref.status}: ${text.slice(0, 500)}`);
     }
+
     const release = await this.findReleaseByTag(tag);
+
     return release !== null;
   }
 }
@@ -722,12 +834,15 @@ export function jobComment(params: {
     params.agentId ? `agentId: \`${params.agentId}\`` : "agentId: —",
     params.runId ? `runId: \`${params.runId}\`` : "runId: —",
   ];
+
   if (params.decision) {
     lines.push(`Решение: \`${params.decision}\`.`);
   }
+
   if (params.error) {
     lines.push(`Ошибка: ${params.error}`);
   }
+
   return lines.join("\n");
 }
 
@@ -736,9 +851,12 @@ const GITHUB_COMMENT_MAX = 60_000;
 export function agentResultComment(role: string, text: string): string {
   const header = `## Результат: ${role}\n\n`;
   const trimmed = text.trim() || "(пустой ответ агента)";
+
   if (header.length + trimmed.length <= GITHUB_COMMENT_MAX) {
     return header + trimmed;
   }
+
   const budget = GITHUB_COMMENT_MAX - header.length - 40;
+
   return `${header}${trimmed.slice(0, budget)}\n\n… (обрезано, полный текст в Cursor SDK)`;
 }

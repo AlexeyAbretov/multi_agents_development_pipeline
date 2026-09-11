@@ -26,16 +26,22 @@ export type Config = z.infer<typeof envSchema>;
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const parsed = envSchema.parse(env);
+
   const repoUrl =
     parsed.CURSOR_REPO_URL ||
     (parsed.GITHUB_REPO ? `https://github.com/${parsed.GITHUB_REPO}` : "");
+
   return { ...parsed, CURSOR_REPO_URL: repoUrl };
 }
 
-export function parseOwnerRepo(repo: string): { owner: string; repo: string } | null {
+type OwnerRepo = { owner: string; repo: string } | null;
+
+export function parseOwnerRepo(repo: string): OwnerRepo {
   const [owner, name] = repo.split("/");
+
   if (!owner || !name || repo.split("/").length !== 2) {
     return null;
   }
+
   return { owner, repo: name };
 }

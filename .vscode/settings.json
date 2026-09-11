@@ -1,0 +1,7 @@
+{
+  "eslint.workingDirectories": ["pipeline"],
+  "eslint.useFlatConfig": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  }
+}

@@ -3,7 +3,7 @@ import type { Role } from "./types.js";
 /** Идентичность активного задания: одно облако на пару `(issue, role)`. */
 export const inFlightKey = (issue: number, role: Role): string => {
   return `${issue}:${role}`;
-}
+};
 
 export type DispatchWork<T> = { issue: T; role: Role };
 
@@ -31,4 +31,4 @@ export const selectJobsToLaunch = <T extends { number: number }>(
   }
 
   return selected;
-}
+};

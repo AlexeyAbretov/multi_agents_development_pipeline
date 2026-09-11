@@ -11,7 +11,6 @@ import {
 const STATUS_LABEL: Record<UiJobStatus, string> = {
   queued: "в очереди",
   running: "выполняется",
-  "waiting-approval": "ожидает апрува",
   failed: "ошибка",
   finished: "готово",
 };
@@ -20,8 +19,6 @@ function statusClass(status: UiJobStatus): string {
   switch (status) {
     case "running":
       return "text-amber-800 bg-amber-100";
-    case "waiting-approval":
-      return "text-accent bg-orange-100";
     case "failed":
       return "text-red-800 bg-red-100";
     case "queued":

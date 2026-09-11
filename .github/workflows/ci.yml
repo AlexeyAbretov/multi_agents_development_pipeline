@@ -22,6 +22,7 @@ jobs:
         working-directory: pipeline
         run: |
           npm ci
+          npm run lint
           npm run build
           npm test --if-present
       - name: Pipeline UI build

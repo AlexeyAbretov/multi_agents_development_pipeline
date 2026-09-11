@@ -9,9 +9,11 @@ export function calendarDateInTimeZone(date: Date = new Date(), timeZone = "Euro
   const year = parts.find((part) => part.type === "year")?.value;
   const month = parts.find((part) => part.type === "month")?.value;
   const day = parts.find((part) => part.type === "day")?.value;
+
   if (!year || !month || !day) {
     return date.toISOString().slice(0, 10);
   }
+
   return `${year}-${month}-${day}`;
 }
 
@@ -24,13 +26,16 @@ function dueDay(dueOn: string | null | undefined): string | null {
   if (!dueOn) {
     return null;
   }
+
   const day = dueOn.slice(0, 10);
+
   return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null;
 }
 
 function dayDiff(fromDay: string, toDay: string): number {
   const fromMs = Date.parse(`${fromDay}T00:00:00Z`);
   const toMs = Date.parse(`${toDay}T00:00:00Z`);
+
   return Math.round((toMs - fromMs) / 86_400_000);
 }
 
@@ -41,9 +46,11 @@ export function daysUntilDue(
   today: Date = new Date(),
 ): number | null {
   const day = dueDay(dueOn);
+
   if (!day) {
     return null;
   }
+
   return dayDiff(calendarDateInTimeZone(today, timeZone), day);
 }
 
@@ -60,6 +67,7 @@ export function isMilestoneDueOn(
  */
 export function tagFromMilestoneTitle(title: string): string | null {
   const trimmed = title.trim();
+
   return /^v\d+\.\d+\.\d+$/.test(trimmed) ? trimmed : null;
 }
 
@@ -79,11 +87,15 @@ export function parseRegressionMilestoneId(body: string | null): number | null {
   if (!body) {
     return null;
   }
+
   const marker = body.match(/<!--\s*pipeline:regression:(\d+)\s*-->/i);
+
   if (!marker) {
     return null;
   }
+
   const value = Number(marker[1]);
+
   return Number.isSafeInteger(value) && value > 0 ? value : null;
 }
 
@@ -117,6 +129,7 @@ export function bodyHasBlockedNoReleaseMarker(body: string | null, milestoneId: 
   if (!body) {
     return false;
   }
+
   return body.includes(blockedNoReleaseMarker(milestoneId));
 }
 
@@ -167,28 +180,37 @@ export function decideReleaseGate(params: {
   if (!isRegressionIssue(params.labels, params.body ?? null)) {
     return "not-regression";
   }
+
   if (!params.labels.includes("qa-passed")) {
     return "regression-not-passed";
   }
+
   const tag = params.milestoneTitle ? tagFromMilestoneTitle(params.milestoneTitle) : null;
+
   if (!tag) {
     return "bad-title";
   }
+
   if (params.releaseExists) {
     return "already-released";
   }
+
   if (params.nothingToRelease) {
     return "nothing-to-release";
   }
+
   if (params.dueTodayCount > 1) {
     return "duplicate-due";
   }
+
   if (daysUntilDue(params.dueOn, params.timeZone, params.now) !== 0) {
     return "not-due-today";
   }
+
   if (params.hasOpenWorkItems) {
     return "open-work";
   }
+
   return "ok";
 }
 
@@ -201,8 +223,10 @@ export function previousReleaseTag(
     .sort((a, b) => {
       const aTime = a.published_at ? Date.parse(a.published_at) : 0;
       const bTime = b.published_at ? Date.parse(b.published_at) : 0;
+
       return bTime - aTime;
     });
+
   return others[0]?.tag_name ?? null;
 }
 
@@ -214,9 +238,11 @@ export function isEmptySincePreviousRelease(params: {
   if (!params.previousTag) {
     return false;
   }
+
   if (params.aheadBy === null) {
     return false;
   }
+
   return params.aheadBy <= 0;
 }
 
@@ -241,13 +267,17 @@ export function upsertNothingToReleaseDescription(
   comment: string,
 ): string {
   const markerLine = comment.split("\n")[0] ?? "";
+
   if (existing && markerLine && existing.includes(markerLine)) {
     return existing;
   }
+
   const base = (existing ?? "").trimEnd();
+
   if (!base) {
     return comment;
   }
+
   return `${base}\n\n${comment}`;
 }
 
@@ -260,15 +290,20 @@ export function shouldNotifyBlockedNoRelease(params: {
   if (params.releaseExists) {
     return false;
   }
+
   const labels = params.regressionLabels;
+
   if (!labels) {
     return false;
   }
+
   if (labels.includes("needs-human")) {
     return true;
   }
+
   if (labels.includes("qa-passed") && params.hasOpenWorkItems) {
     return true;
   }
+
   return false;
 }

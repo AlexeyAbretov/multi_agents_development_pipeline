@@ -31,6 +31,7 @@ export class DeployRequestStore {
 
   private save(data: StoreFile): void {
     const tmp = `${this.filePath}.tmp`;
+
     writeFileSync(tmp, JSON.stringify(data, null, 2), "utf8");
     renameSync(tmp, this.filePath);
   }
@@ -47,6 +48,7 @@ export class DeployRequestStore {
     milestoneTitle: string;
   }): DeployRequest | null {
     const data = this.load();
+
     if (
       data.requests.some(
         (item) =>
@@ -55,6 +57,7 @@ export class DeployRequestStore {
     ) {
       return null;
     }
+
     const request: DeployRequest = {
       tag: params.tag,
       milestoneId: params.milestoneId,
@@ -62,8 +65,10 @@ export class DeployRequestStore {
       requestedAt: new Date().toISOString(),
       status: "pending",
     };
+
     data.requests.push(request);
     this.save(data);
+
     return request;
   }
 
@@ -76,9 +81,11 @@ export class DeployRequestStore {
     const item = data.requests.find(
       (entry) => entry.tag === tag && entry.requestedAt === requestedAt,
     );
+
     if (!item) {
       return;
     }
+
     item.status = status;
     this.save(data);
   }

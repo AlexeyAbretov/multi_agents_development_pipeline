@@ -19,10 +19,12 @@ export class JobStore {
 
   private synchronized<T>(fn: () => T): Promise<T> {
     const next = this.chain.then(() => fn());
+
     this.chain = next.then(
       () => undefined,
       () => undefined,
     );
+
     return next;
   }
 
@@ -36,6 +38,7 @@ export class JobStore {
 
   private saveSync(data: StoreFile): void {
     const tmp = `${this.filePath}.tmp`;
+
     writeFileSync(tmp, JSON.stringify(data, null, 2), "utf8");
     renameSync(tmp, this.filePath);
   }
@@ -49,9 +52,11 @@ export class JobStore {
   create(issue: number, role: Role): Promise<Job | null> {
     return this.synchronized(() => {
       const data = this.loadSync();
+
       if (data.jobs.some((job) => job.issue === issue && job.role === role)) {
         return null;
       }
+
       const now = new Date().toISOString();
       const job: Job = {
         id: randomUUID(),
@@ -65,8 +70,10 @@ export class JobStore {
         createdAt: now,
         updatedAt: now,
       };
+
       data.jobs.push(job);
       this.saveSync(data);
+
       return job;
     });
   }
@@ -76,11 +83,14 @@ export class JobStore {
     return this.synchronized(() => {
       const data = this.loadSync();
       const next = data.jobs.filter((job) => !(job.issue === issue && job.role === role));
+
       if (next.length === data.jobs.length) {
         return false;
       }
+
       data.jobs = next;
       this.saveSync(data);
+
       return true;
     });
   }
@@ -98,15 +108,20 @@ export class JobStore {
     return this.synchronized(() => {
       const data = this.loadSync();
       const job = data.jobs.find((item) => item.id === id);
+
       if (!job) {
         return undefined;
       }
+
       Object.assign(job, patch);
+
       if (job.decision === undefined) {
         job.decision = null;
       }
+
       job.updatedAt = new Date().toISOString();
       this.saveSync(data);
+
       return job;
     });
   }
@@ -114,6 +129,7 @@ export class JobStore {
   snapshot(): Promise<{ lastPollAt: string | null; jobs: Job[] }> {
     return this.synchronized(() => {
       const data = this.loadSync();
+
       return {
         lastPollAt: data.lastPollAt,
         jobs: data.jobs.map((job) => ({ ...job, decision: job.decision ?? null })),
@@ -124,6 +140,7 @@ export class JobStore {
   setLastPollAt(iso: string): Promise<void> {
     return this.synchronized(() => {
       const data = this.loadSync();
+
       data.lastPollAt = iso;
       this.saveSync(data);
     });
@@ -136,11 +153,14 @@ export class JobStore {
         (job) => job.status !== "running" && job.status !== "queued",
       );
       const dropped = data.jobs.length - next.length;
+
       if (dropped === 0) {
         return 0;
       }
+
       data.jobs = next;
       this.saveSync(data);
+
       return dropped;
     });
   }

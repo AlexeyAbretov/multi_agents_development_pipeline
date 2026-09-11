@@ -23,6 +23,7 @@ app.get("/health", async () => ({
 registerApiRoutes(app, config, store);
 
 const dropped = await store.dropUnfinishedJobs();
+
 if (dropped > 0) {
   app.log.info({ dropped }, "dropped unfinished pipeline jobs after restart");
 }
