@@ -1,5 +1,5 @@
 ---
-description: Стиль TypeScript-функций в оркестраторе (declaration, 1tbs, padding, Elvis, геттеры)
+description: Стиль TypeScript-функций в оркестраторе (declaration, 1tbs, padding, Elvis, геттеры, импорты)
 globs: pipeline/**/*.ts
 alwaysApply: false
 ---
@@ -12,7 +12,9 @@ alwaysApply: false
 
 Вложенные поля и «нет значения → дефолт» — через Elvis: `?.` и `??`. Не через `"x" in obj`, цепочки `&&` и тернарники. Пустую строку / `0` как «нет значения» по-прежнему обрабатывай через `||`.
 
-Линтер: `cd pipeline && npm run lint` (правка: `npm run lint:fix`). `--fix` сортирует импорты (`simple-import-sort`: `node:` → пакеты → `@providers`/`@routes` → `./` → `../`) и переносит строки через Prettier (`printWidth: 80`). Неразбиваемые строки (длинный литерал без пробелов) — вручную. Elvis: `@typescript-eslint/prefer-optional-chain`, `prefer-nullish-coalescing`.
+Импорты — группы через пустую строку, сверху вниз: `node:` → npm (включая scoped `@cursor/sdk`) → локальные алиасы `tsconfig` (`@config`, `@providers`, `@routes`) → `./` → `../`. Алиасы — отдельная группа **после** внешних, не смешивать с пакетами.
+
+Линтер: `cd pipeline && npm run lint` (правка: `npm run lint:fix`). `--fix` сортирует импорты (`simple-import-sort`) и переносит строки через Prettier (`printWidth: 80`). Неразбиваемые строки (длинный литерал без пробелов) — вручную. Elvis: `@typescript-eslint/prefer-optional-chain`, `prefer-nullish-coalescing`.
 
 ```typescript
 // ❌ BAD
@@ -41,4 +43,20 @@ get ownerRepo(): OwnerRepo {
 }
 
 const stdout = String((err as { stdout?: unknown })?.stdout ?? "");
+
+// ❌ BAD — алиас в одной группе с npm
+import type { Config } from "@config";
+import Fastify from "fastify";
+import { Agent } from "@cursor/sdk";
+
+import { GitHubClient } from "@providers";
+
+// ✅ GOOD — npm, затем локальные алиасы, затем относительные
+import Fastify from "fastify";
+import { Agent } from "@cursor/sdk";
+
+import type { Config } from "@config";
+import { GitHubClient } from "@providers";
+
+import { JobStore } from "./jobs";
 ```

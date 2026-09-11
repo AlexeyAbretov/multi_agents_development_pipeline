@@ -4,7 +4,7 @@ import stylistic from "@stylistic/eslint-plugin";
 import eslintPluginPrettierRecommended from "eslint-plugin-prettier/recommended";
 import simpleImportSort from "eslint-plugin-simple-import-sort";
 
-/** Matches `.cursor/rules/typescript-functions.mdc` (see ownerRepo, Elvis). */
+/** Matches `.cursor/rules/typescript-functions.mdc` (ownerRepo, Elvis, import groups). */
 export default [
   {
     ignores: ["dist/**", "test/**"],
@@ -34,8 +34,8 @@ export default [
           groups: [
             ["^\\u0000"],
             ["^node:"],
-            ["^(?!@(?:providers|routes)(?:/|\\u0000|$))@?\\w"],
-            ["^@(?:providers|routes)(?:/|\\u0000|$)"],
+            ["^@\\w+/", "^\\w"],
+            ["^@"],
             ["^\\./"],
             ["^\\.\\."],
           ],

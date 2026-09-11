@@ -8,6 +8,7 @@
     "baseUrl": ".",
     "paths": {
       "@routes": ["./src/routes/index.ts"],
+      "@config": ["./src/config/index.ts"],
       "@providers": ["./src/providers/index.ts"]
     },
     "strict": true,

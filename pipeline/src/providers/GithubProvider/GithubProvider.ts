@@ -1,3 +1,5 @@
+import type { Config } from "@config";
+
 import { GITHUB_COMMENT_MAX } from "./GithubProvider.constants";
 import type {
   GitHubIssue,
@@ -5,7 +7,6 @@ import type {
   GitHubPull,
 } from "./GithubProvider.types";
 
-import type { Config } from "../../config";
 import type { GitHubRelease } from "../../deploy-rules";
 import { fixIssueWithPR } from "../../rules";
 import {

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const envSchema = z.object({
+export const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3020),
   POLL_INTERVAL_MS: z.coerce.number().int().positive().default(30_000),
   /** Hourly milestone due check on orchestrator (P9). */
@@ -22,34 +22,5 @@ const envSchema = z.object({
   WORKSPACE_DIR: z.string().default("/product"),
 });
 
-type EnvConfig = z.infer<typeof envSchema>;
-type OwnerRepo = { owner: string; repo: string } | null;
-
-export interface Config extends EnvConfig {}
-
-export class Config {
-  private constructor(env: NodeJS.ProcessEnv) {
-    const parsed = envSchema.parse(env);
-
-    Object.assign(this, {
-      ...parsed,
-      CURSOR_REPO_URL:
-        parsed.CURSOR_REPO_URL ||
-        (parsed.GITHUB_REPO ? `https://github.com/${parsed.GITHUB_REPO}` : ""),
-    });
-  }
-
-  static loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
-    return new Config(env);
-  }
-
-  get ownerRepo(): OwnerRepo {
-    const [owner, name] = this.GITHUB_REPO.split("/");
-
-    if (!owner || !name || this.GITHUB_REPO.split("/").length !== 2) {
-      return null;
-    }
-
-    return { owner, repo: name };
-  }
-}
+export type EnvConfig = z.infer<typeof envSchema>;
+export type OwnerRepo = { owner: string; repo: string } | null;

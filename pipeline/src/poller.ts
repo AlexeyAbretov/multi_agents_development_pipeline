@@ -1,5 +1,6 @@
 import type { FastifyBaseLogger } from "fastify";
 
+import type { Config } from "@config";
 import {
   agentResultComment,
   CursorClient,
@@ -9,7 +10,6 @@ import {
   jobComment,
 } from "@providers";
 
-import type { Config } from "./config";
 import { inFlightKey, selectJobsToLaunch } from "./dispatch";
 import { JobStore } from "./jobs";
 import { jobLog } from "./log";

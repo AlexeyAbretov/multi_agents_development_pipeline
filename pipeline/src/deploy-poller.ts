@@ -1,8 +1,8 @@
 import type { FastifyBaseLogger } from "fastify";
 
+import type { Config } from "@config";
 import { GitHubClient } from "@providers";
 
-import type { Config } from "./config";
 import { DeployRequestStore } from "./deploy-request-store";
 import {
   appendDeployNote,

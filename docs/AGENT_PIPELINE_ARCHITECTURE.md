@@ -198,7 +198,7 @@ index.ts                    deployer.ts
 
 | Файл | Назначение |
 |------|------------|
-| `pipeline/src/config.ts` | Env → класс `Config` (`GITHUB_REPO`, `CURSOR_*`, `ownerRepo`, интервалы, `DEPLOY_MODE`). |
+| `pipeline/src/config/` | Env → класс `Config` (`GITHUB_REPO`, `CURSOR_*`, `ownerRepo`, интервалы, `DEPLOY_MODE`). |
 | `pipeline/src/types.ts` | `Role`, `Job`, `JobStatus`, `UiJobStatus`. |
 | `pipeline/src/rules.ts` | Статусная модель issue: роль по labels, исход прогона, fix-round, дерево QA, маркеры ответа, проекция джоба в UI-статус. |
 | `pipeline/src/schedule-rules.ts` | Календарь milestone, tag `vN.N.N`, gate RM, пустой релиз, маркеры в комментариях. |

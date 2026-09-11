@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 
-import { Config } from "./config";
+import { Config } from "@config";
+
 import { startDeployPoller } from "./deploy-poller";
 import { DeployStore } from "./deploy-store";
 

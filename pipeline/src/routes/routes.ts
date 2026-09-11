@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 
-import type { Config } from "../config";
+import type { Config } from "../config/config";
 import { DeployRequestStore } from "../deploy-request-store";
 import { DeployStore } from "../deploy-store";
 import type { JobStore } from "../jobs";

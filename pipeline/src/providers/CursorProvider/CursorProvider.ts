@@ -3,10 +3,11 @@ import { join } from "node:path";
 
 import { Agent, CursorAgentError } from "@cursor/sdk";
 
+import type { Config } from "@config";
+
 import { TESTER_REGRESSION_PROMPT } from "./CursorProvider.constants";
 import type { CursorRunResult, CursorRunStarted } from "./CursorProvider.types";
 
-import type { Config } from "../../config";
 import type { Role } from "../../types";
 import type {
   GitHubIssue,
