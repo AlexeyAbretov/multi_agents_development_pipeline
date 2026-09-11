@@ -1,12 +1,15 @@
-import type { Job, Role, UiJobStatus } from "./types";
 import { isRegressionIssue } from "./schedule-rules";
+import type { Job, Role, UiJobStatus } from "./types";
 
 export type AnalystDecision = "ready-for-dev" | "needs-human";
 export type DeveloperDecision = "in-qa" | "needs-human";
 export type TesterDecision = "in-qa" | "qa-passed" | "needs-human";
 export type ReleaseManagerDecision = "released" | "needs-human";
 
-export function roleForLabels(labels: string[], body: string | null = null): Role | null {
+export function roleForLabels(
+  labels: string[],
+  body: string | null = null,
+): Role | null {
   if (labels.includes("needs-human") || labels.includes("in-analysis")) {
     return null;
   }
@@ -18,7 +21,11 @@ export function roleForLabels(labels: string[], body: string | null = null): Rol
     return null;
   }
 
-  if (hasType && labels.includes("needs-plan") && !labels.includes("ready-for-dev")) {
+  if (
+    hasType &&
+    labels.includes("needs-plan") &&
+    !labels.includes("ready-for-dev")
+  ) {
     return "analyst";
   }
 
@@ -55,7 +62,9 @@ export function decideAnalystOutcome(
     return "needs-human";
   }
 
-  const marker = resultText?.match(/PIPELINE_LABELS:\s*(needs-human|ready-for-dev)/i);
+  const marker = resultText?.match(
+    /PIPELINE_LABELS:\s*(needs-human|ready-for-dev)/i,
+  );
 
   if (marker) {
     return marker[1].toLowerCase() as AnalystDecision;
@@ -122,7 +131,8 @@ export const MAX_TESTER_CHILD_BUGS = 2;
 
 export type TesterBugHandoff = "ok" | "too-many" | "grandchild";
 
-/** Глубина дерева QA = 1: дети не плодят внуков; на корне не больше MAX багов. */
+/** Глубина дерева QA = 1: дети не плодят внуков; на корне не больше MAX
+ * багов. */
 export function classifyTesterBugHandoff(
   parentBody: string | null,
   bugIssues: number[],
@@ -142,7 +152,9 @@ export function classifyTesterBugHandoff(
   return "ok";
 }
 
-export function extractTesterBugIssues(resultText: string | null): number[] | null {
+export function extractTesterBugIssues(
+  resultText: string | null,
+): number[] | null {
   const marker = resultText?.match(
     /^PIPELINE_BUG_ISSUES:\s*(none|(?:#?\d+(?:\s*,\s*#?\d+)*))\s*$/im,
   );
@@ -166,7 +178,9 @@ export function extractTesterBugIssues(resultText: string | null): number[] | nu
 }
 
 export function extractReleaseTag(resultText: string | null): string | null {
-  const marker = resultText?.match(/^PIPELINE_RELEASE_TAG:\s*(v?[0-9]+\.[0-9]+\.[0-9]+)\s*$/im);
+  const marker = resultText?.match(
+    /^PIPELINE_RELEASE_TAG:\s*(v?[0-9]+\.[0-9]+\.[0-9]+)\s*$/im,
+  );
 
   if (!marker) {
     return null;
@@ -177,7 +191,9 @@ export function extractReleaseTag(resultText: string | null): string | null {
   return tag.startsWith("v") ? tag : `v${tag}`;
 }
 
-export function extractReleasePrNumbers(resultText: string | null): number[] | null {
+export function extractReleasePrNumbers(
+  resultText: string | null,
+): number[] | null {
   const marker = resultText?.match(
     /^PIPELINE_PR_NUMBERS:\s*(none|(?:#?\d+(?:\s*,\s*#?\d+)*))\s*$/im,
   );
@@ -200,7 +216,9 @@ export function extractReleasePrNumbers(resultText: string | null): number[] | n
   ];
 }
 
-export function extractReleaseChangelog(resultText: string | null): string | null {
+export function extractReleaseChangelog(
+  resultText: string | null,
+): string | null {
   if (!resultText) {
     return null;
   }
@@ -229,7 +247,9 @@ export function decideReleaseManagerOutcome(
     return "needs-human";
   }
 
-  const marker = resultText?.match(/^PIPELINE_LABELS:\s*(needs-human|released)\s*$/im);
+  const marker = resultText?.match(
+    /^PIPELINE_LABELS:\s*(needs-human|released)\s*$/im,
+  );
 
   if (!marker) {
     return "needs-human";
@@ -248,11 +268,14 @@ export function decideReleaseManagerOutcome(
   return "needs-human";
 }
 
-export function fixIssueWithPR(pr: {
-  title: string;
-  body: string | null;
-  headRef: string;
-}, issue: number): boolean {
+export function fixIssueWithPR(
+  pr: {
+    title: string;
+    body: string | null;
+    headRef: string;
+  },
+  issue: number,
+): boolean {
   const text = `${pr.title}\n${pr.body ?? ""}`;
   const keywords = new RegExp(
     `(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\\s+#${issue}\\b`,
@@ -266,7 +289,8 @@ export function fixIssueWithPR(pr: {
   return new RegExp(`^issue/${issue}(?:-|$)`).test(pr.headRef);
 }
 
-/** Completed developer starts allowed before needs-human (4th attempt blocked). */
+/** Completed developer starts allowed before needs-human (4th attempt
+ * blocked). */
 export const MAX_FIX_ROUNDS = 3;
 
 export function parseFixRound(body: string | null): number | null {
@@ -285,14 +309,18 @@ export function parseFixRound(body: string | null): number | null {
   return Number.isSafeInteger(value) && value >= 0 ? value : null;
 }
 
-/** True when another developer start is not allowed (already used MAX rounds). */
+/** True when another developer start is not allowed (already used MAX
+ * rounds). */
 export function fixRoundBlocksDeveloper(body: string | null): boolean {
   const round = parseFixRound(body) ?? 0;
 
   return round >= MAX_FIX_ROUNDS;
 }
 
-export function upsertFixRoundInBody(body: string | null, round: number): string {
+export function upsertFixRoundInBody(
+  body: string | null,
+  round: number,
+): string {
   const line = `fix-round: ${round}`;
   const html = `<!-- pipeline:fix-round:${round} -->`;
   const base = (body ?? "")
@@ -328,10 +356,17 @@ export function parseChildBugIssues(body: string | null): number[] {
   ];
 }
 
-export function upsertChildBugIssuesInBody(body: string | null, bugs: number[]): string {
-  const unique = [...new Set(bugs.filter((n) => Number.isSafeInteger(n) && n > 0))];
+export function upsertChildBugIssuesInBody(
+  body: string | null,
+  bugs: number[],
+): string {
+  const unique = [
+    ...new Set(bugs.filter((n) => Number.isSafeInteger(n) && n > 0)),
+  ];
   const marker = `<!-- pipeline:child-bugs:${unique.join(",")} -->`;
-  const base = (body ?? "").replace(/<!--\s*pipeline:child-bugs:[0-9,\s]*\s*-->/gi, "").trimEnd();
+  const base = (body ?? "")
+    .replace(/<!--\s*pipeline:child-bugs:[0-9,\s]*\s*-->/gi, "")
+    .trimEnd();
 
   if (unique.length === 0) {
     return base;
@@ -371,10 +406,15 @@ export function isChildBugCandidate(issue: {
   );
 }
 
-/** Группы sibling child bugs (один parent) для параллельного analyst; остальные — по одной issue. */
-export function groupAnalystIssuesByParent<T extends { number: number; labels: string[]; body: string | null }>(
-  issues: T[],
-): T[][] {
+/** Группы sibling child bugs (один parent) для параллельного analyst;
+ * остальные — по одной issue. */
+export function groupAnalystIssuesByParent<
+  T extends {
+    number: number;
+    labels: string[];
+    body: string | null;
+  },
+>(issues: T[]): T[][] {
   const siblingByParent = new Map<number, T[]>();
   const standalone: T[] = [];
 
@@ -400,7 +440,10 @@ export function groupAnalystIssuesByParent<T extends { number: number; labels: s
 }
 
 /** Child is still in the fix pipeline (blocks parent re-QA). */
-export function childBugStillOpen(labels: string[], state: "open" | "closed"): boolean {
+export function childBugStillOpen(
+  labels: string[],
+  state: "open" | "closed",
+): boolean {
   if (state === "closed") {
     return false;
   }
@@ -429,7 +472,8 @@ export function childBlocksParentReQa(
   return childBugStillOpen(labels, state);
 }
 
-/** Дочерний qa-passed без открытого PR, фикс уже смержен — можно закрыть issue. */
+/** Дочерний qa-passed без открытого PR, фикс уже смержен — можно закрыть
+ * issue. */
 export function shouldCloseMergedChildIssue(params: {
   body: string | null;
   labels: string[];
@@ -451,7 +495,9 @@ export function shouldCloseMergedChildIssue(params: {
   return params.hasMergedFixPr;
 }
 
-export function mapJobToUiStatus(job: Pick<Job, "status" | "decision">): UiJobStatus {
+export function mapJobToUiStatus(
+  job: Pick<Job, "status" | "decision">,
+): UiJobStatus {
   if (job.status === "queued") {
     return "queued";
   }

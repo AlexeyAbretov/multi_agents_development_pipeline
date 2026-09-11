@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+
 import type { Config } from "./config";
 
 const execFileAsync = promisify(execFile);
@@ -9,11 +10,16 @@ export type DeployRunResult = {
   detail: string;
 };
 
-export async function runProductDeploy(config: Config, tag: string): Promise<DeployRunResult> {
+export async function runProductDeploy(
+  config: Config,
+  tag: string,
+): Promise<DeployRunResult> {
   if (config.DEPLOY_MODE === "stub") {
     return {
       ok: true,
-      detail: `stub: tag \`${tag}\` доехал, docker compose продукта не запускался (DEPLOY_MODE=stub).`,
+      detail:
+        `stub: tag \`${tag}\` доехал, docker compose ` +
+        "продукта не запускался (DEPLOY_MODE=stub).",
     };
   }
 
@@ -35,7 +41,11 @@ export async function runProductDeploy(config: Config, tag: string): Promise<Dep
 
     return {
       ok: true,
-      detail: `compose up -d (\`${composeFile}\`, tag \`${tag}\`):\n\`\`\`\n${out.slice(0, 3500)}\n\`\`\``,
+      detail:
+        `compose up -d (\`${composeFile}\`, tag \`${tag}\`):\n` +
+        "```\n" +
+        `${out.slice(0, 3500)}\n` +
+        "```",
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -45,7 +55,11 @@ export async function runProductDeploy(config: Config, tag: string): Promise<Dep
 
     return {
       ok: false,
-      detail: `compose failed (tag \`${tag}\`): ${message}\n\`\`\`\n${`${stdout}\n${stderr}`.trim().slice(0, 3500)}\n\`\`\``,
+      detail:
+        `compose failed (tag \`${tag}\`): ${message}\n` +
+        "```\n" +
+        `${`${stdout}\n${stderr}`.trim().slice(0, 3500)}\n` +
+        "```",
     };
   }
 }

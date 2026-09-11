@@ -4,7 +4,10 @@ import { join } from "node:path";
 type StoreFile = {
   /** Milestone ids that already received blocked: no release comments. */
   blockedNotified: number[];
-  /** Calendar days (YYYY-MM-DD in SCHEDULE_TZ) that already got duplicate-due comments. */
+  /**
+   * Calendar days (YYYY-MM-DD in SCHEDULE_TZ) that already got
+   * duplicate-due comments.
+   */
   duplicateDueNotified: string[];
 };
 
@@ -18,7 +21,9 @@ export class ScheduleStateStore {
 
   load(): StoreFile {
     try {
-      const parsed = JSON.parse(readFileSync(this.filePath, "utf8")) as Partial<StoreFile>;
+      const parsed = JSON.parse(
+        readFileSync(this.filePath, "utf8"),
+      ) as Partial<StoreFile>;
 
       return {
         blockedNotified: parsed.blockedNotified ?? [],

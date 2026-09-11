@@ -1,6 +1,16 @@
 import type { FastifyBaseLogger } from "fastify";
+
+import {
+  agentResultComment,
+  CursorClient,
+  GitHubClient,
+  type GitHubIssue,
+  type GitHubPull,
+  jobComment,
+} from "@providers";
+
 import type { Config } from "./config";
-import { CursorClient, GitHubClient, agentResultComment, jobComment, type GitHubIssue, type GitHubPull } from "@providers";
+import { inFlightKey, selectJobsToLaunch } from "./dispatch";
 import { JobStore } from "./jobs";
 import { jobLog } from "./log";
 import {
@@ -10,6 +20,9 @@ import {
   decideDeveloperOutcome,
   decideReleaseManagerOutcome,
   decideTesterOutcome,
+  extractReleaseChangelog,
+  extractReleaseTag,
+  extractTesterBugIssues,
   fixRoundBlocksDeveloper,
   groupAnalystIssuesByParent,
   MAX_FIX_ROUNDS,
@@ -17,24 +30,20 @@ import {
   parseChildBugIssues,
   parseFixRound,
   parseRelatedParentIssue,
-  shouldCloseMergedChildIssue,
-  extractReleaseChangelog,
-  extractReleaseTag,
   roleForLabels,
-  extractTesterBugIssues,
+  shouldCloseMergedChildIssue,
   upsertChildBugIssuesInBody,
   upsertFixRoundInBody,
 } from "./rules";
+import { closeEmptyRelease } from "./schedule";
 import {
-  decideReleaseGate,
   daysUntilDue,
+  decideReleaseGate,
   isRegressionIssue,
   isReleaseWorkIssue,
   tagFromMilestoneTitle,
 } from "./schedule-rules";
 import type { Role } from "./types";
-import { inFlightKey, selectJobsToLaunch } from "./dispatch";
-import { closeEmptyRelease } from "./schedule";
 
 export function startPoller(
   config: Config,
@@ -54,9 +63,11 @@ export function startPoller(
     }
 
     listing = true;
-    void pollOnce(config, logger, store, github, cursor, inFlight).finally(() => {
-      listing = false;
-    });
+    void pollOnce(config, logger, store, github, cursor, inFlight).finally(
+      () => {
+        listing = false;
+      },
+    );
   };
 
   tick();
@@ -138,7 +149,9 @@ async function pollOnce(
     work.push({ issue, role });
   }
 
-  const analystIssues = work.filter((item) => item.role === "analyst").map((item) => item.issue);
+  const analystIssues = work
+    .filter((item) => item.role === "analyst")
+    .map((item) => item.issue);
 
   for (const batch of groupAnalystIssuesByParent(analystIssues)) {
     if (batch.length > 1) {
@@ -150,7 +163,9 @@ async function pollOnce(
           agentId: null,
           runId: null,
         },
-        `parallel analyst dispatch: ${batch.map((issue) => `#${issue.number}`).join(", ")}`,
+        `parallel analyst dispatch: ${batch
+          .map((issue) => `#${issue.number}`)
+          .join(", ")}`,
       );
     }
   }
@@ -184,7 +199,9 @@ async function pollOnce(
         agentId: null,
         runId: null,
       },
-      `${role} dispatch (parallel): ${numbers.map((number) => `#${number}`).join(", ")}`,
+      `${role} dispatch (parallel): ${numbers
+        .map((number) => `#${number}`)
+        .join(", ")}`,
     );
   }
 
@@ -249,7 +266,12 @@ async function labelTesterBugs(
 
   for (const issue of children) {
     // Новый круг плана: сбросить джобы и state-метки, только bug + needs-plan.
-    await store.removeRoles(issue, ["analyst", "developer", "tester", "release-manager"]);
+    await store.removeRoles(issue, [
+      "analyst",
+      "developer",
+      "tester",
+      "release-manager",
+    ]);
     await github.removeIssueLabel(issue, "in-analysis");
     await github.removeIssueLabel(issue, "ready-for-dev");
     await github.removeIssueLabel(issue, "in-dev");
@@ -267,7 +289,9 @@ async function labelTesterBugs(
     }
   }
 
-  const merged = [...new Set([...parseChildBugIssues(parent.body), ...children])];
+  const merged = [
+    ...new Set([...parseChildBugIssues(parent.body), ...children]),
+  ];
 
   await github.updateIssueBody(
     parent.number,
@@ -308,7 +332,9 @@ async function closeMergedChildBugs(
 
     try {
       const hasOpenFixPr = await github.hasOpenFixPr(issue.number);
-      const merged = hasOpenFixPr ? null : await github.findMergedFixPr(issue.number);
+      const merged = hasOpenFixPr
+        ? null
+        : await github.findMergedFixPr(issue.number);
 
       if (
         !shouldCloseMergedChildIssue({
@@ -323,7 +349,9 @@ async function closeMergedChildBugs(
 
       await github.commentOnIssue(
         issue.number,
-        `Пайплайн: фикс смержен в ${merged!.html_url} (не в default branch — GitHub issue сам не закрывает). Закрываю дочерний баг.`,
+        `Пайплайн: фикс смержен в ${merged!.html_url} ` +
+          "(не в default branch — GitHub issue сам не закрывает). " +
+          "Закрываю дочерний баг.",
       );
       await github.closeIssue(issue.number);
       jobLog(
@@ -332,7 +360,10 @@ async function closeMergedChildBugs(
         `closed child bug after merged PR #${merged!.number}`,
       );
     } catch (err) {
-      logger.error({ err, issue: issue.number }, "close merged child bug failed");
+      logger.error(
+        { err, issue: issue.number },
+        "close merged child bug failed",
+      );
     }
   }
 }
@@ -363,12 +394,14 @@ async function retargetChildPullIfNeeded(
     await github.retargetPullBase(childPr.number, parentPr.headRef);
     await github.commentOnIssue(
       issue.number,
-      `Пайплайн: base PR #${childPr.number} сменён на \`${parentPr.headRef}\` (ветка родителя #${parent}), не main.`,
+      `Пайплайн: base PR #${childPr.number} сменён на ` +
+        `\`${parentPr.headRef}\` (ветка родителя #${parent}), не main.`,
     );
     jobLog(
       logger,
       { issue: issue.number, role: "developer", agentId: null, runId: null },
-      `retargeted PR #${childPr.number} base ${childPr.baseRef} → ${parentPr.headRef}`,
+      `retargeted PR #${childPr.number} base ` +
+        `${childPr.baseRef} → ${parentPr.headRef}`,
     );
   } catch (err) {
     logger.error({ err, issue: issue.number }, "retarget child PR base failed");
@@ -430,7 +463,8 @@ async function releaseStartGate(
       const issues = await github.listOpenIssuesForMilestone(milestone.number);
 
       hasOpenWorkItems = issues.some(
-        (item) => item.number !== issue.number && isReleaseWorkIssue(item.labels),
+        (item) =>
+          item.number !== issue.number && isReleaseWorkIssue(item.labels),
       );
     } catch {
       hasOpenWorkItems = true;
@@ -446,7 +480,10 @@ async function releaseStartGate(
 
     if (!releaseExists) {
       try {
-        const detected = await github.detectEmptySincePrevious(tag, config.CURSOR_STARTING_REF);
+        const detected = await github.detectEmptySincePrevious(
+          tag,
+          config.CURSOR_STARTING_REF,
+        );
 
         nothingToRelease = detected.empty;
         previousTag = detected.previousTag;
@@ -488,11 +525,15 @@ async function handleIssue(
         await applyDeveloperLabels(github, issue.number, "needs-human");
         await github.commentOnIssue(
           issue.number,
-          `Пайплайн: лимит \`fix-round\` (${MAX_FIX_ROUNDS}) исчерпан — разработчик не стартует, нужен человек.`,
+          `Пайплайн: лимит \`fix-round\` (${MAX_FIX_ROUNDS}) исчерпан — ` +
+            "разработчик не стартует, нужен человек.",
         );
         jobLog(logger, fields, "labels: fix-round limit → needs-human");
       } catch (err) {
-        logger.error({ err, issue: issue.number }, "fix-round limit labels failed");
+        logger.error(
+          { err, issue: issue.number },
+          "fix-round limit labels failed",
+        );
       }
 
       return;
@@ -539,11 +580,17 @@ async function handleIssue(
         await applyTesterLabels(github, issue.number, "needs-human");
         await github.commentOnIssue(
           issue.number,
-          "Пайплайн: `in-qa`, но нет открытого PR с `Fixes #<этот номер>` — тестировщик не стартует, нужен человек. Допишите `Fixes #N` в тело PR (не затирая старые Fixes) или снимите `in-qa`.",
+          "Пайплайн: `in-qa`, но нет открытого PR с " +
+            "`Fixes #<этот номер>` — тестировщик не стартует, нужен человек. " +
+            "Допишите `Fixes #N` в тело PR (не затирая старые Fixes) " +
+            "или снимите `in-qa`.",
         );
         jobLog(logger, fields, "labels: no Fixes PR → needs-human");
       } catch (err) {
-        logger.error({ err, issue: issue.number }, "tester missing PR labels failed");
+        logger.error(
+          { err, issue: issue.number },
+          "tester missing PR labels failed",
+        );
       }
 
       return;
@@ -554,11 +601,23 @@ async function handleIssue(
     const gate = await releaseStartGate(config, github, issue);
 
     if (!gate.ok) {
-      if (gate.reason === "nothing-to-release" && issue.milestone && gate.previousTag) {
+      if (
+        gate.reason === "nothing-to-release" &&
+        issue.milestone &&
+        gate.previousTag
+      ) {
         try {
-          await closeEmptyRelease(github, logger, issue.milestone, gate.previousTag);
+          await closeEmptyRelease(
+            github,
+            logger,
+            issue.milestone,
+            gate.previousTag,
+          );
         } catch (err) {
-          logger.error({ err, issue: issue.number }, "close empty milestone failed");
+          logger.error(
+            { err, issue: issue.number },
+            "close empty milestone failed",
+          );
         }
       }
 
@@ -575,7 +634,10 @@ async function handleIssue(
       try {
         linkedPull = (await github.findOpenFixPr(parent)) ?? undefined;
       } catch (err) {
-        logger.error({ err, issue: issue.number, parent }, "github parent PR lookup failed");
+        logger.error(
+          { err, issue: issue.number, parent },
+          "github parent PR lookup failed",
+        );
       }
     }
   }
@@ -588,10 +650,18 @@ async function handleIssue(
         linkedPull = (await github.findOpenFixPr(parent)) ?? undefined;
 
         if (linkedPull) {
-          jobLog(logger, fields, `child developer startingRef: ${linkedPull.headRef} (parent #${parent})`);
+          jobLog(
+            logger,
+            fields,
+            `child developer startingRef: ${linkedPull.headRef} ` +
+              `(parent #${parent})`,
+          );
         }
       } catch (err) {
-        logger.error({ err, issue: issue.number, parent }, "github parent PR lookup failed");
+        logger.error(
+          { err, issue: issue.number, parent },
+          "github parent PR lookup failed",
+        );
       }
     }
   }
@@ -604,18 +674,26 @@ async function handleIssue(
         jobLog(
           logger,
           fields,
-          `skip tester: waiting for child bugs ${blocking.map((n) => `#${n}`).join(", ")}`,
+          `skip tester: waiting for child bugs ${blocking
+            .map((n) => `#${n}`)
+            .join(", ")}`,
         );
 
         return;
       }
 
-      if (parseChildBugIssues(issue.body).length > 0 && (await store.find(issue.number, "tester"))) {
+      if (
+        parseChildBugIssues(issue.body).length > 0 &&
+        (await store.find(issue.number, "tester"))
+      ) {
         await store.remove(issue.number, "tester");
         jobLog(logger, fields, "cleared tester job for re-QA after child bugs");
       }
     } catch (err) {
-      logger.error({ err, issue: issue.number }, "child bug status check failed");
+      logger.error(
+        { err, issue: issue.number },
+        "child bug status check failed",
+      );
 
       return;
     }
@@ -628,7 +706,11 @@ async function handleIssue(
   }
 
   if (!config.CURSOR_API_KEY || !config.CURSOR_REPO_URL) {
-    jobLog(logger, fields, "poll skip: CURSOR_API_KEY or CURSOR_REPO_URL empty");
+    jobLog(
+      logger,
+      fields,
+      "poll skip: CURSOR_API_KEY or CURSOR_REPO_URL empty",
+    );
 
     return;
   }
@@ -653,11 +735,17 @@ async function handleIssue(
         status: "startup_error",
         error: "failed to set in-analysis",
       });
-      logger.error({ err, issue: issue.number }, "github analyst labels failed");
+      logger.error(
+        { err, issue: issue.number },
+        "github analyst labels failed",
+      );
       try {
         await applyAnalystLabels(github, issue.number, "needs-human");
       } catch (labelErr) {
-        logger.error({ err: labelErr, issue: issue.number }, "github fallback labels failed");
+        logger.error(
+          { err: labelErr, issue: issue.number },
+          "github fallback labels failed",
+        );
       }
 
       return;
@@ -674,12 +762,18 @@ async function handleIssue(
       issue = { ...issue, body };
       jobLog(logger, fields, `fix-round: ${nextRound}`);
     } catch (err) {
-      await store.update(job.id, { status: "startup_error", error: "failed to set fix-round" });
+      await store.update(job.id, {
+        status: "startup_error",
+        error: "failed to set fix-round",
+      });
       logger.error({ err, issue: issue.number }, "fix-round update failed");
       try {
         await applyDeveloperLabels(github, issue.number, "needs-human");
       } catch (labelErr) {
-        logger.error({ err: labelErr, issue: issue.number }, "github fallback labels failed");
+        logger.error(
+          { err: labelErr, issue: issue.number },
+          "github fallback labels failed",
+        );
       }
 
       return;
@@ -694,11 +788,17 @@ async function handleIssue(
         status: "startup_error",
         error: "failed to set in-dev",
       });
-      logger.error({ err, issue: issue.number }, "github developer labels failed");
+      logger.error(
+        { err, issue: issue.number },
+        "github developer labels failed",
+      );
       try {
         await applyDeveloperLabels(github, issue.number, "needs-human");
       } catch (labelErr) {
-        logger.error({ err: labelErr, issue: issue.number }, "github fallback labels failed");
+        logger.error(
+          { err: labelErr, issue: issue.number },
+          "github fallback labels failed",
+        );
       }
 
       return;
@@ -719,7 +819,10 @@ async function handleIssue(
       try {
         await applyTesterLabels(github, issue.number, "needs-human");
       } catch (labelErr) {
-        logger.error({ err: labelErr, issue: issue.number }, "github fallback labels failed");
+        logger.error(
+          { err: labelErr, issue: issue.number },
+          "github fallback labels failed",
+        );
       }
 
       return;
@@ -733,7 +836,11 @@ async function handleIssue(
     issue,
     async ({ agentId, runId }) => {
       await store.update(job.id, { agentId, runId });
-      jobLog(logger, { issue: issue.number, role, agentId, runId }, "cursor run started");
+      jobLog(
+        logger,
+        { issue: issue.number, role, agentId, runId },
+        "cursor run started",
+      );
       try {
         await github.commentOnIssue(
           issue.number,
@@ -842,13 +949,19 @@ async function handleIssue(
         testerDecision = "needs-human";
         const reason =
           handoff === "grandchild"
-            ? "Пайплайн: тестировщик на дочернем баге (`Related to #`) открыл новые issues — глубина дерева QA = 1, внуки запрещены. Нужен человек."
-            : `Пайплайн: тестировщик создал больше ${MAX_TESTER_CHILD_BUGS} bug-issues за прогон (лимит). Нужен человек.`;
+            ? "Пайплайн: тестировщик на дочернем баге (`Related to #`) " +
+              "открыл новые issues — глубина дерева QA = 1, внуки " +
+              "запрещены. Нужен человек."
+            : `Пайплайн: тестировщик создал больше ${MAX_TESTER_CHILD_BUGS} ` +
+              "bug-issues за прогон (лимит). Нужен человек.";
 
         try {
           await github.commentOnIssue(issue.number, reason);
         } catch (err) {
-          logger.error({ err, issue: issue.number }, "tester handoff comment failed");
+          logger.error(
+            { err, issue: issue.number },
+            "tester handoff comment failed",
+          );
         }
 
         jobLog(
@@ -863,7 +976,12 @@ async function handleIssue(
         );
       } else {
         try {
-          const bugs = await labelTesterBugs(github, store, issue, bugIssues ?? []);
+          const bugs = await labelTesterBugs(
+            github,
+            store,
+            issue,
+            bugIssues ?? [],
+          );
 
           jobLog(
             logger,
@@ -874,12 +992,17 @@ async function handleIssue(
               runId: result.runId,
             },
             bugs.length
-              ? `labeled tester bugs: ${bugs.map((number) => `#${number}`).join(", ")}`
+              ? `labeled tester bugs: ${bugs
+                  .map((number) => `#${number}`)
+                  .join(", ")}`
               : "tester reported no bugs",
           );
         } catch (err) {
           testerDecision = "needs-human";
-          logger.error({ err, issue: issue.number }, "tester bug handoff failed");
+          logger.error(
+            { err, issue: issue.number },
+            "tester bug handoff failed",
+          );
         }
       }
     }
@@ -905,7 +1028,9 @@ async function handleIssue(
   if (role === "release-manager") {
     const tag = extractReleaseTag(result.text);
     const changelog = extractReleaseChangelog(result.text);
-    const expectedTag = issue.milestone ? tagFromMilestoneTitle(issue.milestone.title) : null;
+    const expectedTag = issue.milestone
+      ? tagFromMilestoneTitle(issue.milestone.title)
+      : null;
     let releaseDecision = decideReleaseManagerOutcome(
       result.status,
       result.text,
@@ -916,7 +1041,12 @@ async function handleIssue(
 
     if (releaseDecision === "released" && tag && changelog) {
       try {
-        const releaseUrl = await applyPublishedRelease(github, issue, tag, changelog);
+        const releaseUrl = await applyPublishedRelease(
+          github,
+          issue,
+          tag,
+          changelog,
+        );
 
         jobLog(
           logger,
@@ -978,7 +1108,10 @@ async function handleIssue(
 
   if (result.text?.trim()) {
     try {
-      await github.commentOnIssue(issue.number, agentResultComment(role, result.text));
+      await github.commentOnIssue(
+        issue.number,
+        agentResultComment(role, result.text),
+      );
     } catch (err) {
       logger.error({ err, issue: issue.number }, "github plan comment failed");
     }

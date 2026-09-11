@@ -1,5 +1,7 @@
 import Fastify from "fastify";
+
 import { registerApiRoutes } from "@routes";
+
 import { loadConfig } from "./config";
 import { JobStore } from "./jobs";
 import { startPoller } from "./poller";

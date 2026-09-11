@@ -1,6 +1,8 @@
 import tsParser from "@typescript-eslint/parser";
 import tsPlugin from "@typescript-eslint/eslint-plugin";
 import stylistic from "@stylistic/eslint-plugin";
+import eslintPluginPrettierRecommended from "eslint-plugin-prettier/recommended";
+import simpleImportSort from "eslint-plugin-simple-import-sort";
 
 /** Matches `.cursor/rules/typescript-functions.mdc` (see parseOwnerRepo, Elvis). */
 export default [
@@ -21,10 +23,25 @@ export default [
     plugins: {
       "@stylistic": stylistic,
       "@typescript-eslint": tsPlugin,
+      "simple-import-sort": simpleImportSort,
     },
     rules: {
       curly: ["error", "all"],
       "func-style": ["error", "declaration", { allowArrowFunctions: true }],
+      "simple-import-sort/imports": [
+        "error",
+        {
+          groups: [
+            ["^\\u0000"],
+            ["^node:"],
+            ["^(?!@(?:providers|routes)(?:/|\\u0000|$))@?\\w"],
+            ["^@(?:providers|routes)(?:/|\\u0000|$)"],
+            ["^\\./"],
+            ["^\\.\\."],
+          ],
+        },
+      ],
+      "simple-import-sort/exports": "error",
       "@typescript-eslint/prefer-optional-chain": "error",
       "@typescript-eslint/prefer-nullish-coalescing": [
         "error",
@@ -37,24 +54,32 @@ export default [
           },
         },
       ],
-      "@stylistic/brace-style": ["error", "1tbs", { allowSingleLine: false }],
-      "@stylistic/indent": ["error", 2],
-      "@stylistic/quotes": ["error", "double", { avoidEscape: true }],
-      "@stylistic/semi": ["error", "always"],
-      "@stylistic/no-trailing-spaces": "error",
-      "@stylistic/eol-last": ["error", "always"],
-      "@stylistic/padded-blocks": ["error", "never"],
-      "@stylistic/space-before-function-paren": [
-        "error",
-        { anonymous: "always", named: "never", asyncArrow: "always" },
-      ],
       "@stylistic/padding-line-between-statements": [
         "error",
         { blankLine: "always", prev: "*", next: "return" },
         { blankLine: "always", prev: ["const", "let", "var"], next: "*" },
-        { blankLine: "any", prev: ["const", "let", "var"], next: ["const", "let", "var"] },
+        {
+          blankLine: "any",
+          prev: ["const", "let", "var"],
+          next: ["const", "let", "var"],
+        },
         { blankLine: "always", prev: "block-like", next: "*" },
         { blankLine: "always", prev: "*", next: "if" },
+      ],
+    },
+  },
+  eslintPluginPrettierRecommended,
+  {
+    files: ["src/**/*.ts"],
+    rules: {
+      curly: ["error", "all"],
+      "@stylistic/max-len": [
+        "error",
+        {
+          code: 80,
+          ignoreUrls: true,
+          ignoreRegExpLiterals: true,
+        },
       ],
     },
   },

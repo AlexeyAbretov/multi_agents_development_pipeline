@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+
 import type { Config } from "../config";
 import { DeployRequestStore } from "../deploy-request-store";
 import { DeployStore } from "../deploy-store";
@@ -38,7 +39,9 @@ export function registerApiRoutes(
 
     return {
       deploys: [...deploys].sort((a, b) => b.at.localeCompare(a.at)),
-      requests: [...requests].sort((a, b) => b.requestedAt.localeCompare(a.requestedAt)),
+      requests: [...requests].sort((a, b) =>
+        b.requestedAt.localeCompare(a.requestedAt),
+      ),
     };
   });
 }

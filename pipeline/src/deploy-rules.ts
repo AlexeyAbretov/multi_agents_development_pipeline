@@ -10,7 +10,9 @@ export type GitHubRelease = {
 };
 
 /** Published (not draft) releases are eligible — including pre-release. */
-export function isDeployableRelease(release: Pick<GitHubRelease, "draft">): boolean {
+export function isDeployableRelease(
+  release: Pick<GitHubRelease, "draft">,
+): boolean {
   return !release.draft;
 }
 
@@ -33,7 +35,10 @@ export function deployMarker(releaseId: number): string {
   return `<!-- pipeline:deploy:${releaseId} -->`;
 }
 
-export function releaseBodyHasDeployMarker(body: string | null, releaseId: number): boolean {
+export function releaseBodyHasDeployMarker(
+  body: string | null,
+  releaseId: number,
+): boolean {
   if (!body) {
     return false;
   }
@@ -48,7 +53,9 @@ export function appendDeployNote(
   detail: string,
 ): string {
   const marker = deployMarker(releaseId);
-  const base = (body ?? "").replace(/\n*---\n<!-- pipeline:deploy:\d+ -->[\s\S]*$/m, "").trimEnd();
+  const base = (body ?? "")
+    .replace(/\n*---\n<!-- pipeline:deploy:\d+ -->[\s\S]*$/m, "")
+    .trimEnd();
   const block = [
     "",
     "---",

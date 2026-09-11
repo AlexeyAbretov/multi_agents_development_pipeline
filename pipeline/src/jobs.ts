@@ -1,6 +1,7 @@
+import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { randomUUID } from "node:crypto";
+
 import type { Job, Role } from "./types";
 
 type StoreFile = {
@@ -45,7 +46,9 @@ export class JobStore {
 
   find(issue: number, role: Role): Promise<Job | undefined> {
     return this.synchronized(() =>
-      this.loadSync().jobs.find((job) => job.issue === issue && job.role === role),
+      this.loadSync().jobs.find(
+        (job) => job.issue === issue && job.role === role,
+      ),
     );
   }
 
@@ -82,7 +85,9 @@ export class JobStore {
   async remove(issue: number, role: Role): Promise<boolean> {
     return this.synchronized(() => {
       const data = this.loadSync();
-      const next = data.jobs.filter((job) => !(job.issue === issue && job.role === role));
+      const next = data.jobs.filter(
+        (job) => !(job.issue === issue && job.role === role),
+      );
 
       if (next.length === data.jobs.length) {
         return false;
@@ -103,7 +108,9 @@ export class JobStore {
 
   update(
     id: string,
-    patch: Partial<Pick<Job, "status" | "agentId" | "runId" | "error" | "decision">>,
+    patch: Partial<
+      Pick<Job, "status" | "agentId" | "runId" | "error" | "decision">
+    >,
   ): Promise<Job | undefined> {
     return this.synchronized(() => {
       const data = this.loadSync();
@@ -132,7 +139,10 @@ export class JobStore {
 
       return {
         lastPollAt: data.lastPollAt,
-        jobs: data.jobs.map((job) => ({ ...job, decision: job.decision ?? null })),
+        jobs: data.jobs.map((job) => ({
+          ...job,
+          decision: job.decision ?? null,
+        })),
       };
     });
   }

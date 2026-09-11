@@ -147,6 +147,8 @@ queued → running → finished | error | startup_error
 | **@cursor/sdk** | Cloud Agent: `Agent.create({ cloud: { repos } })`. Local runtime запрещён конституцией (P1). |
 | **Node ≥ 22** | Встроенный `fetch` к GitHub API, ESM, `await using` для агента. |
 | **tsx / typescript** | Dev-watch и сборка в `dist/`. Тесты: `node --test` по скомпилированному JS. |
+| **prettier** | Автоперенос строк (`printWidth: 80`) в `eslint --fix` / `npm run lint:fix`. Жёсткий потолок — `@stylistic/max-len`. |
+| **eslint-plugin-simple-import-sort** | Сортировка и группы импортов: `node:` → npm → `@providers`/`@routes` → `./` → `../`. |
 | **tsc-alias** | После `tsc` переписывает алиасы (`@routes`, `@providers`) и дописывает `.js` к относительным импортам в `dist/` (`resolveFullPaths`). Без этого `node dist/index.js` в Docker не резолвит алиасы и ESM-пути без расширения. Сборка: `npm run clean && tsc && tsc-alias`. Источники — `module`/`moduleResolution`: `ES2022`/`bundler`, импорты без `.js`. |
 
 Чего нет намеренно:

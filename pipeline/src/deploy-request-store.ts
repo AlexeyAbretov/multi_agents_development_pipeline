@@ -38,7 +38,9 @@ export class DeployRequestStore {
 
   hasOpenOrDoneForTag(tag: string): boolean {
     return this.load().requests.some(
-      (item) => item.tag === tag && (item.status === "pending" || item.status === "done"),
+      (item) =>
+        item.tag === tag &&
+        (item.status === "pending" || item.status === "done"),
     );
   }
 
@@ -52,7 +54,8 @@ export class DeployRequestStore {
     if (
       data.requests.some(
         (item) =>
-          item.tag === params.tag && (item.status === "pending" || item.status === "done"),
+          item.tag === params.tag &&
+          (item.status === "pending" || item.status === "done"),
       )
     ) {
       return null;

@@ -51,7 +51,9 @@ export class DeployStore {
   }
 
   hasSuccessfulTag(tag: string): boolean {
-    return this.load().deploys.some((item) => item.tag === tag && item.status === "deployed");
+    return this.load().deploys.some(
+      (item) => item.tag === tag && item.status === "deployed",
+    );
   }
 
   deployedIds(): Set<number> {

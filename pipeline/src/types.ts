@@ -1,6 +1,7 @@
 export type Role = "analyst" | "developer" | "tester" | "release-manager";
 
-export type JobStatus = "queued" | "running" | "finished" | "error" | "startup_error";
+export type JobStatus =
+  "queued" | "running" | "finished" | "error" | "startup_error";
 
 export type Job = {
   id: string;
@@ -10,7 +11,8 @@ export type Job = {
   agentId: string | null;
   runId: string | null;
   error: string | null;
-  /** Итог оркестратора: ready-for-dev, in-qa, qa-passed, released, needs-human, … */
+  /** Итог оркестратора: ready-for-dev, in-qa, qa-passed, released,
+   * needs-human, … */
   decision: string | null;
   createdAt: string;
   updatedAt: string;

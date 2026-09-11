@@ -1,5 +1,11 @@
-/** Calendar date YYYY-MM-DD in an IANA time zone (GitHub milestone due_on is a date). */
-export function calendarDateInTimeZone(date: Date = new Date(), timeZone = "Europe/Moscow"): string {
+/**
+ * Calendar date YYYY-MM-DD in an IANA time zone
+ * (GitHub milestone due_on is a date).
+ */
+export function calendarDateInTimeZone(
+  date: Date = new Date(),
+  timeZone = "Europe/Moscow",
+): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone,
     year: "numeric",
@@ -17,7 +23,10 @@ export function calendarDateInTimeZone(date: Date = new Date(), timeZone = "Euro
   return `${year}-${month}-${day}`;
 }
 
-/** @deprecated use calendarDateInTimeZone; kept as UTC snapshot for older call sites. */
+/**
+ * @deprecated use calendarDateInTimeZone; kept as UTC snapshot
+ * for older call sites.
+ */
 export function utcDateString(date: Date = new Date()): string {
   return date.toISOString().slice(0, 10);
 }
@@ -39,7 +48,10 @@ function dayDiff(fromDay: string, toDay: string): number {
   return Math.round((toMs - fromMs) / 86_400_000);
 }
 
-/** Days from today (in timeZone) until milestone due date. 0 = today, 1 = tomorrow, negative = past. */
+/**
+ * Days from today (in timeZone) until milestone due date.
+ * 0 = today, 1 = tomorrow, negative = past.
+ */
 export function daysUntilDue(
   dueOn: string | null | undefined,
   timeZone = "Europe/Moscow",
@@ -105,16 +117,25 @@ export function regressionIssueBody(milestoneId: number, tag: string): string {
     "",
     `Служебная issue регресса ветки \`main\` перед релизом \`${tag}\`.`,
     "Не фича и не баг продукта: тестировщик проверяет HEAD `main`.",
-    "Баги регресса — отдельные корневые `bug` в этом milestone, без `Related to #` на эту issue.",
+    "Баги регресса — отдельные корневые `bug` в этом milestone, " +
+      "без `Related to #` на эту issue.",
   ].join("\n");
 }
 
-export function bodyHasRegressionMarker(body: string | null, milestoneId: number): boolean {
+export function bodyHasRegressionMarker(
+  body: string | null,
+  milestoneId: number,
+): boolean {
   return parseRegressionMilestoneId(body) === milestoneId;
 }
 
-export function isRegressionIssue(labels: string[], body: string | null = null): boolean {
-  return labels.includes("regression") || parseRegressionMilestoneId(body) !== null;
+export function isRegressionIssue(
+  labels: string[],
+  body: string | null = null,
+): boolean {
+  return (
+    labels.includes("regression") || parseRegressionMilestoneId(body) !== null
+  );
 }
 
 export function isReleaseWorkIssue(labels: string[]): boolean {
@@ -125,7 +146,10 @@ export function blockedNoReleaseMarker(milestoneId: number): string {
   return `<!-- pipeline:blocked-no-release:${milestoneId} -->`;
 }
 
-export function bodyHasBlockedNoReleaseMarker(body: string | null, milestoneId: number): boolean {
+export function bodyHasBlockedNoReleaseMarker(
+  body: string | null,
+  milestoneId: number,
+): boolean {
   if (!body) {
     return false;
   }
@@ -133,12 +157,17 @@ export function bodyHasBlockedNoReleaseMarker(body: string | null, milestoneId: 
   return body.includes(blockedNoReleaseMarker(milestoneId));
 }
 
-export function blockedNoReleaseComment(milestoneTitle: string, milestoneId: number): string {
+export function blockedNoReleaseComment(
+  milestoneTitle: string,
+  milestoneId: number,
+): string {
   return [
     blockedNoReleaseMarker(milestoneId),
-    `Пайплайн: milestone \`${milestoneTitle}\` due сегодня, но **published Release / tag нет**.`,
+    `Пайплайн: milestone \`${milestoneTitle}\` due сегодня, ` +
+      "но **published Release / tag нет**.",
     "`blocked: no release` — локальный compose / deployer не запускается.",
-    "Дождитесь зелёного регресса `main` и релиз-менеджера или сдвиньте `due_on`.",
+    "Дождитесь зелёного регресса `main` и релиз-менеджера " +
+      "или сдвиньте `due_on`.",
   ].join("\n");
 }
 
@@ -149,8 +178,12 @@ export function duplicateDueMarker(day: string): string {
 export function duplicateDueComment(day: string, titles: string[]): string {
   return [
     duplicateDueMarker(day),
-    `Пайплайн: сегодня (${day}) due у нескольких release-milestones: ${titles.map((title) => `\`${title}\``).join(", ")}.`,
-    "Релиз-менеджер не стартует, нужен человек. Оставьте один milestone с due сегодня.",
+    `Пайплайн: сегодня (${day}) due у нескольких ` +
+      "release-milestones: " +
+      titles.map((title) => `\`${title}\``).join(", ") +
+      ".",
+    "Релиз-менеджер не стартует, нужен человек. " +
+      "Оставьте один milestone с due сегодня.",
   ].join("\n");
 }
 
@@ -185,7 +218,9 @@ export function decideReleaseGate(params: {
     return "regression-not-passed";
   }
 
-  const tag = params.milestoneTitle ? tagFromMilestoneTitle(params.milestoneTitle) : null;
+  const tag = params.milestoneTitle
+    ? tagFromMilestoneTitle(params.milestoneTitle)
+    : null;
 
   if (!tag) {
     return "bad-title";
@@ -230,7 +265,10 @@ export function previousReleaseTag(
   return others[0]?.tag_name ?? null;
 }
 
-/** No previous published tag → first release, not empty. Unknown aheadBy → do not skip. */
+/**
+ * No previous published tag → first release, not empty.
+ * Unknown aheadBy → do not skip.
+ */
 export function isEmptySincePreviousRelease(params: {
   previousTag: string | null;
   aheadBy: number | null;
@@ -257,7 +295,8 @@ export function nothingToReleaseComment(
 ): string {
   return [
     nothingToReleaseMarker(milestoneId),
-    `Пайплайн: с прошлого релиза \`${previousTag}\` в \`main\` **нет новых коммитов**.`,
+    `Пайплайн: с прошлого релиза \`${previousTag}\` ` +
+      "в `main` **нет новых коммитов**.",
     `GitHub Release \`${milestoneTitle}\` не создан. Milestone закрыт.`,
   ].join("\n");
 }
@@ -281,7 +320,10 @@ export function upsertNothingToReleaseDescription(
   return `${base}\n\n${comment}`;
 }
 
-/** True when due today and RM cannot run — notify, but not while regression is still in progress. */
+/**
+ * True when due today and RM cannot run — notify,
+ * but not while regression is still in progress.
+ */
 export function shouldNotifyBlockedNoRelease(params: {
   releaseExists: boolean;
   regressionLabels: string[] | null;

@@ -1,13 +1,23 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+
 import { Agent, CursorAgentError } from "@cursor/sdk";
-import type { Config } from "../../config";
-import type { Role } from "../../types";
-import type { GitHubIssue, GitHubPull } from "../GithubProvider/GithubProvider.types";
+
 import { TESTER_REGRESSION_PROMPT } from "./CursorProvider.constants";
 import type { CursorRunResult, CursorRunStarted } from "./CursorProvider.types";
 
-function loadPrompt(promptsDir: string, role: Role, issue: GitHubIssue): string {
+import type { Config } from "../../config";
+import type { Role } from "../../types";
+import type {
+  GitHubIssue,
+  GitHubPull,
+} from "../GithubProvider/GithubProvider.types";
+
+function loadPrompt(
+  promptsDir: string,
+  role: Role,
+  issue: GitHubIssue,
+): string {
   if (role === "tester" && issue.labels.includes("regression")) {
     return readFileSync(join(promptsDir, TESTER_REGRESSION_PROMPT), "utf8");
   }
@@ -55,7 +65,10 @@ function buildMessage(
       lines.push(
         "",
         `База твоего PR: \`${pull.headRef}\` — **не** \`main\`.`,
-        `Открой PR командой \`gh pr create --base ${pull.headRef}\` (Cursor autoCreatePR часто целится в default branch — сразу смени base, если открылся в main).`,
+        "Открой PR командой `gh pr create --base " +
+          pull.headRef +
+          "` (Cursor autoCreatePR часто целится в default " +
+          "branch — сразу смени base, если открылся в main).",
       );
     }
   }
@@ -96,7 +109,14 @@ export class CursorClient {
       });
 
       agentId = agent.agentId;
-      const run = await agent.send(buildMessage(loadPrompt(this.config.PROMPTS_DIR, role, issue), issue, pull, role));
+      const run = await agent.send(
+        buildMessage(
+          loadPrompt(this.config.PROMPTS_DIR, role, issue),
+          issue,
+          pull,
+          role,
+        ),
+      );
 
       runId = run.id;
       await onStarted({ agentId, runId });
@@ -133,7 +153,9 @@ export class CursorClient {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const retryable =
-        err instanceof CursorAgentError ? ` retryable=${String(err.isRetryable)}` : "";
+        err instanceof CursorAgentError
+          ? ` retryable=${String(err.isRetryable)}`
+          : "";
       const status = runId ? "error" : "startup_error";
 
       return {
