@@ -2,7 +2,7 @@ services:
   orchestrator:
     build:
       context: ./pipeline
-    command: ["node", "dist/index.js"]
+    command: ["node", "dist/services/OrchestratorService/index.js"]
     env_file:
       - path: pipeline/.env
         required: true
@@ -23,7 +23,7 @@ services:
   deployer:
     build:
       context: ./pipeline
-    command: ["node", "dist/deployer.js"]
+    command: ["node", "dist/services/DeployerService/index.js"]
     env_file:
       - path: .env
         required: true

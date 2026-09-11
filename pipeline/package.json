@@ -8,9 +8,9 @@
     "test": "npm run build && node --test test/*.test.js",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
-    "start": "node --use-env-proxy --env-file=.env.local dist/index.js",
-    "start:deployer": "node dist/deployer.js",
-    "dev": "tsx watch src/index.ts"
+    "start": "node --use-env-proxy --env-file=.env.local dist/services/OrchestratorService/index.js",
+    "start:deployer": "node dist/services/DeployerService/index.js",
+    "dev": "tsx watch src/services/OrchestratorService/index.ts"
   },
   "engines": {
     "node": ">=22"
