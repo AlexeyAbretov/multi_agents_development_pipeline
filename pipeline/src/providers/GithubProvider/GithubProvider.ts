@@ -5,7 +5,7 @@ import type {
   GitHubPull,
 } from "./GithubProvider.types";
 
-import { type Config, parseOwnerRepo } from "../../config";
+import type { Config } from "../../config";
 import type { GitHubRelease } from "../../deploy-rules";
 import { fixIssueWithPR } from "../../rules";
 import {
@@ -84,7 +84,7 @@ export class GitHubClient {
   constructor(private readonly config: Config) {}
 
   private repoPath(): { owner: string; repo: string } {
-    const parsed = parseOwnerRepo(this.config.GITHUB_REPO);
+    const parsed = this.config.ownerRepo;
 
     if (!parsed) {
       throw new Error(`Invalid GITHUB_REPO: ${this.config.GITHUB_REPO}`);

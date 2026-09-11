@@ -1,5 +1,5 @@
 ---
-description: Стиль TypeScript-функций в оркестраторе (declaration, 1tbs, padding, Elvis)
+description: Стиль TypeScript-функций в оркестраторе (declaration, 1tbs, padding, Elvis, геттеры)
 globs: pipeline/**/*.ts
 alwaysApply: false
 ---
@@ -7,6 +7,8 @@ alwaysApply: false
 # Стиль функций
 
 Именованные и экспортируемые функции — `function`, не стрелки. Скобка `{` на той же строке (1tbs). У `if` / `for` / `while` всегда `{}`. Пустая строка между логическими блоками (объявления, ветвление, `return`). Не вставляй пустые строки в начало и конец блока. Отступ 2 пробела. Строка ≤ 80 символов (`@stylistic/max-len`).
+
+Геттеры — существительные (`ownerRepo`), не глаголы (`parseOwnerRepo`). Обращение без скобок.
 
 Вложенные поля и «нет значения → дефолт» — через Elvis: `?.` и `??`. Не через `"x" in obj`, цепочки `&&` и тернарники. Пустую строку / `0` как «нет значения» по-прежнему обрабатывай через `||`.
 
@@ -20,16 +22,18 @@ export const parseOwnerRepo = (repo: string) => {
   return { owner, repo: name };
 };
 
+get parseOwnerRepo(): OwnerRepo { /* глагол — не имя геттера */ }
+
 const stdout =
   err && typeof err === "object" && "stdout" in err
     ? String((err as { stdout: unknown }).stdout)
     : "";
 
 // ✅ GOOD
-export function parseOwnerRepo(repo: string): OwnerRepo {
-  const [owner, name] = repo.split("/");
+get ownerRepo(): OwnerRepo {
+  const [owner, name] = this.GITHUB_REPO.split("/");
 
-  if (!owner || !name || repo.split("/").length !== 2) {
+  if (!owner || !name || this.GITHUB_REPO.split("/").length !== 2) {
     return null;
   }
 

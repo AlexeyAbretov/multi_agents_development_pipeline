@@ -22,26 +22,34 @@ const envSchema = z.object({
   WORKSPACE_DIR: z.string().default("/product"),
 });
 
-export type Config = z.infer<typeof envSchema>;
-
-export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
-  const parsed = envSchema.parse(env);
-
-  const repoUrl =
-    parsed.CURSOR_REPO_URL ||
-    (parsed.GITHUB_REPO ? `https://github.com/${parsed.GITHUB_REPO}` : "");
-
-  return { ...parsed, CURSOR_REPO_URL: repoUrl };
-}
-
+type EnvConfig = z.infer<typeof envSchema>;
 type OwnerRepo = { owner: string; repo: string } | null;
 
-export function parseOwnerRepo(repo: string): OwnerRepo {
-  const [owner, name] = repo.split("/");
+export interface Config extends EnvConfig {}
 
-  if (!owner || !name || repo.split("/").length !== 2) {
-    return null;
+export class Config {
+  private constructor(env: NodeJS.ProcessEnv) {
+    const parsed = envSchema.parse(env);
+
+    Object.assign(this, {
+      ...parsed,
+      CURSOR_REPO_URL:
+        parsed.CURSOR_REPO_URL ||
+        (parsed.GITHUB_REPO ? `https://github.com/${parsed.GITHUB_REPO}` : ""),
+    });
   }
 
-  return { owner, repo: name };
+  static loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
+    return new Config(env);
+  }
+
+  get ownerRepo(): OwnerRepo {
+    const [owner, name] = this.GITHUB_REPO.split("/");
+
+    if (!owner || !name || this.GITHUB_REPO.split("/").length !== 2) {
+      return null;
+    }
+
+    return { owner, repo: name };
+  }
 }

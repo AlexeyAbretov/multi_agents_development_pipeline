@@ -4,7 +4,7 @@ import stylistic from "@stylistic/eslint-plugin";
 import eslintPluginPrettierRecommended from "eslint-plugin-prettier/recommended";
 import simpleImportSort from "eslint-plugin-simple-import-sort";
 
-/** Matches `.cursor/rules/typescript-functions.mdc` (see parseOwnerRepo, Elvis). */
+/** Matches `.cursor/rules/typescript-functions.mdc` (see ownerRepo, Elvis). */
 export default [
   {
     ignores: ["dist/**", "test/**"],

@@ -1,10 +1,10 @@
 import Fastify from "fastify";
 
-import { loadConfig } from "./config";
+import { Config } from "./config";
 import { startDeployPoller } from "./deploy-poller";
 import { DeployStore } from "./deploy-store";
 
-const config = loadConfig();
+const config = Config.loadConfig();
 const store = new DeployStore(config.DATA_DIR);
 
 const app = Fastify({

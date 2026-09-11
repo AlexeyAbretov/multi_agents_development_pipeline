@@ -2,12 +2,12 @@ import Fastify from "fastify";
 
 import { registerApiRoutes } from "@routes";
 
-import { loadConfig } from "./config";
+import { Config } from "./config";
 import { JobStore } from "./jobs";
 import { startPoller } from "./poller";
 import { startSchedulePoller } from "./schedule";
 
-const config = loadConfig();
+const config = Config.loadConfig();
 const store = new JobStore(config.DATA_DIR);
 
 const app = Fastify({
