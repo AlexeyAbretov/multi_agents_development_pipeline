@@ -1,7 +1,6 @@
 import type { FastifyBaseLogger } from "fastify";
 import type { Config } from "./config";
-import { runCloudAgent } from "./cursor";
-import { GitHubClient, agentResultComment, jobComment, type GitHubIssue, type GitHubPull } from "./providers";
+import { CursorClient, GitHubClient, agentResultComment, jobComment, type GitHubIssue, type GitHubPull } from "@providers";
 import { JobStore } from "./jobs";
 import { jobLog } from "./log";
 import {
@@ -43,6 +42,7 @@ export function startPoller(
   store: JobStore,
 ): { stop: () => void } {
   const github = new GitHubClient(config);
+  const cursor = new CursorClient(config);
   let listing = false;
   const inFlight = new Set<string>();
 
@@ -54,7 +54,7 @@ export function startPoller(
     }
 
     listing = true;
-    void pollOnce(config, logger, store, github, inFlight).finally(() => {
+    void pollOnce(config, logger, store, github, cursor, inFlight).finally(() => {
       listing = false;
     });
   };
@@ -86,6 +86,7 @@ async function pollOnce(
   logger: FastifyBaseLogger,
   store: JobStore,
   github: GitHubClient,
+  cursor: CursorClient,
   inFlight: Set<string>,
 ): Promise<void> {
   jobLog(logger, {}, "poll tick");
@@ -191,7 +192,7 @@ async function pollOnce(
     const key = inFlightKey(issue.number, role);
 
     inFlight.add(key);
-    void handleIssue(config, logger, store, github, issue, role)
+    void handleIssue(config, logger, store, github, cursor, issue, role)
       .catch((err) => {
         logger.error({ err, issue: issue.number, role }, "pipeline job failed");
       })
@@ -475,6 +476,7 @@ async function handleIssue(
   logger: FastifyBaseLogger,
   store: JobStore,
   github: GitHubClient,
+  cursor: CursorClient,
   issue: GitHubIssue,
   role: Role,
 ): Promise<void> {
@@ -726,8 +728,7 @@ async function handleIssue(
 
   jobLog(logger, { ...fields }, "cursor agent starting");
 
-  const result = await runCloudAgent(
-    config,
+  const result = await cursor.runCloudAgent(
     role,
     issue,
     async ({ agentId, runId }) => {

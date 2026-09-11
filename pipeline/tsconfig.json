@@ -7,7 +7,8 @@
     "rootDir": "src",
     "baseUrl": ".",
     "paths": {
-      "@routes": ["./src/routes/index.ts"]
+      "@routes": ["./src/routes/index.ts"],
+      "@providers": ["./src/providers/index.ts"]
     },
     "strict": true,
     "esModuleInterop": true,

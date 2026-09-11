@@ -2,7 +2,7 @@ import type { FastifyBaseLogger } from "fastify";
 import type { Config } from "./config";
 import { DeployRequestStore } from "./deploy-request-store";
 import { DeployStore } from "./deploy-store";
-import { GitHubClient, type GitHubIssue } from "./providers";
+import { GitHubClient, type GitHubIssue } from "@providers";
 import { jobLog } from "./log";
 import {
   blockedNoReleaseComment,

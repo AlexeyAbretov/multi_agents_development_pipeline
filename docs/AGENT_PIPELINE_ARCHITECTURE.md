@@ -147,7 +147,7 @@ queued → running → finished | error | startup_error
 | **@cursor/sdk** | Cloud Agent: `Agent.create({ cloud: { repos } })`. Local runtime запрещён конституцией (P1). |
 | **Node ≥ 22** | Встроенный `fetch` к GitHub API, ESM, `await using` для агента. |
 | **tsx / typescript** | Dev-watch и сборка в `dist/`. Тесты: `node --test` по скомпилированному JS. |
-| **tsc-alias** | После `tsc` переписывает алиасы (`@routes`) и дописывает `.js` к относительным импортам в `dist/` (`resolveFullPaths`). Без этого `node dist/index.js` в Docker не резолвит `@routes` и ESM-пути без расширения. Сборка: `npm run clean && tsc && tsc-alias`. Источники — `module`/`moduleResolution`: `ES2022`/`bundler`, импорты без `.js`. |
+| **tsc-alias** | После `tsc` переписывает алиасы (`@routes`, `@providers`) и дописывает `.js` к относительным импортам в `dist/` (`resolveFullPaths`). Без этого `node dist/index.js` в Docker не резолвит алиасы и ESM-пути без расширения. Сборка: `npm run clean && tsc && tsc-alias`. Источники — `module`/`moduleResolution`: `ES2022`/`bundler`, импорты без `.js`. |
 
 Чего нет намеренно:
 
@@ -182,10 +182,11 @@ index.ts                    deployer.ts
   │ Fastify /health           │ Fastify /health
   ├─ routes/ (@routes)        │
   │    jobs + deploys         │
-  ├─ poller.ts                ├── GitHubClient, runCloudAgent
+  ├─ poller.ts                ├── GitHubClient
   │    ├─ rules.ts            │
   │    ├─ dispatch.ts         │
   │    ├─ schedule-rules.ts   │
+  │    ├─ providers (@providers)
   │    └─ schedule.ts (closeEmptyRelease)
   └─ schedule.ts              └─ deploy-poller.ts
        ├─ schedule-rules.ts        ├─ deploy-rules.ts
@@ -201,8 +202,9 @@ index.ts                    deployer.ts
 | `pipeline/src/schedule-rules.ts` | Календарь milestone, tag `vN.N.N`, gate RM, пустой релиз, маркеры в комментариях. |
 | `pipeline/src/dispatch.ts` | Eligible пары `(issue, role)` в тике; роли не гейтят друг друга; skip только in-flight. |
 | `pipeline/src/poller.ts` | Тик `POLL_INTERVAL_MS`: список issues → роль → гейты → Cursor → смена labels. |
-| `pipeline/src/cursor.ts` | Промпт + issue/PR, `Agent.create` cloud, `run.wait()`. `tester-regression.md` если label `regression`. |
-| `pipeline/src/github.ts` | REST GitHub: issues, labels, PR `Fixes #`, releases, milestones. |
+| `pipeline/src/providers/index.ts` | Баррель внешних клиентов; алиас `@providers`. |
+| `pipeline/src/providers/GithubProvider/` | REST GitHub: issues, labels, PR `Fixes #`, releases, milestones. Класс `GitHubClient`. |
+| `pipeline/src/providers/CursorProvider/` | Промпт + issue/PR, `Agent.create` cloud, `run.wait()`. Класс `CursorClient`. `tester-regression.md` если label `regression`. |
 | `pipeline/src/jobs.ts` | `jobs.json`, идемпотентность, сброс ролей, drop после рестарта. |
 | `pipeline/src/routes/routes.ts` | HTTP `GET /api/jobs`, `/api/deploys` для UI. |
 | `pipeline/src/routes/index.ts` | Реэкспорт; алиас `@routes` в `tsconfig.json` (`paths`). |
@@ -224,7 +226,7 @@ index.ts                    deployer.ts
 1. `poller` тянет open issues с `needs-plan` \| `ready-for-dev` \| `in-qa` \| `qa-passed`.
 2. `roleForLabels` → роль или skip.
 3. `selectJobsToLaunch` отфильтровывает in-flight.
-4. `handleIssue`: гейты (PR, fix-round, дети, RM gate) → `JobStore.create` → промежуточный label → `runCloudAgent` → `decide*Outcome` → `apply*Labels`.
+4. `handleIssue`: гейты (PR, fix-round, дети, RM gate) → `JobStore.create` → промежуточный label → `CursorClient.runCloudAgent` → `decide*Outcome` → `apply*Labels`.
 5. UI читает джоб; GitHub показывает labels.
 
 Листинг полла **не** включает все labels контракта. Trigger-label, которого нет в `listOpenIssuesByLabel`, тик не увидит.
@@ -280,7 +282,7 @@ index.ts                    deployer.ts
 1. Тип `Role` в `types.ts`.
 2. `selectJobsToLaunch` в `dispatch.ts` — новая роль стартует в том же тике, что и остальные (роли не гейтят друг друга).
 3. Ветка в `roleForLabels` — уникальный набор labels.
-4. Промпт `pipeline/prompts/<role>.md` — `cursor.ts` грузит `${role}.md` (исключение только `tester` + label `regression` → `tester-regression.md`).
+4. Промпт `pipeline/prompts/<role>.md` — `CursorClient` грузит `${role}.md` (исключение только `tester` + label `regression` → `tester-regression.md`).
 5. В `handleIssue`: pre-labels, гейты, `decide*Outcome`, `apply*Labels`, комментарии.
 6. Если роль должна повторяться — `store.remove` по событию (как tester после детей).
 7. Тесты dispatch: новая роль стартует вместе с остальными; skip только in-flight `(issue, role)`.
@@ -308,6 +310,26 @@ index.ts                    deployer.ts
 Только если текущего слоя не хватает:
 
 - GitHub: сначала метод в `GitHubClient`, не Octokit «заодно»
+- Cursor Cloud: сначала метод в `CursorClient`, не вызов `@cursor/sdk` из поллера
 - Очередь/БД: сейчас файлы + `synchronized()`; менять, если появятся два писателя на один JSON без этой цепочки
 - Webhook вместо полла — смена конституции P3
 - Новый TS-алиас — только вместе с `tsc-alias` (см. §3.1)
+
+### 4.8. Новый внешний провайдер
+
+Клиент внешнего API — папка `pipeline/src/providers/<Name>Provider/`, не файл в корне `src/`.
+
+```
+pipeline/src/providers/<Name>Provider/
+  index.ts                    реэкспорт публичного API
+  <Name>Provider.ts           класс *Client
+  <Name>Provider.types.ts     типы ответа и сущностей
+  <Name>Provider.constants.ts константы (лимиты, имена файлов)
+```
+
+- Папка: суффикс `Provider` (`GithubProvider`, `CursorProvider`)
+- Класс: суффикс `Client` (`GitHubClient`, `CursorClient`)
+- Снаружи импорт только из `@providers` (`pipeline/src/providers/index.ts`)
+- Типы другого провайдера — из его `*.types.ts`, не из `@providers` (без циклов)
+- Отдельный TS-алиас на каждый провайдер не нужен
+- Новый провайдер: папка + реэкспорт в барреле + вызов из поллера. SDK остаётся внутри `*Provider.ts`

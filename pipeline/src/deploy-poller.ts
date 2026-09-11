@@ -8,7 +8,7 @@ import {
 } from "./deploy-rules";
 import { runProductDeploy } from "./deploy-run";
 import { DeployStore } from "./deploy-store";
-import { GitHubClient } from "./providers";
+import { GitHubClient } from "@providers";
 import { jobLog } from "./log";
 
 export function startDeployPoller(

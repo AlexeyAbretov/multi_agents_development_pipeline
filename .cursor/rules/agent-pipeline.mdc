@@ -24,3 +24,7 @@ alwaysApply: true
 - Деплой с облачной VM
 - Коммитить секреты (`.env`, `.env.local`, `pipeline/.env`, `pipeline/.env.local`)
 - Hardcode URL конкретного продукта в коде (только плейсхолдеры в `.env.example`)
+
+## Провайдеры
+
+Внешний API — папка `pipeline/src/providers/<Name>Provider/` (`*Provider.ts`, `*.types.ts`, `*.constants.ts`, `index.ts`), класс `*Client`. Снаружи только `@providers`. Не класть клиент в `pipeline/src/<vendor>.ts`. Подробнее: `docs/AGENT_PIPELINE_ARCHITECTURE.md` §4.8.
