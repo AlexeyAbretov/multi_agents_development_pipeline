@@ -279,10 +279,105 @@ export function extractTesterBugIssues(
   return extractIssueListMarker(resultText, 'PIPELINE_BUG_ISSUES');
 }
 
+export function flattenMvpQueue(stages: number[][]): number[] {
+  const seen = new Set<number>();
+  const flat: number[] = [];
+
+  for (const stage of stages) {
+    for (const n of stage) {
+      if (seen.has(n)) {
+        continue;
+      }
+
+      seen.add(n);
+      flat.push(n);
+    }
+  }
+
+  return flat;
+}
+
+export function formatMvpQueueStages(stages: number[][]): string {
+  return stages
+    .map((stage) =>
+      stage.filter((n) => Number.isSafeInteger(n) && n > 0).join('+'),
+    )
+    .filter((item) => item.length > 0)
+    .join(',');
+}
+
+function parseMvpQueueText(value: string): number[][] | null {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  if (trimmed.toLowerCase() === 'none') {
+    return [];
+  }
+
+  if (!/^[#\d+,\s]+$/.test(trimmed)) {
+    return null;
+  }
+
+  const stages: number[][] = [];
+  const seen = new Set<number>();
+
+  for (const stageText of trimmed.split(',')) {
+    if (!stageText.trim()) {
+      continue;
+    }
+
+    const stage: number[] = [];
+
+    for (const part of stageText.split('+')) {
+      const n = Number(part.trim().replace(/^#/, ''));
+
+      if (!Number.isSafeInteger(n) || n <= 0) {
+        return null;
+      }
+
+      if (seen.has(n)) {
+        continue;
+      }
+
+      seen.add(n);
+      stage.push(n);
+    }
+
+    if (stage.length === 0) {
+      continue;
+    }
+
+    stages.push(stage);
+  }
+
+  return stages.length > 0 ? stages : null;
+}
+
+export function extractMvpTaskStages(
+  resultText: string | null,
+): number[][] | null {
+  const marker = resultText?.match(/^PIPELINE_MVP_TASKS:\s*(.+?)\s*$/im);
+
+  if (!marker) {
+    return null;
+  }
+
+  return parseMvpQueueText(marker[1]);
+}
+
 export function extractMvpTaskIssues(
   resultText: string | null,
 ): number[] | null {
-  return extractIssueListMarker(resultText, 'PIPELINE_MVP_TASKS');
+  const stages = extractMvpTaskStages(resultText);
+
+  if (stages === null) {
+    return null;
+  }
+
+  return flattenMvpQueue(stages);
 }
 
 export function extractReleaseTag(resultText: string | null): string | null {
@@ -443,12 +538,14 @@ export function parseChildBugIssues(body: string | null): number[] {
   ];
 }
 
-export function parseMvpTaskIssues(body: string | null): number[] {
+function parsePipelineHtmlList(body: string | null, key: string): number[] {
   if (!body) {
     return [];
   }
 
-  const marker = body.match(/<!--\s*pipeline:mvp-tasks:([0-9,\s]+)\s*-->/i);
+  const marker = body.match(
+    new RegExp(`<!--\\s*pipeline:${key}:([0-9,\\s]+)\\s*-->`, 'i'),
+  );
 
   if (!marker) {
     return [];
@@ -464,16 +561,17 @@ export function parseMvpTaskIssues(body: string | null): number[] {
   ];
 }
 
-export function upsertMvpTaskIssuesInBody(
+function upsertPipelineHtmlList(
   body: string | null,
-  tasks: number[],
+  key: string,
+  issues: number[],
 ): string {
   const unique = [
-    ...new Set(tasks.filter((n) => Number.isSafeInteger(n) && n > 0)),
+    ...new Set(issues.filter((n) => Number.isSafeInteger(n) && n > 0)),
   ];
-  const marker = `<!-- pipeline:mvp-tasks:${unique.join(',')} -->`;
+  const marker = `<!-- pipeline:${key}:${unique.join(',')} -->`;
   const base = (body ?? '')
-    .replace(/<!--\s*pipeline:mvp-tasks:[0-9,\s]*\s*-->/gi, '')
+    .replace(new RegExp(`<!--\\s*pipeline:${key}:[0-9,\\s]*\\s*-->`, 'gi'), '')
     .trimEnd();
 
   if (unique.length === 0) {
@@ -485,6 +583,67 @@ export function upsertMvpTaskIssuesInBody(
   }
 
   return `${base}\n\n${marker}`;
+}
+
+export function parseMvpTaskIssues(body: string | null): number[] {
+  return parsePipelineHtmlList(body, 'mvp-tasks');
+}
+
+export function upsertMvpTaskIssuesInBody(
+  body: string | null,
+  tasks: number[],
+): string {
+  return upsertPipelineHtmlList(body, 'mvp-tasks', tasks);
+}
+
+export function parseMvpQueueStages(body: string | null): number[][] {
+  if (!body) {
+    return [];
+  }
+
+  const marker = body.match(/<!--\s*pipeline:mvp-queue:([0-9+#,\s]+)\s*-->/i);
+
+  if (!marker) {
+    return [];
+  }
+
+  return parseMvpQueueText(marker[1]) ?? [];
+}
+
+export function parseMvpQueueIssues(body: string | null): number[] {
+  return flattenMvpQueue(parseMvpQueueStages(body));
+}
+
+export function upsertMvpQueueIssuesInBody(
+  body: string | null,
+  stages: number[][],
+): string {
+  const formatted = formatMvpQueueStages(stages);
+  const marker = `<!-- pipeline:mvp-queue:${formatted} -->`;
+  const base = (body ?? '')
+    .replace(/<!--\s*pipeline:mvp-queue:[0-9+#,\s]*\s*-->/gi, '')
+    .trimEnd();
+
+  if (!formatted) {
+    return base;
+  }
+
+  if (!base) {
+    return marker;
+  }
+
+  return `${base}\n\n${marker}`;
+}
+
+/** Предыдущая задача MVP ещё занимает слот developer. */
+export function mvpQueueHoldsDeveloper(labels: readonly string[]): boolean {
+  return (
+    labels.includes('needs-plan') ||
+    labels.includes('in-analysis') ||
+    labels.includes('ready-for-dev') ||
+    labels.includes('in-dev') ||
+    labels.includes('needs-human')
+  );
 }
 
 /** Повторный analyst на MVP: Q&A (needs-plan) или создание задач
@@ -505,6 +664,72 @@ export function shouldResetMvpAnalystJob(params: {
   }
 
   return params.jobStatus !== 'running' && params.jobStatus !== 'queued';
+}
+
+/** Повтор роли после сбоя: человек вернул trigger-лейбл
+ * (developer: `ready-for-dev`, tester: `in-qa`). Не трогать in-flight
+ * и успешный `finished`. */
+export function shouldResetFailedRoleJob(params: {
+  triggerLabel: string;
+  labels: string[];
+  jobStatus: JobStatus | null | undefined;
+  decision: string | null | undefined;
+}): boolean {
+  if (!params.labels.includes(params.triggerLabel)) {
+    return false;
+  }
+
+  if (params.labels.includes('needs-human')) {
+    return false;
+  }
+
+  if (!params.jobStatus) {
+    return false;
+  }
+
+  if (params.jobStatus === 'running' || params.jobStatus === 'queued') {
+    return false;
+  }
+
+  if (params.jobStatus === 'error' || params.jobStatus === 'startup_error') {
+    return true;
+  }
+
+  return params.jobStatus === 'finished' && params.decision === 'needs-human';
+}
+
+/** `in-dev` без живого джоба: облачный агент мог открыть PR после
+ * drop/рестарта. Не трогать in-flight. */
+export function isStaleInDevHandoffCandidate(params: {
+  labels: string[];
+  jobStatus: JobStatus | null | undefined;
+}): boolean {
+  if (!hasWorkType(params.labels)) {
+    return false;
+  }
+
+  if (!params.labels.includes('in-dev')) {
+    return false;
+  }
+
+  if (params.labels.includes('needs-human')) {
+    return false;
+  }
+
+  if (params.jobStatus === 'running' || params.jobStatus === 'queued') {
+    return false;
+  }
+
+  return true;
+}
+
+/** Залипший `in-dev` + открытый Fixes PR → `in-qa` без агента. */
+export function shouldPromoteStaleInDev(params: {
+  labels: string[];
+  jobStatus: JobStatus | null | undefined;
+  hasOpenFixPr: boolean;
+}): boolean {
+  return params.hasOpenFixPr && isStaleInDevHandoffCandidate(params);
 }
 
 export function upsertChildBugIssuesInBody(
@@ -590,7 +815,9 @@ export function groupAnalystIssuesByParent<
   return batches;
 }
 
-const CHILD_DONE_LABELS = ['qa-passed', 'deployed', 'needs-human'] as const;
+/** `needs-human` не финиш: квота / уточнение на ребёнке не должно
+ * снимать блок re-QA родителя. */
+const CHILD_DONE_LABELS = ['qa-passed', 'deployed'] as const;
 
 export function childBugStillOpen(
   labels: string[],

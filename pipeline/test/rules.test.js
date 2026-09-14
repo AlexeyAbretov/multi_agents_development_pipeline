@@ -15,25 +15,33 @@ import {
   decideReleaseManagerOutcome,
   decideTesterOutcome,
   extractMvpTaskIssues,
+  extractMvpTaskStages,
   extractReleaseChangelog,
   extractReleasePrNumbers,
   extractReleaseTag,
   extractTesterBugIssues,
+  flattenMvpQueue,
   fixRoundBlocksDeveloper,
   groupAnalystIssuesByParent,
   isChildBugCandidate,
   isMvpIssue,
   isQaRole,
   mapJobToUiStatus,
+  mvpQueueHoldsDeveloper,
   parseChildBugIssues,
   parseFixRound,
+  parseMvpQueueIssues,
+  parseMvpQueueStages,
   parseMvpTaskIssues,
   parseRelatedParentIssue,
   roleForLabels,
   shouldCloseMergedChildIssue,
+  shouldPromoteStaleInDev,
+  shouldResetFailedRoleJob,
   shouldResetMvpAnalystJob,
   upsertChildBugIssuesInBody,
   upsertFixRoundInBody,
+  upsertMvpQueueIssuesInBody,
   upsertMvpTaskIssuesInBody,
 } from "../dist/services/OrchestratorService/rules.js";
 import {
@@ -178,7 +186,7 @@ test("analyst work and mvp decisions follow PIPELINE_LABELS", () => {
   assert.equal(
     decideAnalystOutcome(
       "finished",
-      "PIPELINE_MVP_TASKS: 12,13\nPIPELINE_LABELS: done",
+      "PIPELINE_MVP_TASKS: 12+14,16\nPIPELINE_LABELS: done",
       "mvp-spawn",
     ),
     "done",
@@ -211,10 +219,52 @@ test("extractMvpTaskIssues parses numbers like tester bugs", () => {
   assert.equal(extractMvpTaskIssues("PIPELINE_LABELS: done"), null);
 });
 
+test("extractMvpTaskStages keeps development order and + groups", () => {
+  assert.deepEqual(
+    extractMvpTaskStages("PIPELINE_MVP_TASKS: 12+14,16,15,18,13,17"),
+    [[12, 14], [16], [15], [18], [13], [17]],
+  );
+  assert.deepEqual(extractMvpTaskIssues("PIPELINE_MVP_TASKS: 12+14,16"), [
+    12, 14, 16,
+  ]);
+  assert.deepEqual(
+    extractMvpTaskStages("PIPELINE_MVP_TASKS: #12 + #14, 16"),
+    [[12, 14], [16]],
+  );
+  assert.equal(extractMvpTaskStages("PIPELINE_MVP_TASKS: 12-14"), null);
+});
+
+test("flattenMvpQueue drops duplicates first-seen", () => {
+  assert.deepEqual(flattenMvpQueue([[12, 14], [16], [12]]), [12, 14, 16]);
+});
+
 test("mvp task markers round-trip in issue body", () => {
   const body = upsertMvpTaskIssuesInBody("план проекта", [12, 13, 12]);
   assert.deepEqual(parseMvpTaskIssues(body), [12, 13]);
   assert.match(body, /pipeline:mvp-tasks:12,13/);
+});
+
+test("mvp queue markers round-trip in issue body", () => {
+  const body = upsertMvpQueueIssuesInBody("Источник: MVP #1", [
+    [12, 14],
+    [16],
+  ]);
+  assert.deepEqual(parseMvpQueueStages(body), [[12, 14], [16]]);
+  assert.deepEqual(parseMvpQueueIssues(body), [12, 14, 16]);
+  assert.match(body, /pipeline:mvp-queue:12\+14,16/);
+});
+
+test("mvpQueueHoldsDeveloper covers pre-qa labels only", () => {
+  assert.equal(
+    mvpQueueHoldsDeveloper(["feature", "ready-for-dev"]),
+    true,
+  );
+  assert.equal(mvpQueueHoldsDeveloper(["feature", "in-dev"]), true);
+  assert.equal(mvpQueueHoldsDeveloper(["feature", "needs-plan"]), true);
+  assert.equal(mvpQueueHoldsDeveloper(["feature", "in-analysis"]), true);
+  assert.equal(mvpQueueHoldsDeveloper(["feature", "needs-human"]), true);
+  assert.equal(mvpQueueHoldsDeveloper(["feature", "in-qa"]), false);
+  assert.equal(mvpQueueHoldsDeveloper(["feature", "qa-passed"]), false);
 });
 
 test("shouldResetMvpAnalystJob only for finished mvp re-entry", () => {
@@ -255,6 +305,141 @@ test("shouldResetMvpAnalystJob only for finished mvp re-entry", () => {
   );
   assert.equal(
     shouldResetMvpAnalystJob({ labels: ["mvp", "needs-plan"], jobStatus: null }),
+    false,
+  );
+});
+
+test("shouldResetFailedRoleJob retries after error or needs-human", () => {
+  assert.equal(
+    shouldResetFailedRoleJob({
+      triggerLabel: "ready-for-dev",
+      labels: ["feature", "ready-for-dev"],
+      jobStatus: "startup_error",
+      decision: "needs-human",
+    }),
+    true,
+  );
+  assert.equal(
+    shouldResetFailedRoleJob({
+      triggerLabel: "ready-for-dev",
+      labels: ["feature", "ready-for-dev"],
+      jobStatus: "error",
+      decision: null,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldResetFailedRoleJob({
+      triggerLabel: "ready-for-dev",
+      labels: ["feature", "ready-for-dev"],
+      jobStatus: "finished",
+      decision: "needs-human",
+    }),
+    true,
+  );
+  assert.equal(
+    shouldResetFailedRoleJob({
+      triggerLabel: "ready-for-dev",
+      labels: ["feature", "ready-for-dev"],
+      jobStatus: "running",
+      decision: null,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldResetFailedRoleJob({
+      triggerLabel: "ready-for-dev",
+      labels: ["feature", "ready-for-dev"],
+      jobStatus: "finished",
+      decision: "in-qa",
+    }),
+    false,
+  );
+  assert.equal(
+    shouldResetFailedRoleJob({
+      triggerLabel: "ready-for-dev",
+      labels: ["feature", "in-dev"],
+      jobStatus: "startup_error",
+      decision: "needs-human",
+    }),
+    false,
+  );
+  assert.equal(
+    shouldResetFailedRoleJob({
+      triggerLabel: "ready-for-dev",
+      labels: ["feature", "ready-for-dev", "needs-human"],
+      jobStatus: "startup_error",
+      decision: "needs-human",
+    }),
+    false,
+  );
+  assert.equal(
+    shouldResetFailedRoleJob({
+      triggerLabel: "in-qa",
+      labels: ["feature", "in-qa"],
+      jobStatus: "error",
+      decision: "needs-human",
+    }),
+    true,
+  );
+  assert.equal(
+    shouldResetFailedRoleJob({
+      triggerLabel: "in-qa",
+      labels: ["feature", "in-qa"],
+      jobStatus: "finished",
+      decision: "qa-passed",
+    }),
+    false,
+  );
+});
+
+test("shouldPromoteStaleInDev recovers orphaned in-dev after PR", () => {
+  assert.equal(
+    shouldPromoteStaleInDev({
+      labels: ["feature", "in-dev"],
+      jobStatus: "error",
+      hasOpenFixPr: true,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldPromoteStaleInDev({
+      labels: ["feature", "in-dev"],
+      jobStatus: null,
+      hasOpenFixPr: true,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldPromoteStaleInDev({
+      labels: ["feature", "in-dev"],
+      jobStatus: "running",
+      hasOpenFixPr: true,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldPromoteStaleInDev({
+      labels: ["feature", "in-dev"],
+      jobStatus: "error",
+      hasOpenFixPr: false,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldPromoteStaleInDev({
+      labels: ["feature", "in-dev", "needs-human"],
+      jobStatus: "error",
+      hasOpenFixPr: true,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldPromoteStaleInDev({
+      labels: ["feature", "ready-for-dev"],
+      jobStatus: null,
+      hasOpenFixPr: true,
+    }),
     false,
   );
 });
@@ -406,13 +591,17 @@ test("child bug markers and open detection", () => {
   assert.equal(childBugStillOpen(["bug", "in-analysis"], "open"), true);
   assert.equal(childBugStillOpen(["bug", "qa-passed"], "open"), false);
   assert.equal(childBugStillOpen(["bug", "in-qa"], "closed"), false);
-  assert.equal(childBugStillOpen(["bug", "needs-human"], "open"), false);
+  assert.equal(childBugStillOpen(["bug", "needs-human"], "open"), true);
 });
 
 test("open child PR blocks parent re-QA even after qa-passed", () => {
   assert.equal(childBlocksParentReQa(["bug", "qa-passed"], "open", true), true);
   assert.equal(childBlocksParentReQa(["bug", "qa-passed"], "open", false), false);
   assert.equal(childBlocksParentReQa(["bug", "in-qa"], "open", false), true);
+  assert.equal(
+    childBlocksParentReQa(["bug", "needs-human"], "open", false),
+    true,
+  );
 });
 
 test("shouldCloseMergedChildIssue only for child qa-passed with merged PR", () => {

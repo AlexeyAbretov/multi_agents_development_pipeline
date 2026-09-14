@@ -35,7 +35,9 @@ export const buildMessage = (
         'GitHub issues не создавать.'
       : labels.includes('approved')
         ? 'создание задач: по утверждённому плану создать feature/bug ' +
-          'issues, затем PIPELINE_MVP_TASKS и PIPELINE_LABELS: done.'
+          'issues. PIPELINE_MVP_TASKS — порядок разработки ' +
+          '(запятая = этап, плюс = параллель), затем ' +
+          'PIPELINE_LABELS: done.'
         : 'mvp';
 
     lines.push('', '## Фаза MVP', phase);

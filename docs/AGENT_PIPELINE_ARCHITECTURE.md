@@ -83,7 +83,7 @@ stateDiagram-v2
   in_analysis --> closed: PIPELINE_MVP_TASKS + done
 ```
 
-`to-approve` — ожидание человека, роль не стартует. Повторный analyst на `needs-plan` / `approved` сбрасывает джоб `(issue, analyst)`. Созданные задачи — корневые `feature`/`bug` + `needs-plan`, не дети QA (`Related to #` запрещён). MVP после `done` закрывается.
+`to-approve` — ожидание человека, роль не стартует. Повторный analyst на `needs-plan` / `approved` сбрасывает джоб `(issue, analyst)`. Созданные задачи — корневые `feature`/`bug` + `needs-plan`, не дети QA (`Related to #` запрещён). На детях — `<!-- pipeline:mvp-queue:12+14,16,… -->`: developer по этапам (запятая), внутри этапа (`+`) параллельно; analyst и tester параллельно. MVP после `done` закрывается.
 
 ### 1.3. Цикл QA (дочерние bugs)
 
@@ -92,7 +92,7 @@ flowchart TD
   T[tester на родителе] -->|PIPELINE_BUG_ISSUES: 17,18| Kids["дети: bug + needs-plan\nRelated to #parent"]
   Kids --> A[analyst → developer → tester на детях]
   A --> Wait["родитель остаётся in-qa\nповторный tester skip"]
-  Wait -->|дети closed / qa-passed / needs-human\nи нет открытого Fixes PR| ReQA[сброс джоба tester → re-QA родителя]
+  Wait -->|дети closed / qa-passed\nи нет открытого Fixes PR| ReQA[сброс джоба tester → re-QA родителя]
   T -->|PIPELINE_BUG_ISSUES: none| Pass[qa-passed]
 ```
 
@@ -129,7 +129,7 @@ queued → running → finished | error | startup_error
                     └── decision: ready-for-dev | to-approve | done | in-qa | qa-passed | released | needs-human
 ```
 
-Пара `(issue, role)` — один **активный** замок (`JobStore.create`). Чтобы роль стартовала снова (re-QA, новый круг плана), замок снимается (`remove` / `removeRoles`, поле `cleared`), запись журнала **остаётся**. После recreate контейнера `dropUnfinishedJobs` помечает `running`/`queued` как `error` + `cleared` (агент уже мёртв), не стирая историю.
+Пара `(issue, role)` — один **активный** замок (`JobStore.create`). Чтобы роль стартовала снова (re-QA, новый круг плана, повтор developer/tester после сбоя), замок снимается (`remove` / `removeRoles`, поле `cleared`), запись журнала **остаётся**. `shouldResetFailedRoleJob`: на issue снова `ready-for-dev` (developer) или `in-qa` (tester), джоб `error` / `startup_error` или `finished` + `needs-human`. После recreate контейнера `dropUnfinishedJobs` помечает `running`/`queued` как `error` + `cleared` (агент уже мёртв), не стирая историю. Залипший `in-dev` после drop + открытый Fixes PR: `shouldPromoteStaleInDev` → `in-qa` без нового агента.
 
 `needs-human` на issue блокирует роли. `finished` + `decision === "needs-human"` в UI — `clarification` (уточнение). Ошибка Cursor / старта — `failed`.
 
@@ -189,7 +189,8 @@ React + Vite + Tailwind. UI только читает `GET /api/jobs` и `/api/d
 |--------|-----------|------------|
 | `PIPELINE_LABELS:` | все роли | `decide*Outcome` в `OrchestratorService/rules.ts` |
 | `PIPELINE_BUG_ISSUES:` | tester, tester-regression | `extractTesterBugIssues` |
-| `PIPELINE_MVP_TASKS:` | analyst на `mvp` + `approved` | `extractMvpTaskIssues` |
+| `PIPELINE_MVP_TASKS:` | analyst на `mvp` + `approved` | `extractMvpTaskStages` (порядок разработки, `+` = этап) |
+| `<!-- pipeline:mvp-queue:… -->` | оркестратор на детях MVP | `selectJobsToLaunch` (developer по этапам) |
 | `PIPELINE_RELEASE_TAG:` | RM | `extractReleaseTag` |
 | `PIPELINE_CHANGELOG_BEGIN` … `END` | RM | `extractReleaseChangelog` |
 
@@ -231,7 +232,7 @@ services/OrchestratorService/     services/DeployerService/
 | `…/OrchestratorService/OrchestratorService.routes.ts` | HTTP `GET /api/jobs` для UI. |
 | `…/OrchestratorService/rules.ts` | Статусная модель issue: роль по labels, исход прогона, fix-round, дерево QA, маркеры ответа, проекция джоба в UI-статус. |
 | `…/OrchestratorService/schedule-rules.ts` | Календарь milestone, tag `vN.N.N`, gate RM, маркеры в комментариях. |
-| `…/OrchestratorService/dispatch.ts` | Eligible пары `(issue, role)` в тике; роли не гейтят друг друга; skip только in-flight. |
+| `…/OrchestratorService/dispatch.ts` | Eligible пары `(issue, role)` в тике; роли не гейтят друг друга; skip in-flight и developer из `mvp-queue`. |
 | `…/OrchestratorService/poller.ts` | Тик `POLL_INTERVAL_MS`: список issues → роль → гейты → Cursor → смена labels. |
 | `…/OrchestratorService/jobs.ts` | `jobs.json`, журнал прогонов, замок `(issue, role)`, сброс без удаления, drop после рестарта. |
 | `…/OrchestratorService/schedule.ts` | Тик `SCHEDULE_INTERVAL_MS`: T−1/T, regression-issue, `blocked: no release`. |
@@ -248,13 +249,13 @@ services/OrchestratorService/     services/DeployerService/
 
 Поток одного feature-тика:
 
-1. `poller` тянет open issues с `needs-plan` \| `ready-for-dev` \| `in-qa` \| `qa-passed` \| `approved`.
-2. `roleForLabels` → роль или skip.
-3. `selectJobsToLaunch` отфильтровывает in-flight.
+1. `poller` тянет open issues с trigger-labels и замками (`in-analysis`, `in-dev`, `qa-in-progress`, `needs-human`) — каталог для очереди MVP.
+2. `roleForLabels` → роль или skip. Залипший `in-dev` + открытый Fixes PR без живого джоба → `in-qa` (дальше tester в том же тике).
+3. `selectJobsToLaunch` отфильтровывает in-flight и лишних developer из `mvp-queue`.
 4. `handleIssue`: гейты (PR, fix-round, дети, RM gate) → `JobStore.create` → промежуточный label → `CursorClient.runCloudAgent` → `decide*Outcome` → `apply*Labels`.
 5. UI читает джоб; GitHub показывает labels.
 
-Листинг полла **не** включает все labels контракта. Trigger-label, которого нет в `getOpenIssuesByLabel`, тик не увидит.
+Листинг полла: trigger-labels плюс замки (`in-analysis`, `in-dev`, `qa-in-progress`, `needs-human`) для каталога `mvp-queue`. Другого trigger-label в `getOpenIssuesByLabel` тик не увидит.
 
 ### 3.1. Сборка и локальный запуск
 
@@ -307,12 +308,12 @@ services/OrchestratorService/     services/DeployerService/
 Пример: отдельный ревьюер.
 
 1. Тип `Role` в `pipeline/src/types/types.ts` (алиас `@types`).
-2. `selectJobsToLaunch` в `dispatch.ts` — новая роль стартует в том же тике, что и остальные (роли не гейтят друг друга).
+2. `selectJobsToLaunch` в `dispatch.ts` — новая роль стартует в том же тике, что и остальные (роли не гейтят друг друга), кроме developer на `mvp-queue`.
 3. Ветка в `roleForLabels` — уникальный набор labels.
 4. Промпт `pipeline/prompts/<role>.md` — `CursorClient` грузит `${role}.md`.
 5. В `handleIssue`: pre-labels, гейты, `decide*Outcome`, `apply*Labels`, комментарии.
 6. Если роль должна повторяться — `store.remove` снимает замок по событию (как tester после детей); история в `jobs.json` сохраняется.
-7. Тесты dispatch: новая роль стартует вместе с остальными; skip только in-flight `(issue, role)`.
+7. Тесты dispatch: новая роль стартует вместе с остальными; skip in-flight `(issue, role)`; developer из `mvp-queue` — по этапам, `+` параллельно.
 
 Роль без нового trigger-label не заведётся: полл выбирает работу **только** через labels.
 
