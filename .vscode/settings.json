@@ -5,9 +5,5 @@
     "source.fixAll.eslint": "explicit"
   },
   "eslint.execArgv": ["--disable-warning=DEP0190"],
-  // Cursor SCM sets core.hooksPath=nul; wrapper strips it so pre-commit runs.
-  "git.path": [
-    "${workspaceFolder}/scripts/git-with-hooks.exe",
-    "${workspaceFolder}/scripts/git-with-hooks.mjs"
-  ]
+  "git.path": "C:/development/ai/multi_agents_development_pipeline/scripts/git-with-hooks.exe"
 }

@@ -11,7 +11,8 @@ internal static class Program
 {
     private static int Main(string[] args)
     {
-        StripNullDeviceOverrides();
+        StripForcedHooksPath();
+        Log(args);
 
         string git = FindGit();
         if (git == null)
@@ -53,7 +54,28 @@ internal static class Program
         return "\"" + arg.Replace("\"", "\\\"") + "\"";
     }
 
-    private static void StripNullDeviceOverrides()
+    private static void Log(string[] args)
+    {
+        try
+        {
+            string line =
+                DateTime.Now.ToString("o")
+                + " GIT_CONFIG_COUNT="
+                + (Environment.GetEnvironmentVariable("GIT_CONFIG_COUNT") ?? "")
+                + " "
+                + string.Join(" ", args)
+                + Environment.NewLine;
+
+            File.AppendAllText(
+                Path.Combine(Path.GetTempPath(), "git-with-hooks.log"),
+                line);
+        }
+        catch
+        {
+        }
+    }
+
+    private static void StripForcedHooksPath()
     {
         string countStr = Environment.GetEnvironmentVariable("GIT_CONFIG_COUNT");
         int count;
@@ -69,7 +91,7 @@ internal static class Program
             string key = Environment.GetEnvironmentVariable("GIT_CONFIG_KEY_" + i);
             string val = Environment.GetEnvironmentVariable("GIT_CONFIG_VALUE_" + i);
 
-            if (IsNullDeviceOverride(key, val))
+            if (IsForcedHooksPath(key))
             {
                 continue;
             }
@@ -92,28 +114,10 @@ internal static class Program
         }
     }
 
-    private static bool IsNullDeviceOverride(string key, string val)
+    private static bool IsForcedHooksPath(string key)
     {
-        if (string.IsNullOrEmpty(key) || string.IsNullOrEmpty(val))
-        {
-            return false;
-        }
-
-        bool interesting =
-            key.Equals("core.hooksPath", StringComparison.OrdinalIgnoreCase)
-            || key.Equals("core.attributesFile", StringComparison.OrdinalIgnoreCase);
-
-        if (!interesting)
-        {
-            return false;
-        }
-
-        string n = val.Trim();
-
-        return n.Equals("/dev/null", StringComparison.OrdinalIgnoreCase)
-            || n.Equals("nul", StringComparison.OrdinalIgnoreCase)
-            || n.Equals("\\\\.\\nul", StringComparison.OrdinalIgnoreCase)
-            || n.Equals("\\Device\\Null", StringComparison.OrdinalIgnoreCase);
+        return key != null
+            && key.Equals("core.hooksPath", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string FindGit()
