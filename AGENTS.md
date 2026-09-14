@@ -27,6 +27,7 @@
 ```bash
 cp .env.example .env
 cp pipeline/.env.example pipeline/.env
+npm i                                # pipeline + pipeline-ui
 docker compose up --build -d          # orchestrator :3020, deployer :3021, UI :3010
 cd pipeline && npm ci && npm run build && npm test
 cd pipeline-ui && npm ci && npm run build

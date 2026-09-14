@@ -129,9 +129,9 @@ queued → running → finished | error | startup_error
                     └── decision: ready-for-dev | to-approve | done | in-qa | qa-passed | released | needs-human
 ```
 
-Пара `(issue, role)` создаётся один раз (`JobStore.create`). Чтобы роль стартовала снова (re-QA, новый круг плана), запись **удаляется** (`remove` / `removeRoles`). После recreate контейнера `dropUnfinishedJobs` вычищает `running`/`queued` — облачный агент к тому моменту уже мёртв.
+Пара `(issue, role)` — один **активный** замок (`JobStore.create`). Чтобы роль стартовала снова (re-QA, новый круг плана), замок снимается (`remove` / `removeRoles`, поле `cleared`), запись журнала **остаётся**. После recreate контейнера `dropUnfinishedJobs` помечает `running`/`queued` как `error` + `cleared` (агент уже мёртв), не стирая историю.
 
-`needs-human` на issue блокирует роли. `decision === "needs-human"` на джобе в UI — `failed`.
+`needs-human` на issue блокирует роли. `finished` + `decision === "needs-human"` в UI — `clarification` (уточнение). Ошибка Cursor / старта — `failed`.
 
 Проекция UI (`OrchestratorService/rules.ts` → `mapJobToUiStatus`):
 
@@ -140,7 +140,7 @@ queued → running → finished | error | startup_error
 | `queued` | `queued` |
 | `running` | `running` |
 | `error` / `startup_error` | `failed` |
-| `finished` + `decision === needs-human` | `failed` |
+| `finished` + `decision === needs-human` | `clarification` |
 | иначе `finished` | `finished` |
 
 ---
@@ -233,7 +233,7 @@ services/OrchestratorService/     services/DeployerService/
 | `…/OrchestratorService/schedule-rules.ts` | Календарь milestone, tag `vN.N.N`, gate RM, маркеры в комментариях. |
 | `…/OrchestratorService/dispatch.ts` | Eligible пары `(issue, role)` в тике; роли не гейтят друг друга; skip только in-flight. |
 | `…/OrchestratorService/poller.ts` | Тик `POLL_INTERVAL_MS`: список issues → роль → гейты → Cursor → смена labels. |
-| `…/OrchestratorService/jobs.ts` | `jobs.json`, идемпотентность, сброс ролей, drop после рестарта. |
+| `…/OrchestratorService/jobs.ts` | `jobs.json`, журнал прогонов, замок `(issue, role)`, сброс без удаления, drop после рестарта. |
 | `…/OrchestratorService/schedule.ts` | Тик `SCHEDULE_INTERVAL_MS`: T−1/T, regression-issue, `blocked: no release`. |
 | `…/OrchestratorService/schedule-state.ts` | Не спамить одинаковыми комментариями каждый час. |
 | `pipeline/src/services/DeployerService/` | Точка входа deployer (`index.ts`). |
@@ -243,7 +243,7 @@ services/OrchestratorService/     services/DeployerService/
 | `…/DeployerService/deploy-run.ts` | `DEPLOY_MODE=stub` или `docker compose up -d` в `/product`. |
 | `…/DeployerService/deploy-store.ts` | `deploys.json` (deployer пишет; UI читает через HTTP). |
 | `pipeline/prompts/*.md` | Контракт с агентом: что писать в маркерах. |
-| `pipeline/test/rules.test.js`, `dispatch.test.js`, `labels.test.js` | Правила, dispatch и каталог labels без GitHub/Cursor. |
+| `pipeline/test/rules.test.js`, `dispatch.test.js`, `labels.test.js`, `jobs.test.js` | Правила, dispatch, labels, журнал `jobs.json` без GitHub/Cursor. |
 | `.vscode/launch.json` | Отладка: **Orchestrator** (`:3020`), **Deployer** (`:3021`), compound оба. |
 
 Поток одного feature-тика:
@@ -311,7 +311,7 @@ services/OrchestratorService/     services/DeployerService/
 3. Ветка в `roleForLabels` — уникальный набор labels.
 4. Промпт `pipeline/prompts/<role>.md` — `CursorClient` грузит `${role}.md`.
 5. В `handleIssue`: pre-labels, гейты, `decide*Outcome`, `apply*Labels`, комментарии.
-6. Если роль должна повторяться — `store.remove` по событию (как tester после детей).
+6. Если роль должна повторяться — `store.remove` снимает замок по событию (как tester после детей); история в `jobs.json` сохраняется.
 7. Тесты dispatch: новая роль стартует вместе с остальными; skip только in-flight `(issue, role)`.
 
 Роль без нового trigger-label не заведётся: полл выбирает работу **только** через labels.

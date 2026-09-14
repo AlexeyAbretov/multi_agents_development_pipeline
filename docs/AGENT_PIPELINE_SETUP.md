@@ -64,7 +64,7 @@ git clone https://github.com/owner/your-product-repo.git
 npm run ensure-labels -- owner/your-product-repo
 ```
 
-Из корня репозитория. Нужны `npm ci` в `pipeline/` и `GITHUB_TOKEN` в `pipeline/.env.local` или `pipeline/.env`. Без аргумента берётся `GITHUB_REPO`. Скрипт идемпотентен: уже существующие labels не меняет.
+Из корня репозитория (`npm i` ставит зависимости `pipeline` и `pipeline-ui`). Нужен `GITHUB_TOKEN` в `pipeline/.env.local` или `pipeline/.env`. Без аргумента берётся `GITHUB_REPO`. Скрипт идемпотентен: уже существующие labels не меняет.
 
 Справочник:
 

@@ -580,7 +580,11 @@ test("mapJobToUiStatus maps release-manager and failures", () => {
   );
   assert.equal(
     mapJobToUiStatus({ status: "finished", decision: "needs-human" }),
-    "failed",
+    "clarification",
   );
   assert.equal(mapJobToUiStatus({ status: "error", decision: null }), "failed");
+  assert.equal(
+    mapJobToUiStatus({ status: "error", decision: "needs-human" }),
+    "failed",
+  );
 });

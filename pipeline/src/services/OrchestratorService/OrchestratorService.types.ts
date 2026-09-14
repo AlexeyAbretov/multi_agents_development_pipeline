@@ -16,7 +16,10 @@ export type Job = {
   decision: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Замок (issue, role) снят; запись журнала остаётся. */
+  cleared?: boolean;
 };
 
 /** UI-статус очереди (контракт AGENT_PIPELINE_PLAN UI). */
-export type UiJobStatus = 'queued' | 'running' | 'failed' | 'finished';
+export type UiJobStatus =
+  'queued' | 'running' | 'failed' | 'finished' | 'clarification';

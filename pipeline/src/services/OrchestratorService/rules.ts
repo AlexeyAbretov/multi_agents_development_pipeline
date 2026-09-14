@@ -639,7 +639,7 @@ export function mapJobToUiStatus(
   job: Pick<Job, 'status' | 'decision'>,
 ): UiJobStatus {
   if (job.status === 'finished' && job.decision === 'needs-human') {
-    return 'failed';
+    return 'clarification';
   }
 
   return JOB_STATUS_TO_UI[job.status];

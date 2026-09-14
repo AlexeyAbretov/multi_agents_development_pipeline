@@ -479,7 +479,7 @@ Issue → план → PR → issue-QA → merge человеком в `main` �
 
 1. Сервис `pipeline-ui` (React + Vite + TS + Tailwind), порт `127.0.0.1:3010`.
 2. API: `GET /api/jobs` (orchestrator), `GET /api/deploys` (deployer); данные из volume, не docker logs.
-3. Таблица: issue, роль, UI-статус (`queued` / `running` / `failed` / `finished`), ссылки GitHub и Cursor.
+3. Таблица: issue, роль, UI-статус (`queued` / `running` / `failed` / `finished` / `clarification`), ссылки GitHub и Cursor.
 4. Полный транскрипт — ссылка на Cursor (`agentId`); Publish релиза — RM по milestone, не кнопка в UI.
 5. Compose: `pipeline-ui` + nginx: `/api/jobs` → orchestrator, `/api/deploys` → deployer.
 

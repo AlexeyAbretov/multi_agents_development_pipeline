@@ -2,6 +2,10 @@
   "name": "multi-agents-development-pipeline",
   "private": true,
   "scripts": {
+    "postinstall": "npm --prefix pipeline install && npm --prefix pipeline-ui install",
     "ensure-labels": "npm --prefix pipeline run ensure-labels --"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

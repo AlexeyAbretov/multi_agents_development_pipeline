@@ -1,3 +1,1 @@
-scripts/git-with-hooks.mjs text eol=lf
-scripts/git-with-hooks.cs text eol=lf
 .husky/** text eol=lf
