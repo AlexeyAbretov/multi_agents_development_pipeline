@@ -1,7 +1,11 @@
 import type { FastifyBaseLogger } from "fastify";
 
 import type { Config } from "@config";
-import { GitHubClient, type GitHubIssue } from "@providers";
+import {
+  GitHubClient,
+  type GitHubIssue,
+  type GitHubMilestoneRef,
+} from "@providers";
 
 import { ScheduleStateStore } from "./schedule-state";
 
@@ -21,13 +25,6 @@ import {
   tagFromMilestoneTitle,
   upsertNothingToReleaseDescription,
 } from "./schedule-rules";
-
-type Milestone = {
-  id: number;
-  number: number;
-  title: string;
-  due_on: string | null;
-};
 
 export function startSchedulePoller(
   config: Config,
@@ -74,7 +71,7 @@ async function scheduleOnce(
     return;
   }
 
-  let milestones: Milestone[];
+  let milestones: GitHubMilestoneRef[];
 
   try {
     milestones = await github.listOpenMilestones();
@@ -137,7 +134,7 @@ async function scheduleOnce(
 export async function closeEmptyRelease(
   github: GitHubClient,
   logger: FastifyBaseLogger,
-  milestone: { id: number; number: number; title: string },
+  milestone: Pick<GitHubMilestoneRef, "id" | "number" | "title">,
   previousTag: string,
 ): Promise<void> {
   const fields = {
@@ -183,7 +180,7 @@ async function skipIfEmptyRelease(
   config: Config,
   logger: FastifyBaseLogger,
   github: GitHubClient,
-  milestone: Milestone,
+  milestone: GitHubMilestoneRef,
 ): Promise<boolean> {
   const tag = tagFromMilestoneTitle(milestone.title);
 
@@ -219,7 +216,7 @@ async function notifyDuplicateDue(
   logger: FastifyBaseLogger,
   github: GitHubClient,
   state: ScheduleStateStore,
-  dueToday: Milestone[],
+  dueToday: GitHubMilestoneRef[],
 ): Promise<void> {
   const day = calendarDateInTimeZone(new Date(), config.SCHEDULE_TZ);
 
@@ -259,7 +256,7 @@ async function notifyDuplicateDue(
 async function ensureRegressionIssue(
   logger: FastifyBaseLogger,
   github: GitHubClient,
-  milestone: Milestone,
+  milestone: GitHubMilestoneRef,
   hotfix: boolean,
 ): Promise<void> {
   const tag = tagFromMilestoneTitle(milestone.title);
@@ -321,7 +318,7 @@ async function handleDueToday(
   logger: FastifyBaseLogger,
   github: GitHubClient,
   state: ScheduleStateStore,
-  milestone: Milestone,
+  milestone: GitHubMilestoneRef,
 ): Promise<void> {
   const fields = {
     issue: milestone.number,

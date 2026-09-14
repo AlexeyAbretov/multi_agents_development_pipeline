@@ -5,6 +5,10 @@ export type GitHubMilestoneRef = {
   due_on: string | null;
 };
 
+export type GitHubMilestoneWithState = GitHubMilestoneRef & {
+  state: string;
+};
+
 export type GitHubIssue = {
   number: number;
   title: string;
@@ -14,6 +18,10 @@ export type GitHubIssue = {
   milestone: GitHubMilestoneRef | null;
 };
 
+export type GitHubIssueWithState = GitHubIssue & {
+  state: 'open' | 'closed';
+};
+
 export type GitHubPull = {
   number: number;
   title: string;
@@ -21,6 +29,10 @@ export type GitHubPull = {
   html_url: string;
   headRef: string;
   baseRef: string;
+};
+
+export type GitHubPullWithMerged = GitHubPull & {
+  merged: boolean;
 };
 
 export type GitHubRelease = {
@@ -34,17 +46,18 @@ export type GitHubRelease = {
   published_at: string | null;
 };
 
+export type GitHubLabelRaw = string | { name: string };
+
 export type GitHubIssueRaw = {
   number: number;
   title: string;
   body: string | null;
   html_url: string;
   pull_request?: unknown;
-  labels: Array<string | { name: string }>;
-  milestone?: {
-    id: number;
-    number: number;
-    title: string;
-    due_on: string | null;
-  } | null;
+  labels: GitHubLabelRaw[];
+  milestone?: GitHubMilestoneRef | null;
+};
+
+export type GitHubIssueRawWithState = GitHubIssueRaw & {
+  state: 'open' | 'closed';
 };

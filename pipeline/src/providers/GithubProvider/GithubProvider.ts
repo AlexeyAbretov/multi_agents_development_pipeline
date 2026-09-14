@@ -4,11 +4,17 @@ import { GITHUB_COMMENT_MAX } from './GithubProvider.constants';
 import type {
   GitHubIssue,
   GitHubIssueRaw,
+  GitHubIssueRawWithState,
+  GitHubIssueWithState,
+  GitHubLabelRaw,
+  GitHubMilestoneRef,
+  GitHubMilestoneWithState,
   GitHubPull,
+  GitHubPullWithMerged,
   GitHubRelease,
 } from './GithubProvider.types';
 
-function labelNames(labels: GitHubIssueRaw['labels']): string[] {
+function labelNames(labels: GitHubLabelRaw[]): string[] {
   return labels.map((label) =>
     typeof label === 'string' ? label : label.name,
   );
@@ -21,14 +27,7 @@ function toGitHubIssue(item: GitHubIssueRaw): GitHubIssue {
     body: item.body,
     html_url: item.html_url,
     labels: labelNames(item.labels),
-    milestone: item.milestone
-      ? {
-          id: item.milestone.id,
-          number: item.milestone.number,
-          title: item.milestone.title,
-          due_on: item.milestone.due_on,
-        }
-      : null,
+    milestone: item.milestone ?? null,
   };
 }
 
@@ -234,7 +233,7 @@ export class GitHubClient {
 
   private async listPulls(
     state: 'open' | 'closed',
-  ): Promise<Array<GitHubPull & { merged: boolean }>> {
+  ): Promise<GitHubPullWithMerged[]> {
     const { owner, repo } = this.repoPath();
     const url = new URL(`https://api.github.com/repos/${owner}/${repo}/pulls`);
 
@@ -290,9 +289,7 @@ export class GitHubClient {
     }
   }
 
-  async getIssue(
-    issue: number,
-  ): Promise<GitHubIssue & { state: 'open' | 'closed' }> {
+  async getIssue(issue: number): Promise<GitHubIssueWithState> {
     const { owner, repo } = this.repoPath();
     const response = await githubFetch(
       `https://api.github.com/repos/${owner}/${repo}/issues/${issue}`,
@@ -307,9 +304,7 @@ export class GitHubClient {
       );
     }
 
-    const item = (await response.json()) as GitHubIssueRaw & {
-      state: 'open' | 'closed';
-    };
+    const item = (await response.json()) as GitHubIssueRawWithState;
 
     return {
       ...toGitHubIssue(item),
@@ -638,9 +633,7 @@ export class GitHubClient {
     }
   }
 
-  async listOpenMilestones(): Promise<
-    Array<{ id: number; number: number; title: string; due_on: string | null }>
-  > {
+  async listOpenMilestones(): Promise<GitHubMilestoneRef[]> {
     const { owner, repo } = this.repoPath();
     const url = new URL(
       `https://api.github.com/repos/${owner}/${repo}/milestones`,
@@ -658,12 +651,7 @@ export class GitHubClient {
       );
     }
 
-    const items = (await response.json()) as Array<{
-      id: number;
-      number: number;
-      title: string;
-      due_on: string | null;
-    }>;
+    const items = (await response.json()) as GitHubMilestoneRef[];
 
     return items.map((item) => ({
       id: item.id,
@@ -673,13 +661,9 @@ export class GitHubClient {
     }));
   }
 
-  async findMilestoneByTitle(title: string): Promise<{
-    id: number;
-    number: number;
-    title: string;
-    due_on: string | null;
-    state: string;
-  } | null> {
+  async findMilestoneByTitle(
+    title: string,
+  ): Promise<GitHubMilestoneWithState | null> {
     const { owner, repo } = this.repoPath();
     const url = new URL(
       `https://api.github.com/repos/${owner}/${repo}/milestones`,
@@ -697,13 +681,7 @@ export class GitHubClient {
       );
     }
 
-    const items = (await response.json()) as Array<{
-      id: number;
-      number: number;
-      title: string;
-      due_on: string | null;
-      state: string;
-    }>;
+    const items = (await response.json()) as GitHubMilestoneWithState[];
 
     return items.find((item) => item.title === title) ?? null;
   }

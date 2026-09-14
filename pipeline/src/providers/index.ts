@@ -1,6 +1,14 @@
 export type { CursorRunResult } from "./CursorProvider";
 export { CursorClient } from "./CursorProvider";
-export type { GitHubIssue, GitHubPull, GitHubRelease } from "./GithubProvider";
+export type {
+  GitHubIssue,
+  GitHubIssueWithState,
+  GitHubMilestoneRef,
+  GitHubMilestoneWithState,
+  GitHubPull,
+  GitHubPullWithMerged,
+  GitHubRelease,
+} from "./GithubProvider";
 export {
   agentResultComment,
   fixIssueWithPR,
