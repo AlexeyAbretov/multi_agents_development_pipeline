@@ -1,17 +1,17 @@
-import type { FastifyBaseLogger } from "fastify";
+import type { FastifyBaseLogger } from 'fastify';
 
-import type { Config } from "@config";
-import { GitHubClient } from "@providers";
+import type { Config } from '@config';
+import { GitHubClient } from '@providers';
 
 import {
   appendDeployNote,
   releaseBodyHasDeployMarker,
   releasesToDeploy,
-} from "./deploy-rules";
-import { runProductDeploy } from "./deploy-run";
-import { DeployStore } from "./deploy-store";
+} from './deploy-rules';
+import { runProductDeploy } from './deploy-run';
+import { DeployStore } from './deploy-store';
 
-import { jobLog } from "../../log";
+import { jobLog } from '../../log';
 
 export function startDeployPoller(
   config: Config,
@@ -23,7 +23,7 @@ export function startDeployPoller(
 
   const tick = (): void => {
     if (busy) {
-      jobLog(logger, {}, "deploy poll skip: previous tick still running");
+      jobLog(logger, {}, 'deploy poll skip: previous tick still running');
 
       return;
     }
@@ -50,10 +50,10 @@ async function pollOnce(
   store: DeployStore,
   github: GitHubClient,
 ): Promise<void> {
-  jobLog(logger, {}, "deploy poll tick");
+  jobLog(logger, {}, 'deploy poll tick');
 
   if (!config.GITHUB_TOKEN || !config.GITHUB_REPO) {
-    jobLog(logger, {}, "deploy poll skip: GITHUB_TOKEN or GITHUB_REPO empty");
+    jobLog(logger, {}, 'deploy poll skip: GITHUB_TOKEN or GITHUB_REPO empty');
 
     return;
   }
@@ -63,7 +63,7 @@ async function pollOnce(
   try {
     releases = await github.listPublishedReleases();
   } catch (err) {
-    logger.error({ err }, "github list releases failed");
+    logger.error({ err }, 'github list releases failed');
 
     return;
   }
@@ -75,7 +75,7 @@ async function pollOnce(
   );
 
   if (pending.length === 0) {
-    jobLog(logger, {}, "deploy: no new published releases");
+    jobLog(logger, {}, 'deploy: no new published releases');
 
     return;
   }
@@ -87,7 +87,7 @@ async function pollOnce(
 
 async function applyDeployLabels(
   github: GitHubClient,
-  status: "deployed" | "deploy-failed",
+  status: 'deployed' | 'deploy-failed',
   tag: string,
 ): Promise<number[]> {
   const labeled: number[] = [];
@@ -98,15 +98,15 @@ async function applyDeployLabels(
 
   for (const issue of issues) {
     if (
-      issue.labels.includes("deployed") ||
-      issue.labels.includes("deploy-failed")
+      issue.labels.includes('deployed') ||
+      issue.labels.includes('deploy-failed')
     ) {
       continue;
     }
 
     await github.removeIssueLabel(
       issue.number,
-      status === "deployed" ? "deploy-failed" : "deployed",
+      status === 'deployed' ? 'deploy-failed' : 'deployed',
     );
     await github.addIssueLabels(issue.number, [status]);
     labeled.push(issue.number);
@@ -129,7 +129,7 @@ async function handleRelease(
 ): Promise<void> {
   const fields = {
     issue: release.id,
-    role: "deployer",
+    role: 'deployer',
     agentId: null,
     runId: null,
   };
@@ -147,7 +147,7 @@ async function handleRelease(
   );
 
   const result = await runProductDeploy(config, release.tag_name);
-  const status = result.ok ? "deployed" : "deploy-failed";
+  const status = result.ok ? 'deployed' : 'deploy-failed';
 
   store.record({
     releaseId: release.id,
@@ -166,7 +166,7 @@ async function handleRelease(
   } catch (err) {
     logger.error(
       { err, releaseId: release.id },
-      "github release body update failed",
+      'github release body update failed',
     );
   }
 
@@ -177,11 +177,11 @@ async function handleRelease(
       logger,
       fields,
       labeled.length
-        ? `labels +${status} on ${labeled.map((n) => `#${n}`).join(", ")}`
+        ? `labels +${status} on ${labeled.map((n) => `#${n}`).join(', ')}`
         : `no open release issues to label (${status})`,
     );
   } catch (err) {
-    logger.error({ err, releaseId: release.id }, "github deploy labels failed");
+    logger.error({ err, releaseId: release.id }, 'github deploy labels failed');
   }
 
   jobLog(

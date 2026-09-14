@@ -1,4 +1,4 @@
-import type { FastifyBaseLogger } from "fastify";
+import type { FastifyBaseLogger } from 'fastify';
 
 type JobLogFields = {
   issue: number | null;

@@ -1,29 +1,29 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
-import { Agent, CursorAgentError } from "@cursor/sdk";
+import { Agent, CursorAgentError } from '@cursor/sdk';
 
-import type { Config } from "@config";
+import type { Config } from '@config';
 
-import { TESTER_REGRESSION_PROMPT } from "./CursorProvider.constants";
-import type { CursorRunResult, CursorRunStarted } from "./CursorProvider.types";
+import { TESTER_REGRESSION_PROMPT } from './CursorProvider.constants';
+import type { CursorRunResult, CursorRunStarted } from './CursorProvider.types';
 
-import type { Role } from "../../types";
+import type { Role } from '../../types';
 import type {
   GitHubIssue,
   GitHubPull,
-} from "../GithubProvider/GithubProvider.types";
+} from '../GithubProvider/GithubProvider.types';
 
 function loadPrompt(
   promptsDir: string,
   role: Role,
   issue: GitHubIssue,
 ): string {
-  if (role === "tester" && issue.labels.includes("regression")) {
-    return readFileSync(join(promptsDir, TESTER_REGRESSION_PROMPT), "utf8");
+  if (role === 'tester' && issue.labels.includes('regression')) {
+    return readFileSync(join(promptsDir, TESTER_REGRESSION_PROMPT), 'utf8');
   }
 
-  return readFileSync(join(promptsDir, `${role}.md`), "utf8");
+  return readFileSync(join(promptsDir, `${role}.md`), 'utf8');
 }
 
 function buildMessage(
@@ -34,47 +34,47 @@ function buildMessage(
 ): string {
   const lines = [
     rolePrompt.trim(),
-    "",
-    "## Issue",
+    '',
+    '## Issue',
     `Номер: #${issue.number}`,
     `URL: ${issue.html_url}`,
     `Заголовок: ${issue.title}`,
-    "",
-    issue.body?.trim() || "(пустое описание)",
+    '',
+    issue.body?.trim() || '(пустое описание)',
   ];
 
   if (issue.milestone) {
     lines.push(
-      "",
-      "## Milestone",
+      '',
+      '## Milestone',
       `Title (tag): ${issue.milestone.title}`,
-      `Due: ${issue.milestone.due_on ?? "(нет due)"}`,
+      `Due: ${issue.milestone.due_on ?? '(нет due)'}`,
     );
   }
 
   if (pull) {
     lines.push(
-      "",
-      "## Pull request",
+      '',
+      '## Pull request',
       `Номер: #${pull.number}`,
       `URL: ${pull.html_url}`,
       `Ветка: ${pull.headRef}`,
       `Заголовок: ${pull.title}`,
     );
 
-    if (role === "developer") {
+    if (role === 'developer') {
       lines.push(
-        "",
+        '',
         `База твоего PR: \`${pull.headRef}\` — **не** \`main\`.`,
-        "Открой PR командой `gh pr create --base " +
+        'Открой PR командой `gh pr create --base ' +
           pull.headRef +
-          "` (Cursor autoCreatePR часто целится в default " +
-          "branch — сразу смени base, если открылся в main).",
+          '` (Cursor autoCreatePR часто целится в default ' +
+          'branch — сразу смени base, если открылся в main).',
       );
     }
   }
 
-  return lines.join("\n");
+  return lines.join('\n');
 }
 
 export class CursorClient {
@@ -101,7 +101,7 @@ export class CursorClient {
             },
           ],
           skipReviewerRequest: true,
-          autoCreatePR: role === "developer",
+          autoCreatePR: role === 'developer',
           metadata: {
             issue: String(issue.number),
             role,
@@ -124,22 +124,22 @@ export class CursorClient {
 
       const result = await run.wait();
 
-      if (result.status === "error") {
+      if (result.status === 'error') {
         return {
           agentId,
           runId,
-          status: "error",
-          error: result.error?.message ?? "run.status=error",
+          status: 'error',
+          error: result.error?.message ?? 'run.status=error',
           text: result.result ?? null,
         };
       }
 
-      if (result.status === "cancelled") {
+      if (result.status === 'cancelled') {
         return {
           agentId,
           runId,
-          status: "error",
-          error: "run cancelled",
+          status: 'error',
+          error: 'run cancelled',
           text: result.result ?? null,
         };
       }
@@ -147,7 +147,7 @@ export class CursorClient {
       return {
         agentId,
         runId,
-        status: "finished",
+        status: 'finished',
         error: null,
         text: result.result ?? null,
       };
@@ -156,8 +156,8 @@ export class CursorClient {
       const retryable =
         err instanceof CursorAgentError
           ? ` retryable=${String(err.isRetryable)}`
-          : "";
-      const status = runId ? "error" : "startup_error";
+          : '';
+      const status = runId ? 'error' : 'startup_error';
 
       return {
         agentId,

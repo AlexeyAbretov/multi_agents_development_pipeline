@@ -1,6 +1,9 @@
 import type { Config } from '@config';
 
-import { GITHUB_COMMENT_MAX } from './GithubProvider.constants';
+import {
+  GITHUB_COMMENT_MAX,
+  GITHUB_PIPELINE_LABELS,
+} from './GithubProvider.constants';
 import type {
   GitHubIssue,
   GitHubIssueRaw,
@@ -12,7 +15,10 @@ import type {
   GitHubPull,
   GitHubPullWithMerged,
   GitHubRelease,
+  PipelineLabel,
 } from './GithubProvider.types';
+
+export { GITHUB_PIPELINE_LABELS } from './GithubProvider.constants';
 
 function labelNames(labels: GitHubLabelRaw[]): string[] {
   return labels.map((label) =>
@@ -85,6 +91,16 @@ export function fixIssueWithPR(
   }
 
   return new RegExp(`^issue/${issue}(?:-|$)`).test(pr.headRef);
+}
+
+export function missingPipelineLabels(
+  existingNames: string[],
+): PipelineLabel[] {
+  const have = new Set(existingNames.map((name) => name.toLowerCase()));
+
+  return GITHUB_PIPELINE_LABELS.filter(
+    (label) => !have.has(label.name.toLowerCase()),
+  );
 }
 
 function isTransientNetworkError(err: unknown): boolean {
@@ -330,6 +346,89 @@ export class GitHubClient {
         `GitHub update issue ${response.status}: ${text.slice(0, 500)}`,
       );
     }
+  }
+
+  async listRepoLabels(): Promise<string[]> {
+    const { owner, repo } = this.repoPath();
+    const names: string[] = [];
+
+    for (let page = 1; ; page++) {
+      const url = new URL(
+        `https://api.github.com/repos/${owner}/${repo}/labels`,
+      );
+
+      url.searchParams.set('per_page', '100');
+      url.searchParams.set('page', String(page));
+
+      const response = await githubFetch(url, { headers: this.headers() });
+
+      if (!response.ok) {
+        const text = await response.text();
+
+        throw new Error(
+          `GitHub labels ${response.status}: ${text.slice(0, 500)}`,
+        );
+      }
+
+      const items = (await response.json()) as Array<{ name: string }>;
+
+      names.push(...items.map((item) => item.name));
+
+      if (items.length < 100) {
+        break;
+      }
+    }
+
+    return names;
+  }
+
+  async createRepoLabel(label: PipelineLabel): Promise<void> {
+    const { owner, repo } = this.repoPath();
+    const response = await githubFetch(
+      `https://api.github.com/repos/${owner}/${repo}/labels`,
+      {
+        method: 'POST',
+        headers: { ...this.headers(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: label.name,
+          color: label.color,
+          description: label.description,
+        }),
+      },
+    );
+
+    if (response.status === 422) {
+      return;
+    }
+
+    if (!response.ok) {
+      const text = await response.text();
+
+      throw new Error(
+        `GitHub create label ${response.status}: ${text.slice(0, 500)}`,
+      );
+    }
+  }
+
+  async ensurePipelineLabels(): Promise<{
+    created: string[];
+    skipped: string[];
+  }> {
+    const existing = await this.listRepoLabels();
+    const toCreate = missingPipelineLabels(existing);
+    const created: string[] = [];
+
+    for (const label of toCreate) {
+      await this.createRepoLabel(label);
+      created.push(label.name);
+    }
+
+    const createdSet = new Set(created);
+    const skipped = GITHUB_PIPELINE_LABELS.map((label) => label.name).filter(
+      (name) => !createdSet.has(name),
+    );
+
+    return { created, skipped };
   }
 
   async addIssueLabels(issue: number, labels: string[]): Promise<void> {

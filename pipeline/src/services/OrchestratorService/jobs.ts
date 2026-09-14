@@ -1,10 +1,10 @@
-import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { randomUUID } from 'node:crypto';
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
-import type { Job } from "./types";
+import type { Job } from './types';
 
-import type { Role } from "../../types";
+import type { Role } from '../../types';
 
 type StoreFile = {
   lastPollAt: string | null;
@@ -17,7 +17,7 @@ export class JobStore {
 
   constructor(dataDir: string) {
     mkdirSync(dataDir, { recursive: true });
-    this.filePath = join(dataDir, "jobs.json");
+    this.filePath = join(dataDir, 'jobs.json');
   }
 
   private synchronized<T>(fn: () => T): Promise<T> {
@@ -33,7 +33,7 @@ export class JobStore {
 
   private loadSync(): StoreFile {
     try {
-      return JSON.parse(readFileSync(this.filePath, "utf8")) as StoreFile;
+      return JSON.parse(readFileSync(this.filePath, 'utf8')) as StoreFile;
     } catch {
       return { lastPollAt: null, jobs: [] };
     }
@@ -42,7 +42,7 @@ export class JobStore {
   private saveSync(data: StoreFile): void {
     const tmp = `${this.filePath}.tmp`;
 
-    writeFileSync(tmp, JSON.stringify(data, null, 2), "utf8");
+    writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8');
     renameSync(tmp, this.filePath);
   }
 
@@ -67,7 +67,7 @@ export class JobStore {
         id: randomUUID(),
         issue,
         role,
-        status: "queued",
+        status: 'queued',
         agentId: null,
         runId: null,
         error: null,
@@ -111,7 +111,7 @@ export class JobStore {
   update(
     id: string,
     patch: Partial<
-      Pick<Job, "status" | "agentId" | "runId" | "error" | "decision">
+      Pick<Job, 'status' | 'agentId' | 'runId' | 'error' | 'decision'>
     >,
   ): Promise<Job | undefined> {
     return this.synchronized(() => {
@@ -162,7 +162,7 @@ export class JobStore {
     return this.synchronized(() => {
       const data = this.loadSync();
       const next = data.jobs.filter(
-        (job) => job.status !== "running" && job.status !== "queued",
+        (job) => job.status !== 'running' && job.status !== 'queued',
       );
       const dropped = data.jobs.length - next.length;
 

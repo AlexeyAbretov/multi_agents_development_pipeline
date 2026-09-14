@@ -1,7 +1,7 @@
-import { Role } from "../../types";
+import { Role } from '../../types';
 
 export type JobStatus =
-  "queued" | "running" | "finished" | "error" | "startup_error";
+  'queued' | 'running' | 'finished' | 'error' | 'startup_error';
 
 export type Job = {
   id: string;
@@ -19,4 +19,4 @@ export type Job = {
 };
 
 /** UI-статус очереди (контракт AGENT_PIPELINE_PLAN UI). */
-export type UiJobStatus = "queued" | "running" | "failed" | "finished";
+export type UiJobStatus = 'queued' | 'running' | 'failed' | 'finished';

@@ -1,24 +1,24 @@
-import Fastify from "fastify";
+import Fastify from 'fastify';
 
-import { Config } from "@config";
+import { Config } from '@config';
 
-import { JobStore } from "./jobs";
-import { registerApiRoutes } from "./OrchestratorService.routes";
-import { startPoller } from "./poller";
-import { startSchedulePoller } from "./schedule";
+import { JobStore } from './jobs';
+import { registerApiRoutes } from './OrchestratorService.routes';
+import { startPoller } from './poller';
+import { startSchedulePoller } from './schedule';
 
 const config = Config.loadConfig();
 const store = new JobStore(config.DATA_DIR);
 
 const app = Fastify({
   logger: {
-    level: "info",
+    level: 'info',
   },
 });
 
-app.get("/health", async () => ({
-  status: "ok",
-  service: "orchestrator",
+app.get('/health', async () => ({
+  status: 'ok',
+  service: 'orchestrator',
   scheduleIntervalMs: config.SCHEDULE_INTERVAL_MS,
 }));
 
@@ -27,7 +27,7 @@ registerApiRoutes(app, config, store);
 const dropped = await store.dropUnfinishedJobs();
 
 if (dropped > 0) {
-  app.log.info({ dropped }, "dropped unfinished pipeline jobs after restart");
+  app.log.info({ dropped }, 'dropped unfinished pipeline jobs after restart');
 }
 
 const poller = startPoller(config, app.log, store);
@@ -39,11 +39,11 @@ const shutdown = async (): Promise<void> => {
   await app.close();
 };
 
-process.on("SIGINT", () => {
+process.on('SIGINT', () => {
   void shutdown().then(() => process.exit(0));
 });
-process.on("SIGTERM", () => {
+process.on('SIGTERM', () => {
   void shutdown().then(() => process.exit(0));
 });
 
-await app.listen({ port: config.PORT, host: "0.0.0.0" });
+await app.listen({ port: config.PORT, host: '0.0.0.0' });

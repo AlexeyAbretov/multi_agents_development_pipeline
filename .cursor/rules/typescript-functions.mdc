@@ -14,7 +14,7 @@ alwaysApply: false
 
 Импорты — группы через пустую строку, сверху вниз: `node:` → npm (включая scoped `@cursor/sdk`) → локальные алиасы `tsconfig` (`@config`, `@providers`, `@routes`) → `./` → `../`. Алиасы — отдельная группа **после** внешних, не смешивать с пакетами.
 
-Линтер: `cd pipeline && npm run lint` (правка: `npm run lint:fix`). `--fix` сортирует импорты (`simple-import-sort`) и переносит строки через Prettier (`printWidth: 80`). Неразбиваемые строки (длинный литерал без пробелов) — вручную. Elvis: `@typescript-eslint/prefer-optional-chain`, `prefer-nullish-coalescing`.
+Линтер: `cd pipeline && npm run lint` (правка: `npm run lint:fix`). `npm run build` и git pre-commit тоже гоняют lint и падают при ошибках. `--fix` сортирует импорты (`simple-import-sort`) и переносит строки через Prettier (`printWidth: 80`). Неразбиваемые строки (длинный литерал без пробелов) — вручную. Elvis: `@typescript-eslint/prefer-optional-chain`, `prefer-nullish-coalescing`.
 
 ```typescript
 // ❌ BAD

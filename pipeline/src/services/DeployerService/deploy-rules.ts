@@ -7,7 +7,7 @@ export type DeployReleaseCandidate = {
 
 /** Published (not draft) releases are eligible — including pre-release. */
 export function isDeployableRelease(
-  release: Pick<DeployReleaseCandidate, "draft">,
+  release: Pick<DeployReleaseCandidate, 'draft'>,
 ): boolean {
   return !release.draft;
 }
@@ -45,20 +45,20 @@ export function releaseBodyHasDeployMarker(
 export function appendDeployNote(
   body: string | null,
   releaseId: number,
-  status: "deployed" | "deploy-failed",
+  status: 'deployed' | 'deploy-failed',
   detail: string,
 ): string {
   const marker = deployMarker(releaseId);
-  const base = (body ?? "")
-    .replace(/\n*---\n<!-- pipeline:deploy:\d+ -->[\s\S]*$/m, "")
+  const base = (body ?? '')
+    .replace(/\n*---\n<!-- pipeline:deploy:\d+ -->[\s\S]*$/m, '')
     .trimEnd();
   const block = [
-    "",
-    "---",
+    '',
+    '---',
     marker,
     `Локальный деплой: \`${status}\`.`,
     detail.trim(),
-  ].join("\n");
+  ].join('\n');
 
   if (releaseBodyHasDeployMarker(body, releaseId)) {
     return `${base}${block}`;

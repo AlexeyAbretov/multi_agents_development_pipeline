@@ -1,11 +1,11 @@
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 export type DeployRecord = {
   /** GitHub release id. */
   releaseId: number;
   tag: string;
-  status: "deployed" | "deploy-failed";
+  status: 'deployed' | 'deploy-failed';
   mode: string;
   detail: string;
   at: string;
@@ -20,12 +20,12 @@ export class DeployStore {
 
   constructor(dataDir: string) {
     mkdirSync(dataDir, { recursive: true });
-    this.filePath = join(dataDir, "deploys.json");
+    this.filePath = join(dataDir, 'deploys.json');
   }
 
   load(): StoreFile {
     try {
-      return JSON.parse(readFileSync(this.filePath, "utf8")) as StoreFile;
+      return JSON.parse(readFileSync(this.filePath, 'utf8')) as StoreFile;
     } catch {
       return { deploys: [] };
     }
@@ -34,7 +34,7 @@ export class DeployStore {
   private save(data: StoreFile): void {
     const tmp = `${this.filePath}.tmp`;
 
-    writeFileSync(tmp, JSON.stringify(data, null, 2), "utf8");
+    writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8');
     renameSync(tmp, this.filePath);
   }
 
@@ -52,7 +52,7 @@ export class DeployStore {
 
   hasSuccessfulTag(tag: string): boolean {
     return this.load().deploys.some(
-      (item) => item.tag === tag && item.status === "deployed",
+      (item) => item.tag === tag && item.status === 'deployed',
     );
   }
 

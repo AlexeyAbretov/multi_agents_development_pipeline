@@ -48,6 +48,12 @@ export type GitHubRelease = {
 
 export type GitHubLabelRaw = string | { name: string };
 
+export type PipelineLabel = {
+  name: string;
+  color: string;
+  description: string;
+};
+
 export type GitHubIssueRaw = {
   number: number;
   title: string;

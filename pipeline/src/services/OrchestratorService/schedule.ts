@@ -1,15 +1,12 @@
-import type { FastifyBaseLogger } from "fastify";
+import type { FastifyBaseLogger } from 'fastify';
 
-import type { Config } from "@config";
+import type { Config } from '@config';
 import {
   GitHubClient,
   type GitHubIssue,
   type GitHubMilestoneRef,
-} from "@providers";
+} from '@providers';
 
-import { ScheduleStateStore } from "./schedule-state";
-
-import { jobLog } from "../../log";
 import {
   blockedNoReleaseComment,
   bodyHasBlockedNoReleaseMarker,
@@ -24,7 +21,10 @@ import {
   shouldNotifyBlockedNoRelease,
   tagFromMilestoneTitle,
   upsertNothingToReleaseDescription,
-} from "./schedule-rules";
+} from './schedule-rules';
+import { ScheduleStateStore } from './schedule-state';
+
+import { jobLog } from '../../log';
 
 export function startSchedulePoller(
   config: Config,
@@ -36,7 +36,7 @@ export function startSchedulePoller(
 
   const tick = (): void => {
     if (busy) {
-      jobLog(logger, {}, "schedule skip: previous tick still running");
+      jobLog(logger, {}, 'schedule skip: previous tick still running');
 
       return;
     }
@@ -63,10 +63,10 @@ async function scheduleOnce(
   github: GitHubClient,
   state: ScheduleStateStore,
 ): Promise<void> {
-  jobLog(logger, {}, "schedule tick");
+  jobLog(logger, {}, 'schedule tick');
 
   if (!config.GITHUB_TOKEN || !config.GITHUB_REPO) {
-    jobLog(logger, {}, "schedule skip: GITHUB_TOKEN or GITHUB_REPO empty");
+    jobLog(logger, {}, 'schedule skip: GITHUB_TOKEN or GITHUB_REPO empty');
 
     return;
   }
@@ -76,7 +76,7 @@ async function scheduleOnce(
   try {
     milestones = await github.listOpenMilestones();
   } catch (err) {
-    logger.error({ err }, "github milestones failed");
+    logger.error({ err }, 'github milestones failed');
 
     return;
   }
@@ -119,7 +119,7 @@ async function scheduleOnce(
   }
 
   if (dueToday.length === 0 && dueTomorrow.length === 0) {
-    jobLog(logger, {}, "schedule: no release milestones due today or tomorrow");
+    jobLog(logger, {}, 'schedule: no release milestones due today or tomorrow');
   }
 
   for (const milestone of dueToday) {
@@ -134,12 +134,12 @@ async function scheduleOnce(
 export async function closeEmptyRelease(
   github: GitHubClient,
   logger: FastifyBaseLogger,
-  milestone: Pick<GitHubMilestoneRef, "id" | "number" | "title">,
+  milestone: Pick<GitHubMilestoneRef, 'id' | 'number' | 'title'>,
   previousTag: string,
 ): Promise<void> {
   const fields = {
     issue: milestone.number,
-    role: "schedule",
+    role: 'schedule',
     agentId: null,
     runId: null,
   };
@@ -204,7 +204,7 @@ async function skipIfEmptyRelease(
   } catch (err) {
     logger.error(
       { err, milestone: milestone.title },
-      "empty-release check failed",
+      'empty-release check failed',
     );
 
     return false;
@@ -245,11 +245,11 @@ async function notifyDuplicateDue(
     jobLog(
       logger,
       {},
-      "blocked: duplicate due today (" +
-        `${titles.join(", ")}); RM will not start`,
+      'blocked: duplicate due today (' +
+        `${titles.join(', ')}); RM will not start`,
     );
   } catch (err) {
-    logger.error({ err }, "duplicate-due notify failed");
+    logger.error({ err }, 'duplicate-due notify failed');
   }
 }
 
@@ -267,7 +267,7 @@ async function ensureRegressionIssue(
 
   const fields = {
     issue: milestone.number,
-    role: "schedule",
+    role: 'schedule',
     agentId: null,
     runId: null,
   };
@@ -291,10 +291,10 @@ async function ensureRegressionIssue(
     const created = await github.createIssue({
       title: regressionIssueTitle(tag),
       body: regressionIssueBody(milestone.id, tag),
-      labels: ["regression", "in-qa"],
+      labels: ['regression', 'in-qa'],
       milestone: milestone.number,
     });
-    const kind = hotfix ? "hotfix (due today)" : "T−1";
+    const kind = hotfix ? 'hotfix (due today)' : 'T−1';
 
     await github.commentOnIssue(
       created.number,
@@ -308,7 +308,7 @@ async function ensureRegressionIssue(
   } catch (err) {
     logger.error(
       { err, milestone: milestone.title },
-      "ensure regression issue failed",
+      'ensure regression issue failed',
     );
   }
 }
@@ -322,7 +322,7 @@ async function handleDueToday(
 ): Promise<void> {
   const fields = {
     issue: milestone.number,
-    role: "schedule",
+    role: 'schedule',
     agentId: null,
     runId: null,
   };
@@ -337,7 +337,7 @@ async function handleDueToday(
   try {
     hasTag = await github.tagOrReleaseExists(tag);
   } catch (err) {
-    logger.error({ err, milestone: milestone.title }, "tag check failed");
+    logger.error({ err, milestone: milestone.title }, 'tag check failed');
 
     return;
   }
@@ -359,7 +359,7 @@ async function handleDueToday(
   } catch (err) {
     logger.error(
       { err, milestone: milestone.title },
-      "milestone issues failed",
+      'milestone issues failed',
     );
 
     return;
@@ -382,7 +382,7 @@ async function handleDueToday(
       logger,
       fields,
       `schedule: ${tag} waiting for regression/RM ` +
-        "(no published release yet)",
+        '(no published release yet)',
     );
 
     return;
@@ -404,7 +404,7 @@ async function handleDueToday(
     jobLog(
       logger,
       fields,
-      `blocked: no release for ${milestone.title} ` + "(no issues to comment)",
+      `blocked: no release for ${milestone.title} ` + '(no issues to comment)',
     );
     state.markBlockedNotified(milestone.id);
 
@@ -427,12 +427,12 @@ async function handleDueToday(
       logger,
       fields,
       `blocked: no release for milestone ${milestone.title}; ` +
-        "compose not touched",
+        'compose not touched',
     );
   } catch (err) {
     logger.error(
       { err, milestone: milestone.title },
-      "blocked-no-release notify failed",
+      'blocked-no-release notify failed',
     );
   }
 }

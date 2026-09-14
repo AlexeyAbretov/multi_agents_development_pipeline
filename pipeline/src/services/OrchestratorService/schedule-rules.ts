@@ -4,17 +4,17 @@
  */
 export function calendarDateInTimeZone(
   date: Date = new Date(),
-  timeZone = "Europe/Moscow",
+  timeZone = 'Europe/Moscow',
 ): string {
-  const parts = new Intl.DateTimeFormat("en-CA", {
+  const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
   }).formatToParts(date);
-  const year = parts.find((part) => part.type === "year")?.value;
-  const month = parts.find((part) => part.type === "month")?.value;
-  const day = parts.find((part) => part.type === "day")?.value;
+  const year = parts.find((part) => part.type === 'year')?.value;
+  const month = parts.find((part) => part.type === 'month')?.value;
+  const day = parts.find((part) => part.type === 'day')?.value;
 
   if (!year || !month || !day) {
     return date.toISOString().slice(0, 10);
@@ -54,7 +54,7 @@ function dayDiff(fromDay: string, toDay: string): number {
  */
 export function daysUntilDue(
   dueOn: string | null | undefined,
-  timeZone = "Europe/Moscow",
+  timeZone = 'Europe/Moscow',
   today: Date = new Date(),
 ): number | null {
   const day = dueDay(dueOn);
@@ -69,7 +69,7 @@ export function daysUntilDue(
 export function isMilestoneDueOn(
   dueOn: string | null | undefined,
   today: Date = new Date(),
-  timeZone = "Europe/Moscow",
+  timeZone = 'Europe/Moscow',
 ): boolean {
   return daysUntilDue(dueOn, timeZone, today) === 0;
 }
@@ -114,12 +114,12 @@ export function parseRegressionMilestoneId(body: string | null): number | null {
 export function regressionIssueBody(milestoneId: number, tag: string): string {
   return [
     regressionMarker(milestoneId),
-    "",
+    '',
     `Служебная issue регресса ветки \`main\` перед релизом \`${tag}\`.`,
-    "Не фича и не баг продукта: тестировщик проверяет HEAD `main`.",
-    "Баги регресса — отдельные корневые `bug` в этом milestone, " +
-      "без `Related to #` на эту issue.",
-  ].join("\n");
+    'Не фича и не баг продукта: тестировщик проверяет HEAD `main`.',
+    'Баги регресса — отдельные корневые `bug` в этом milestone, ' +
+      'без `Related to #` на эту issue.',
+  ].join('\n');
 }
 
 export function bodyHasRegressionMarker(
@@ -134,12 +134,12 @@ export function isRegressionIssue(
   body: string | null = null,
 ): boolean {
   return (
-    labels.includes("regression") || parseRegressionMilestoneId(body) !== null
+    labels.includes('regression') || parseRegressionMilestoneId(body) !== null
   );
 }
 
 export function isReleaseWorkIssue(labels: string[]): boolean {
-  return labels.includes("bug") || labels.includes("feature");
+  return labels.includes('bug') || labels.includes('feature');
 }
 
 export function blockedNoReleaseMarker(milestoneId: number): string {
@@ -164,11 +164,11 @@ export function blockedNoReleaseComment(
   return [
     blockedNoReleaseMarker(milestoneId),
     `Пайплайн: milestone \`${milestoneTitle}\` due сегодня, ` +
-      "но **published Release / tag нет**.",
-    "`blocked: no release` — локальный compose / deployer не запускается.",
-    "Дождитесь зелёного регресса `main` и релиз-менеджера " +
-      "или сдвиньте `due_on`.",
-  ].join("\n");
+      'но **published Release / tag нет**.',
+    '`blocked: no release` — локальный compose / deployer не запускается.',
+    'Дождитесь зелёного регресса `main` и релиз-менеджера ' +
+      'или сдвиньте `due_on`.',
+  ].join('\n');
 }
 
 export function duplicateDueMarker(day: string): string {
@@ -179,24 +179,24 @@ export function duplicateDueComment(day: string, titles: string[]): string {
   return [
     duplicateDueMarker(day),
     `Пайплайн: сегодня (${day}) due у нескольких ` +
-      "release-milestones: " +
-      titles.map((title) => `\`${title}\``).join(", ") +
-      ".",
-    "Релиз-менеджер не стартует, нужен человек. " +
-      "Оставьте один milestone с due сегодня.",
-  ].join("\n");
+      'release-milestones: ' +
+      titles.map((title) => `\`${title}\``).join(', ') +
+      '.',
+    'Релиз-менеджер не стартует, нужен человек. ' +
+      'Оставьте один milestone с due сегодня.',
+  ].join('\n');
 }
 
 export type ReleaseGate =
-  | "ok"
-  | "not-regression"
-  | "bad-title"
-  | "not-due-today"
-  | "duplicate-due"
-  | "open-work"
-  | "already-released"
-  | "regression-not-passed"
-  | "nothing-to-release";
+  | 'ok'
+  | 'not-regression'
+  | 'bad-title'
+  | 'not-due-today'
+  | 'duplicate-due'
+  | 'open-work'
+  | 'already-released'
+  | 'regression-not-passed'
+  | 'nothing-to-release';
 
 export function decideReleaseGate(params: {
   labels: string[];
@@ -211,11 +211,11 @@ export function decideReleaseGate(params: {
   now?: Date;
 }): ReleaseGate {
   if (!isRegressionIssue(params.labels, params.body ?? null)) {
-    return "not-regression";
+    return 'not-regression';
   }
 
-  if (!params.labels.includes("qa-passed")) {
-    return "regression-not-passed";
+  if (!params.labels.includes('qa-passed')) {
+    return 'regression-not-passed';
   }
 
   const tag = params.milestoneTitle
@@ -223,30 +223,30 @@ export function decideReleaseGate(params: {
     : null;
 
   if (!tag) {
-    return "bad-title";
+    return 'bad-title';
   }
 
   if (params.releaseExists) {
-    return "already-released";
+    return 'already-released';
   }
 
   if (params.nothingToRelease) {
-    return "nothing-to-release";
+    return 'nothing-to-release';
   }
 
   if (params.dueTodayCount > 1) {
-    return "duplicate-due";
+    return 'duplicate-due';
   }
 
   if (daysUntilDue(params.dueOn, params.timeZone, params.now) !== 0) {
-    return "not-due-today";
+    return 'not-due-today';
   }
 
   if (params.hasOpenWorkItems) {
-    return "open-work";
+    return 'open-work';
   }
 
-  return "ok";
+  return 'ok';
 }
 
 export function nothingToReleaseMarker(milestoneId: number): string {
@@ -261,22 +261,22 @@ export function nothingToReleaseComment(
   return [
     nothingToReleaseMarker(milestoneId),
     `Пайплайн: с прошлого релиза \`${previousTag}\` ` +
-      "в `main` **нет новых коммитов**.",
+      'в `main` **нет новых коммитов**.',
     `GitHub Release \`${milestoneTitle}\` не создан. Milestone закрыт.`,
-  ].join("\n");
+  ].join('\n');
 }
 
 export function upsertNothingToReleaseDescription(
   existing: string | null,
   comment: string,
 ): string {
-  const markerLine = comment.split("\n")[0] ?? "";
+  const markerLine = comment.split('\n')[0] ?? '';
 
   if (existing && markerLine && existing.includes(markerLine)) {
     return existing;
   }
 
-  const base = (existing ?? "").trimEnd();
+  const base = (existing ?? '').trimEnd();
 
   if (!base) {
     return comment;
@@ -304,11 +304,11 @@ export function shouldNotifyBlockedNoRelease(params: {
     return false;
   }
 
-  if (labels.includes("needs-human")) {
+  if (labels.includes('needs-human')) {
     return true;
   }
 
-  if (labels.includes("qa-passed") && params.hasOpenWorkItems) {
+  if (labels.includes('qa-passed') && params.hasOpenWorkItems) {
     return true;
   }
 

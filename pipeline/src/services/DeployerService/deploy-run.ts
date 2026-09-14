@@ -1,7 +1,7 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 
-import type { Config } from "@config";
+import type { Config } from '@config';
 
 const execFileAsync = promisify(execFile);
 
@@ -14,12 +14,12 @@ export async function runProductDeploy(
   config: Config,
   tag: string,
 ): Promise<DeployRunResult> {
-  if (config.DEPLOY_MODE === "stub") {
+  if (config.DEPLOY_MODE === 'stub') {
     return {
       ok: true,
       detail:
         `stub: tag \`${tag}\` доехал, docker compose ` +
-        "продукта не запускался (DEPLOY_MODE=stub).",
+        'продукта не запускался (DEPLOY_MODE=stub).',
     };
   }
 
@@ -28,8 +28,8 @@ export async function runProductDeploy(
 
   try {
     const { stdout, stderr } = await execFileAsync(
-      "docker",
-      ["compose", "-f", composeFile, "up", "-d"],
+      'docker',
+      ['compose', '-f', composeFile, 'up', '-d'],
       {
         cwd,
         env: process.env,
@@ -43,23 +43,23 @@ export async function runProductDeploy(
       ok: true,
       detail:
         `compose up -d (\`${composeFile}\`, tag \`${tag}\`):\n` +
-        "```\n" +
+        '```\n' +
         `${out.slice(0, 3500)}\n` +
-        "```",
+        '```',
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const execErr = err as { stdout?: unknown; stderr?: unknown };
-    const stdout = String(execErr?.stdout ?? "");
-    const stderr = String(execErr?.stderr ?? "");
+    const stdout = String(execErr?.stdout ?? '');
+    const stderr = String(execErr?.stderr ?? '');
 
     return {
       ok: false,
       detail:
         `compose failed (tag \`${tag}\`): ${message}\n` +
-        "```\n" +
+        '```\n' +
         `${`${stdout}\n${stderr}`.trim().slice(0, 3500)}\n` +
-        "```",
+        '```',
     };
   }
 }

@@ -1,23 +1,23 @@
-import Fastify from "fastify";
+import Fastify from 'fastify';
 
-import { Config } from "@config";
+import { Config } from '@config';
 
-import { startDeployPoller } from "./deploy-poller";
-import { DeployStore } from "./deploy-store";
-import { registerApiRoutes } from "./DeployerService.routes";
+import { startDeployPoller } from './deploy-poller';
+import { DeployStore } from './deploy-store';
+import { registerApiRoutes } from './DeployerService.routes';
 
 const config = Config.loadConfig();
 const store = new DeployStore(config.DATA_DIR);
 
 const app = Fastify({
   logger: {
-    level: "info",
+    level: 'info',
   },
 });
 
-app.get("/health", async () => ({
-  status: "ok",
-  service: "deployer",
+app.get('/health', async () => ({
+  status: 'ok',
+  service: 'deployer',
   deployMode: config.DEPLOY_MODE,
 }));
 
@@ -30,11 +30,11 @@ const shutdown = async (): Promise<void> => {
   await app.close();
 };
 
-process.on("SIGINT", () => {
+process.on('SIGINT', () => {
   void shutdown().then(() => process.exit(0));
 });
-process.on("SIGTERM", () => {
+process.on('SIGTERM', () => {
   void shutdown().then(() => process.exit(0));
 });
 
-await app.listen({ port: config.PORT, host: "0.0.0.0" });
+await app.listen({ port: config.PORT, host: '0.0.0.0' });

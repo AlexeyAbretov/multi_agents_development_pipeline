@@ -1,4 +1,4 @@
-import { EnvConfig, envSchema, type OwnerRepo } from "./config.types";
+import { EnvConfig, envSchema, type OwnerRepo } from './config.types';
 
 export interface Config extends EnvConfig {}
 
@@ -10,7 +10,7 @@ export class Config {
       ...parsed,
       CURSOR_REPO_URL:
         parsed.CURSOR_REPO_URL ||
-        (parsed.GITHUB_REPO ? `https://github.com/${parsed.GITHUB_REPO}` : ""),
+        (parsed.GITHUB_REPO ? `https://github.com/${parsed.GITHUB_REPO}` : ''),
     });
   }
 
@@ -19,9 +19,9 @@ export class Config {
   }
 
   get ownerRepo(): OwnerRepo {
-    const [owner, name] = this.GITHUB_REPO.split("/");
+    const [owner, name] = this.GITHUB_REPO.split('/');
 
-    if (!owner || !name || this.GITHUB_REPO.split("/").length !== 2) {
+    if (!owner || !name || this.GITHUB_REPO.split('/').length !== 2) {
       return null;
     }
 

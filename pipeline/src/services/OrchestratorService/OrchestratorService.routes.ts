@@ -1,16 +1,16 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance } from 'fastify';
 
-import type { Config } from "@config";
+import type { Config } from '@config';
 
-import type { JobStore } from "./jobs";
-import { mapJobToUiStatus } from "./rules";
+import type { JobStore } from './jobs';
+import { mapJobToUiStatus } from './rules';
 
 export function registerApiRoutes(
   app: FastifyInstance,
   config: Config,
   store: JobStore,
 ): void {
-  app.get("/api/jobs", async () => {
+  app.get('/api/jobs', async () => {
     const snap = await store.snapshot();
     const jobs = [...snap.jobs]
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))

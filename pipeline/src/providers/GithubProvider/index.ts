@@ -5,7 +5,7 @@ export {
   isEmptySincePreviousRelease,
   jobComment,
   previousReleaseTag,
-} from "./GithubProvider";
+} from './GithubProvider';
 export type {
   GitHubIssue,
   GitHubIssueWithState,
@@ -14,4 +14,4 @@ export type {
   GitHubPull,
   GitHubPullWithMerged,
   GitHubRelease,
-} from "./GithubProvider.types";
+} from './GithubProvider.types';

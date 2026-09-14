@@ -1,4 +1,4 @@
-import type { Role } from "../../types";
+import type { Role } from '../../types';
 
 /** Идентичность активного задания: одно облако на пару `(issue, role)`. */
 export const inFlightKey = (issue: number, role: Role): string => {

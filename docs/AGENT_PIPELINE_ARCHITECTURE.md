@@ -151,7 +151,7 @@ queued → running → finished | error | startup_error
 | **tsx / typescript** | Dev-watch и сборка в `dist/`. Тесты: `node --test` по скомпилированному JS. |
 | **prettier** | Автоперенос строк (`printWidth: 80`) в `eslint --fix` / `npm run lint:fix`. Жёсткий потолок — `@stylistic/max-len`. |
 | **eslint-plugin-simple-import-sort** | Сортировка и группы импортов: `node:` → npm → `@providers`/`@routes` → `./` → `../`. |
-| **tsc-alias** | После `tsc` переписывает алиасы (`@routes`, `@providers`) и дописывает `.js` к относительным импортам в `dist/` (`resolveFullPaths`). Без этого `node dist/services/OrchestratorService/index.js` в Docker не резолвит алиасы и ESM-пути без расширения. Сборка: `npm run clean && tsc && tsc-alias`. Источники — `module`/`moduleResolution`: `ES2022`/`bundler`, импорты без `.js`. |
+| **tsc-alias** | После `tsc` переписывает алиасы (`@routes`, `@providers`) и дописывает `.js` к относительным импортам в `dist/` (`resolveFullPaths`). Без этого `node dist/services/OrchestratorService/index.js` в Docker не резолвит алиасы и ESM-пути без расширения. Сборка: `npm run lint && npm run clean && tsc && tsc-alias` — ошибки линтера валят билд. Источники — `module`/`moduleResolution`: `ES2022`/`bundler`, импорты без `.js`. |
 
 Чего нет намеренно:
 

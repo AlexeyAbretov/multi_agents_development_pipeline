@@ -1,23 +1,23 @@
-import { isRegressionIssue } from "./schedule-rules";
-import type { Job, UiJobStatus } from "./types";
+import { isRegressionIssue } from './schedule-rules';
+import type { Job, UiJobStatus } from './types';
 
-import type { Role } from "../../types";
+import type { Role } from '../../types';
 
-export type AnalystDecision = "ready-for-dev" | "needs-human";
-export type DeveloperDecision = "in-qa" | "needs-human";
-export type TesterDecision = "in-qa" | "qa-passed" | "needs-human";
-export type ReleaseManagerDecision = "released" | "needs-human";
+export type AnalystDecision = 'ready-for-dev' | 'needs-human';
+export type DeveloperDecision = 'in-qa' | 'needs-human';
+export type TesterDecision = 'in-qa' | 'qa-passed' | 'needs-human';
+export type ReleaseManagerDecision = 'released' | 'needs-human';
 
 export function roleForLabels(
   labels: string[],
   body: string | null = null,
 ): Role | null {
-  if (labels.includes("needs-human") || labels.includes("in-analysis")) {
+  if (labels.includes('needs-human') || labels.includes('in-analysis')) {
     return null;
   }
 
   const regression = isRegressionIssue(labels, body);
-  const hasType = labels.includes("bug") || labels.includes("feature");
+  const hasType = labels.includes('bug') || labels.includes('feature');
 
   if (!hasType && !regression) {
     return null;
@@ -25,43 +25,43 @@ export function roleForLabels(
 
   if (
     hasType &&
-    labels.includes("needs-plan") &&
-    !labels.includes("ready-for-dev")
+    labels.includes('needs-plan') &&
+    !labels.includes('ready-for-dev')
   ) {
-    return "analyst";
+    return 'analyst';
   }
 
   if (
     hasType &&
-    labels.includes("ready-for-dev") &&
-    !labels.includes("needs-plan") &&
-    !labels.includes("in-dev") &&
-    !labels.includes("in-qa")
+    labels.includes('ready-for-dev') &&
+    !labels.includes('needs-plan') &&
+    !labels.includes('in-dev') &&
+    !labels.includes('in-qa')
   ) {
-    return "developer";
+    return 'developer';
   }
 
   if (
-    labels.includes("in-qa") &&
-    !labels.includes("qa-in-progress") &&
-    !labels.includes("qa-passed")
+    labels.includes('in-qa') &&
+    !labels.includes('qa-in-progress') &&
+    !labels.includes('qa-passed')
   ) {
-    return "tester";
+    return 'tester';
   }
 
-  if (regression && labels.includes("qa-passed")) {
-    return "release-manager";
+  if (regression && labels.includes('qa-passed')) {
+    return 'release-manager';
   }
 
   return null;
 }
 
 export function decideAnalystOutcome(
-  runStatus: "finished" | "error" | "startup_error",
+  runStatus: 'finished' | 'error' | 'startup_error',
   resultText: string | null,
 ): AnalystDecision {
-  if (runStatus !== "finished") {
-    return "needs-human";
+  if (runStatus !== 'finished') {
+    return 'needs-human';
   }
 
   const marker = resultText?.match(
@@ -73,34 +73,34 @@ export function decideAnalystOutcome(
   }
 
   if (resultText && /needs-human/i.test(resultText)) {
-    return "needs-human";
+    return 'needs-human';
   }
 
-  return "ready-for-dev";
+  return 'ready-for-dev';
 }
 
 export function decideDeveloperOutcome(
-  runStatus: "finished" | "error" | "startup_error",
+  runStatus: 'finished' | 'error' | 'startup_error',
   hasOpenFixPr: boolean,
 ): DeveloperDecision {
   if (hasOpenFixPr) {
-    return "in-qa";
+    return 'in-qa';
   }
 
-  if (runStatus !== "finished") {
-    return "needs-human";
+  if (runStatus !== 'finished') {
+    return 'needs-human';
   }
 
-  return "needs-human";
+  return 'needs-human';
 }
 
 export function decideTesterOutcome(
-  runStatus: "finished" | "error" | "startup_error",
+  runStatus: 'finished' | 'error' | 'startup_error',
   resultText: string | null,
   bugIssues: number[] | null,
 ): TesterDecision {
-  if (runStatus !== "finished") {
-    return "needs-human";
+  if (runStatus !== 'finished') {
+    return 'needs-human';
   }
 
   const marker = resultText?.match(
@@ -108,30 +108,30 @@ export function decideTesterOutcome(
   );
 
   if (!marker || bugIssues === null) {
-    return "needs-human";
+    return 'needs-human';
   }
 
   const requested = marker[1].toLowerCase() as TesterDecision;
 
-  if (requested === "needs-human") {
-    return "needs-human";
+  if (requested === 'needs-human') {
+    return 'needs-human';
   }
 
-  if (bugIssues.length === 0 && requested === "qa-passed") {
-    return "qa-passed";
+  if (bugIssues.length === 0 && requested === 'qa-passed') {
+    return 'qa-passed';
   }
 
-  if (bugIssues.length > 0 && requested === "in-qa") {
-    return "in-qa";
+  if (bugIssues.length > 0 && requested === 'in-qa') {
+    return 'in-qa';
   }
 
-  return "needs-human";
+  return 'needs-human';
 }
 
 /** Максимум дочерних bug-issues за один прогон тестировщика (корень). */
 export const MAX_TESTER_CHILD_BUGS = 2;
 
-export type TesterBugHandoff = "ok" | "too-many" | "grandchild";
+export type TesterBugHandoff = 'ok' | 'too-many' | 'grandchild';
 
 /** Глубина дерева QA = 1: дети не плодят внуков; на корне не больше MAX
  * багов. */
@@ -140,18 +140,18 @@ export function classifyTesterBugHandoff(
   bugIssues: number[],
 ): TesterBugHandoff {
   if (bugIssues.length === 0) {
-    return "ok";
+    return 'ok';
   }
 
   if (parseRelatedParentIssue(parentBody) !== null) {
-    return "grandchild";
+    return 'grandchild';
   }
 
   if (bugIssues.length > MAX_TESTER_CHILD_BUGS) {
-    return "too-many";
+    return 'too-many';
   }
 
-  return "ok";
+  return 'ok';
 }
 
 export function extractTesterBugIssues(
@@ -165,15 +165,15 @@ export function extractTesterBugIssues(
     return null;
   }
 
-  if (marker[1].toLowerCase() === "none") {
+  if (marker[1].toLowerCase() === 'none') {
     return [];
   }
 
   return [
     ...new Set(
       marker[1]
-        .split(",")
-        .map((value) => Number(value.trim().replace(/^#/, "")))
+        .split(',')
+        .map((value) => Number(value.trim().replace(/^#/, '')))
         .filter((value) => Number.isSafeInteger(value) && value > 0),
     ),
   ];
@@ -190,7 +190,7 @@ export function extractReleaseTag(resultText: string | null): string | null {
 
   const tag = marker[1];
 
-  return tag.startsWith("v") ? tag : `v${tag}`;
+  return tag.startsWith('v') ? tag : `v${tag}`;
 }
 
 export function extractReleasePrNumbers(
@@ -204,15 +204,15 @@ export function extractReleasePrNumbers(
     return null;
   }
 
-  if (marker[1].toLowerCase() === "none") {
+  if (marker[1].toLowerCase() === 'none') {
     return [];
   }
 
   return [
     ...new Set(
       marker[1]
-        .split(",")
-        .map((value) => Number(value.trim().replace(/^#/, "")))
+        .split(',')
+        .map((value) => Number(value.trim().replace(/^#/, '')))
         .filter((value) => Number.isSafeInteger(value) && value > 0),
     ),
   ];
@@ -239,14 +239,14 @@ export function extractReleaseChangelog(
 }
 
 export function decideReleaseManagerOutcome(
-  runStatus: "finished" | "error" | "startup_error",
+  runStatus: 'finished' | 'error' | 'startup_error',
   resultText: string | null,
   tag: string | null,
   changelog: string | null,
   expectedTag: string | null = null,
 ): ReleaseManagerDecision {
-  if (runStatus !== "finished") {
-    return "needs-human";
+  if (runStatus !== 'finished') {
+    return 'needs-human';
   }
 
   const marker = resultText?.match(
@@ -254,20 +254,20 @@ export function decideReleaseManagerOutcome(
   );
 
   if (!marker) {
-    return "needs-human";
+    return 'needs-human';
   }
 
   const requested = marker[1].toLowerCase() as ReleaseManagerDecision;
 
-  if (requested === "needs-human") {
-    return "needs-human";
+  if (requested === 'needs-human') {
+    return 'needs-human';
   }
 
   if (tag && changelog && (!expectedTag || tag === expectedTag)) {
-    return "released";
+    return 'released';
   }
 
-  return "needs-human";
+  return 'needs-human';
 }
 
 /** Completed developer starts allowed before needs-human (4th attempt
@@ -304,9 +304,9 @@ export function upsertFixRoundInBody(
 ): string {
   const line = `fix-round: ${round}`;
   const html = `<!-- pipeline:fix-round:${round} -->`;
-  const base = (body ?? "")
-    .replace(/^(?:<!--\s*)?fix-round:\s*\d+\s*(?:-->)?\s*$/gim, "")
-    .replace(/<!--\s*pipeline:fix-round:\d+\s*-->/gi, "")
+  const base = (body ?? '')
+    .replace(/^(?:<!--\s*)?fix-round:\s*\d+\s*(?:-->)?\s*$/gim, '')
+    .replace(/<!--\s*pipeline:fix-round:\d+\s*-->/gi, '')
     .trimEnd();
 
   if (!base) {
@@ -330,7 +330,7 @@ export function parseChildBugIssues(body: string | null): number[] {
   return [
     ...new Set(
       marker[1]
-        .split(",")
+        .split(',')
         .map((value) => Number(value.trim()))
         .filter((value) => Number.isSafeInteger(value) && value > 0),
     ),
@@ -344,9 +344,9 @@ export function upsertChildBugIssuesInBody(
   const unique = [
     ...new Set(bugs.filter((n) => Number.isSafeInteger(n) && n > 0)),
   ];
-  const marker = `<!-- pipeline:child-bugs:${unique.join(",")} -->`;
-  const base = (body ?? "")
-    .replace(/<!--\s*pipeline:child-bugs:[0-9,\s]*\s*-->/gi, "")
+  const marker = `<!-- pipeline:child-bugs:${unique.join(',')} -->`;
+  const base = (body ?? '')
+    .replace(/<!--\s*pipeline:child-bugs:[0-9,\s]*\s*-->/gi, '')
     .trimEnd();
 
   if (unique.length === 0) {
@@ -381,8 +381,8 @@ export function isChildBugCandidate(issue: {
   body: string | null;
 }): boolean {
   return (
-    issue.labels.includes("bug") &&
-    issue.labels.includes("needs-plan") &&
+    issue.labels.includes('bug') &&
+    issue.labels.includes('needs-plan') &&
     parseRelatedParentIssue(issue.body) !== null
   );
 }
@@ -423,17 +423,17 @@ export function groupAnalystIssuesByParent<
 /** Child is still in the fix pipeline (blocks parent re-QA). */
 export function childBugStillOpen(
   labels: string[],
-  state: "open" | "closed",
+  state: 'open' | 'closed',
 ): boolean {
-  if (state === "closed") {
+  if (state === 'closed') {
     return false;
   }
 
-  if (labels.includes("qa-passed") || labels.includes("deployed")) {
+  if (labels.includes('qa-passed') || labels.includes('deployed')) {
     return false;
   }
 
-  if (labels.includes("needs-human")) {
+  if (labels.includes('needs-human')) {
     return false;
   }
 
@@ -443,7 +443,7 @@ export function childBugStillOpen(
 /** Open Fixes PR блокирует re-QA родителя, даже если ребёнок уже qa-passed. */
 export function childBlocksParentReQa(
   labels: string[],
-  state: "open" | "closed",
+  state: 'open' | 'closed',
   hasOpenFixPr: boolean,
 ): boolean {
   if (hasOpenFixPr) {
@@ -465,7 +465,7 @@ export function shouldCloseMergedChildIssue(params: {
     return false;
   }
 
-  if (!params.labels.includes("qa-passed")) {
+  if (!params.labels.includes('qa-passed')) {
     return false;
   }
 
@@ -477,23 +477,23 @@ export function shouldCloseMergedChildIssue(params: {
 }
 
 export function mapJobToUiStatus(
-  job: Pick<Job, "status" | "decision">,
+  job: Pick<Job, 'status' | 'decision'>,
 ): UiJobStatus {
-  if (job.status === "queued") {
-    return "queued";
+  if (job.status === 'queued') {
+    return 'queued';
   }
 
-  if (job.status === "running") {
-    return "running";
+  if (job.status === 'running') {
+    return 'running';
   }
 
-  if (job.status === "error" || job.status === "startup_error") {
-    return "failed";
+  if (job.status === 'error' || job.status === 'startup_error') {
+    return 'failed';
   }
 
-  if (job.decision === "needs-human") {
-    return "failed";
+  if (job.decision === 'needs-human') {
+    return 'failed';
   }
 
-  return "finished";
+  return 'finished';
 }

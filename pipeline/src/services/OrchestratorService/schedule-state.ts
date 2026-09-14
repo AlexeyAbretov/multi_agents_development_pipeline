@@ -1,5 +1,5 @@
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 type StoreFile = {
   /** Milestone ids that already received blocked: no release comments. */
@@ -16,13 +16,13 @@ export class ScheduleStateStore {
 
   constructor(dataDir: string) {
     mkdirSync(dataDir, { recursive: true });
-    this.filePath = join(dataDir, "schedule-state.json");
+    this.filePath = join(dataDir, 'schedule-state.json');
   }
 
   load(): StoreFile {
     try {
       const parsed = JSON.parse(
-        readFileSync(this.filePath, "utf8"),
+        readFileSync(this.filePath, 'utf8'),
       ) as Partial<StoreFile>;
 
       return {
@@ -37,7 +37,7 @@ export class ScheduleStateStore {
   private save(data: StoreFile): void {
     const tmp = `${this.filePath}.tmp`;
 
-    writeFileSync(tmp, JSON.stringify(data, null, 2), "utf8");
+    writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8');
     renameSync(tmp, this.filePath);
   }
 

@@ -1,5 +1,5 @@
-export type { CursorRunResult } from "./CursorProvider";
-export { CursorClient } from "./CursorProvider";
+export type { CursorRunResult } from './CursorProvider';
+export { CursorClient } from './CursorProvider';
 export type {
   GitHubIssue,
   GitHubIssueWithState,
@@ -8,7 +8,7 @@ export type {
   GitHubPull,
   GitHubPullWithMerged,
   GitHubRelease,
-} from "./GithubProvider";
+} from './GithubProvider';
 export {
   agentResultComment,
   fixIssueWithPR,
@@ -16,4 +16,4 @@ export {
   isEmptySincePreviousRelease,
   jobComment,
   previousReleaseTag,
-} from "./GithubProvider";
+} from './GithubProvider';
