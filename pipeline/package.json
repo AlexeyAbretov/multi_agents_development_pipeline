@@ -8,7 +8,7 @@
     "test": "npm run build && node --test test/*.test.js",
     "lint": "eslint src --max-warnings=0",
     "lint:fix": "eslint src --fix",
-    "prepare": "node --input-type=commonjs -e \"try { require('simple-git-hooks/cli.js') } catch {}\"",
+    "prepare": "cd .. && husky || exit 0",
     "start": "node --use-env-proxy --env-file=.env.local dist/services/OrchestratorService/index.js",
     "start:deployer": "node --use-env-proxy --env-file=.env.local scripts/run-deployer.mjs dist/services/DeployerService/index.js",
     "dev": "tsx watch --env-file=.env.local src/services/OrchestratorService/index.ts",
@@ -32,13 +32,10 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.6",
     "eslint-plugin-simple-import-sort": "^14.0.0",
+    "husky": "^9.1.7",
     "prettier": "^3.9.6",
-    "simple-git-hooks": "^2.14.0",
     "tsc-alias": "^1.9.4",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2"
-  },
-  "simple-git-hooks": {
-    "pre-commit": "npm --prefix pipeline run lint"
   }
 }

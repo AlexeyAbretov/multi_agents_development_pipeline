@@ -1,7 +1,7 @@
 FROM node:22-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN SKIP_INSTALL_SIMPLE_GIT_HOOKS=1 npm ci
+RUN HUSKY=0 npm ci
 COPY tsconfig.json eslint.config.js .prettierrc.json ./
 COPY src ./src
 COPY test ./test
@@ -12,7 +12,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 RUN apk add --no-cache docker-cli docker-cli-compose
 COPY package.json package-lock.json ./
-RUN SKIP_INSTALL_SIMPLE_GIT_HOOKS=1 npm ci --omit=dev
+RUN HUSKY=0 npm ci --omit=dev
 COPY --from=build /app/dist ./dist
 COPY prompts ./prompts
 EXPOSE 3020
