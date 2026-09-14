@@ -74,7 +74,7 @@ async function scheduleOnce(
   let milestones: GitHubMilestoneRef[];
 
   try {
-    milestones = await github.listOpenMilestones();
+    milestones = await github.getOpenMilestones();
   } catch (err) {
     logger.error({ err }, 'github milestones failed');
 
@@ -148,7 +148,7 @@ export async function closeEmptyRelease(
     previousTag,
     milestone.id,
   );
-  const issues = await github.listOpenIssuesForMilestone(milestone.number);
+  const issues = await github.getOpenIssuesForMilestone(milestone.number);
   const target =
     issues.find((issue) => isRegressionIssue(issue.labels, issue.body)) ??
     issues[0] ??
@@ -230,7 +230,7 @@ async function notifyDuplicateDue(
 
   try {
     for (const milestone of dueToday) {
-      const issues = await github.listOpenIssuesForMilestone(milestone.number);
+      const issues = await github.getOpenIssuesForMilestone(milestone.number);
       const target =
         issues.find((issue) => isRegressionIssue(issue.labels, issue.body)) ??
         issues[0];
@@ -271,7 +271,7 @@ async function ensureRegressionIssue(
   };
 
   try {
-    const issues = await github.listOpenIssuesForMilestone(milestone.number);
+    const issues = await github.getOpenIssuesForMilestone(milestone.number);
     const existing = issues.find((issue) =>
       isRegressionIssue(issue.labels, issue.body),
     );
@@ -331,7 +331,7 @@ async function handleDueToday(
   let hasTag = false;
 
   try {
-    hasTag = await github.tagOrReleaseExists(tag);
+    hasTag = await github.isTagOrReleaseExists(tag);
   } catch (err) {
     logger.error({ err, milestone: milestone.title }, 'tag check failed');
 
@@ -350,7 +350,7 @@ async function handleDueToday(
   let issues: GitHubIssue[];
 
   try {
-    issues = await github.listOpenIssuesForMilestone(milestone.number);
+    issues = await github.getOpenIssuesForMilestone(milestone.number);
   } catch (err) {
     logger.error(
       { err, milestone: milestone.title },

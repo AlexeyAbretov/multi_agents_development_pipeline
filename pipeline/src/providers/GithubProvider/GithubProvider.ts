@@ -5,6 +5,7 @@ import type {
   GitHubIssue,
   GitHubIssueRaw,
   GitHubIssueRawWithState,
+  GitHubIssueState,
   GitHubIssueWithState,
   GitHubMilestoneRef,
   GitHubMilestoneWithState,
@@ -37,7 +38,7 @@ export class GitHubClient {
     return parsed;
   }
 
-  private headers(): HeadersInit {
+  private get headers(): HeadersInit {
     return {
       Accept: 'application/vnd.github+json',
       Authorization: `Bearer ${this.config.GITHUB_TOKEN}`,
@@ -46,7 +47,7 @@ export class GitHubClient {
     };
   }
 
-  async listOpenIssuesByLabel(label: string): Promise<GitHubIssue[]> {
+  async getOpenIssuesByLabel(label: string): Promise<GitHubIssue[]> {
     const { owner, repo } = this.repoPath();
     const url = new URL(`https://api.github.com/repos/${owner}/${repo}/issues`);
 
@@ -54,7 +55,7 @@ export class GitHubClient {
     url.searchParams.set('labels', label);
     url.searchParams.set('per_page', '50');
 
-    const response = await githubFetch(url, { headers: this.headers() });
+    const response = await githubFetch(url, { headers: this.headers });
 
     if (!response.ok) {
       const text = await response.text();
@@ -72,13 +73,13 @@ export class GitHubClient {
   }
 
   async findOpenFixPr(issue: number): Promise<GitHubPull | null> {
-    const items = await this.listPulls('open');
+    const items = await this.getPrList('open');
 
     return items.find((pr) => fixIssueWithPR(pr, issue)) ?? null;
   }
 
   async findMergedFixPr(issue: number): Promise<GitHubPull | null> {
-    const items = await this.listPulls('closed');
+    const items = await this.getPrList('closed');
 
     return items.find((pr) => pr.merged && fixIssueWithPR(pr, issue)) ?? null;
   }
@@ -93,7 +94,7 @@ export class GitHubClient {
       `https://api.github.com/repos/${owner}/${repo}/pulls/${pr}`,
       {
         method: 'PATCH',
-        headers: { ...this.headers(), 'Content-Type': 'application/json' },
+        headers: { ...this.headers, 'Content-Type': 'application/json' },
         body: JSON.stringify({ base }),
       },
     );
@@ -113,7 +114,7 @@ export class GitHubClient {
       `https://api.github.com/repos/${owner}/${repo}/issues/${issue}`,
       {
         method: 'PATCH',
-        headers: { ...this.headers(), 'Content-Type': 'application/json' },
+        headers: { ...this.headers, 'Content-Type': 'application/json' },
         body: JSON.stringify({ state: 'closed' }),
       },
     );
@@ -127,8 +128,8 @@ export class GitHubClient {
     }
   }
 
-  private async listPulls(
-    state: 'open' | 'closed',
+  private async getPrList(
+    state: GitHubIssueState,
   ): Promise<GitHubPullWithMerged[]> {
     const { owner, repo } = this.repoPath();
     const url = new URL(`https://api.github.com/repos/${owner}/${repo}/pulls`);
@@ -136,7 +137,7 @@ export class GitHubClient {
     url.searchParams.set('state', state);
     url.searchParams.set('per_page', '50');
 
-    const response = await githubFetch(url, { headers: this.headers() });
+    const response = await githubFetch(url, { headers: this.headers });
 
     if (!response.ok) {
       const text = await response.text();
@@ -171,7 +172,7 @@ export class GitHubClient {
       `https://api.github.com/repos/${owner}/${repo}/issues/${issue}/comments`,
       {
         method: 'POST',
-        headers: { ...this.headers(), 'Content-Type': 'application/json' },
+        headers: { ...this.headers, 'Content-Type': 'application/json' },
         body: JSON.stringify({ body }),
       },
     );
@@ -189,7 +190,7 @@ export class GitHubClient {
     const { owner, repo } = this.repoPath();
     const response = await githubFetch(
       `https://api.github.com/repos/${owner}/${repo}/issues/${issue}`,
-      { headers: this.headers() },
+      { headers: this.headers },
     );
 
     if (!response.ok) {
@@ -214,7 +215,7 @@ export class GitHubClient {
       `https://api.github.com/repos/${owner}/${repo}/issues/${issue}`,
       {
         method: 'PATCH',
-        headers: { ...this.headers(), 'Content-Type': 'application/json' },
+        headers: { ...this.headers, 'Content-Type': 'application/json' },
         body: JSON.stringify({ body }),
       },
     );
@@ -228,7 +229,7 @@ export class GitHubClient {
     }
   }
 
-  async listRepoLabels(): Promise<string[]> {
+  async getRepoLabels(): Promise<string[]> {
     const { owner, repo } = this.repoPath();
     const names: string[] = [];
 
@@ -240,7 +241,7 @@ export class GitHubClient {
       url.searchParams.set('per_page', '100');
       url.searchParams.set('page', String(page));
 
-      const response = await githubFetch(url, { headers: this.headers() });
+      const response = await githubFetch(url, { headers: this.headers });
 
       if (!response.ok) {
         const text = await response.text();
@@ -268,7 +269,7 @@ export class GitHubClient {
       `https://api.github.com/repos/${owner}/${repo}/labels`,
       {
         method: 'POST',
-        headers: { ...this.headers(), 'Content-Type': 'application/json' },
+        headers: { ...this.headers, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: label.name,
           color: label.color,
@@ -301,7 +302,7 @@ export class GitHubClient {
     created: string[];
     skipped: string[];
   }> {
-    const existing = await this.listRepoLabels();
+    const existing = await this.getRepoLabels();
     const toCreate = getMissingPipelineLabels(existing);
     const created: string[] = [];
 
@@ -328,7 +329,7 @@ export class GitHubClient {
       `https://api.github.com/repos/${owner}/${repo}/issues/${issue}/labels`,
       {
         method: 'POST',
-        headers: { ...this.headers(), 'Content-Type': 'application/json' },
+        headers: { ...this.headers, 'Content-Type': 'application/json' },
         body: JSON.stringify({ labels }),
       },
     );
@@ -347,7 +348,7 @@ export class GitHubClient {
     const encoded = encodeURIComponent(label);
     const response = await githubFetch(
       `https://api.github.com/repos/${owner}/${repo}/issues/${issue}/labels/${encoded}`,
-      { method: 'DELETE', headers: this.headers() },
+      { method: 'DELETE', headers: this.headers },
     );
 
     if (response.status === 404) {
@@ -369,7 +370,7 @@ export class GitHubClient {
       `https://api.github.com/repos/${owner}/${repo}/issues/${issue}/assignees`,
       {
         method: 'POST',
-        headers: { ...this.headers(), 'Content-Type': 'application/json' },
+        headers: { ...this.headers, 'Content-Type': 'application/json' },
         body: JSON.stringify({ assignees }),
       },
     );
@@ -383,11 +384,6 @@ export class GitHubClient {
     }
   }
 
-  /** Repo owner login — default assignee / reviewer for release approval. */
-  releaseOwnerLogin(): string {
-    return this.repoPath().owner;
-  }
-
   async requestPullReviewers(pr: number, reviewers: string[]): Promise<void> {
     if (reviewers.length === 0) {
       return;
@@ -398,7 +394,7 @@ export class GitHubClient {
       `https://api.github.com/repos/${owner}/${repo}/pulls/${pr}/requested_reviewers`,
       {
         method: 'POST',
-        headers: { ...this.headers(), 'Content-Type': 'application/json' },
+        headers: { ...this.headers, 'Content-Type': 'application/json' },
         body: JSON.stringify({ reviewers }),
       },
     );
@@ -425,7 +421,7 @@ export class GitHubClient {
     const { owner, repo } = this.repoPath();
     const published = await githubFetch(
       `https://api.github.com/repos/${owner}/${repo}/releases/tags/${encodeURIComponent(tag)}`,
-      { headers: this.headers() },
+      { headers: this.headers },
     );
 
     if (published.ok) {
@@ -453,7 +449,7 @@ export class GitHubClient {
     );
 
     url.searchParams.set('per_page', '50');
-    const listed = await githubFetch(url, { headers: this.headers() });
+    const listed = await githubFetch(url, { headers: this.headers });
 
     if (!listed.ok) {
       const text = await listed.text();
@@ -499,7 +495,7 @@ export class GitHubClient {
         `https://api.github.com/repos/${owner}/${repo}/releases/${existing.id}`,
         {
           method: 'PATCH',
-          headers: { ...this.headers(), 'Content-Type': 'application/json' },
+          headers: { ...this.headers, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             tag_name: params.tag,
             name: params.name,
@@ -528,7 +524,7 @@ export class GitHubClient {
       `https://api.github.com/repos/${owner}/${repo}/releases`,
       {
         method: 'POST',
-        headers: { ...this.headers(), 'Content-Type': 'application/json' },
+        headers: { ...this.headers, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tag_name: params.tag,
           name: params.name,
@@ -557,14 +553,14 @@ export class GitHubClient {
    * Non-draft releases (published), including prereleases. Drafts are omitted
    * by this filter.
    */
-  async listPublishedReleases(): Promise<GitHubRelease[]> {
+  async getPublishedReleases(): Promise<GitHubRelease[]> {
     const { owner, repo } = this.repoPath();
     const url = new URL(
       `https://api.github.com/repos/${owner}/${repo}/releases`,
     );
 
     url.searchParams.set('per_page', '20');
-    const response = await githubFetch(url, { headers: this.headers() });
+    const response = await githubFetch(url, { headers: this.headers });
 
     if (!response.ok) {
       const text = await response.text();
@@ -574,16 +570,7 @@ export class GitHubClient {
       );
     }
 
-    const items = (await response.json()) as Array<{
-      id: number;
-      tag_name: string;
-      name: string | null;
-      body: string | null;
-      html_url: string;
-      draft: boolean;
-      prerelease: boolean;
-      published_at: string | null;
-    }>;
+    const items = (await response.json()) as Array<GitHubRelease>;
 
     return items
       .filter((item) => !item.draft)
@@ -605,7 +592,7 @@ export class GitHubClient {
       `https://api.github.com/repos/${owner}/${repo}/releases/${releaseId}`,
       {
         method: 'PATCH',
-        headers: { ...this.headers(), 'Content-Type': 'application/json' },
+        headers: { ...this.headers, 'Content-Type': 'application/json' },
         body: JSON.stringify({ body }),
       },
     );
@@ -619,7 +606,7 @@ export class GitHubClient {
     }
   }
 
-  async listOpenMilestones(): Promise<GitHubMilestoneRef[]> {
+  async getOpenMilestones(): Promise<GitHubMilestoneRef[]> {
     const { owner, repo } = this.repoPath();
     const url = new URL(
       `https://api.github.com/repos/${owner}/${repo}/milestones`,
@@ -627,7 +614,7 @@ export class GitHubClient {
 
     url.searchParams.set('state', 'open');
     url.searchParams.set('per_page', '50');
-    const response = await githubFetch(url, { headers: this.headers() });
+    const response = await githubFetch(url, { headers: this.headers });
 
     if (!response.ok) {
       const text = await response.text();
@@ -644,6 +631,7 @@ export class GitHubClient {
       number: item.number,
       title: item.title,
       due_on: item.due_on,
+      description: item.description,
     }));
   }
 
@@ -657,7 +645,7 @@ export class GitHubClient {
 
     url.searchParams.set('state', 'all');
     url.searchParams.set('per_page', '100');
-    const response = await githubFetch(url, { headers: this.headers() });
+    const response = await githubFetch(url, { headers: this.headers });
 
     if (!response.ok) {
       const text = await response.text();
@@ -683,7 +671,7 @@ export class GitHubClient {
       `https://api.github.com/repos/${owner}/${repo}/issues`,
       {
         method: 'POST',
-        headers: { ...this.headers(), 'Content-Type': 'application/json' },
+        headers: { ...this.headers, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: params.title,
           body: params.body,
@@ -712,7 +700,7 @@ export class GitHubClient {
       `https://api.github.com/repos/${owner}/${repo}/issues/${issue}`,
       {
         method: 'PATCH',
-        headers: { ...this.headers(), 'Content-Type': 'application/json' },
+        headers: { ...this.headers, 'Content-Type': 'application/json' },
         body: JSON.stringify({ milestone }),
       },
     );
@@ -744,7 +732,7 @@ export class GitHubClient {
       `https://api.github.com/repos/${owner}/${repo}/milestones/${milestoneNumber}`,
       {
         method: 'PATCH',
-        headers: { ...this.headers(), 'Content-Type': 'application/json' },
+        headers: { ...this.headers, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       },
     );
@@ -758,16 +746,13 @@ export class GitHubClient {
     }
   }
 
-  async getMilestone(milestoneNumber: number): Promise<{
-    number: number;
-    title: string;
-    description: string | null;
-    state: string;
-  }> {
+  async getMilestone(
+    milestoneNumber: number,
+  ): Promise<GitHubMilestoneWithState> {
     const { owner, repo } = this.repoPath();
     const response = await githubFetch(
       `https://api.github.com/repos/${owner}/${repo}/milestones/${milestoneNumber}`,
-      { headers: this.headers() },
+      { headers: this.headers },
     );
 
     if (!response.ok) {
@@ -778,18 +763,15 @@ export class GitHubClient {
       );
     }
 
-    const item = (await response.json()) as {
-      number: number;
-      title: string;
-      description: string | null;
-      state: string;
-    };
+    const item = (await response.json()) as GitHubMilestoneWithState;
 
     return {
+      id: milestoneNumber,
       number: item.number,
       title: item.title,
       description: item.description,
       state: item.state,
+      due_on: item.due_on,
     };
   }
 
@@ -802,7 +784,7 @@ export class GitHubClient {
     const spec = `${encodeURIComponent(base)}...${encodeURIComponent(head)}`;
     const response = await githubFetch(
       `https://api.github.com/repos/${owner}/${repo}/compare/${spec}`,
-      { headers: this.headers() },
+      { headers: this.headers },
     );
 
     if (response.status === 404) {
@@ -826,7 +808,7 @@ export class GitHubClient {
     currentTag: string,
     head: string,
   ): Promise<{ empty: boolean; previousTag: string | null }> {
-    const releases = await this.listPublishedReleases();
+    const releases = await this.getPublishedReleases();
     const previousTag = getPreviousReleaseTag(releases, currentTag);
 
     if (!previousTag) {
@@ -847,7 +829,7 @@ export class GitHubClient {
     };
   }
 
-  async listOpenIssuesForMilestone(
+  async getOpenIssuesForMilestone(
     milestoneNumber: number,
   ): Promise<GitHubIssue[]> {
     const { owner, repo } = this.repoPath();
@@ -856,7 +838,7 @@ export class GitHubClient {
     url.searchParams.set('state', 'open');
     url.searchParams.set('milestone', String(milestoneNumber));
     url.searchParams.set('per_page', '50');
-    const response = await githubFetch(url, { headers: this.headers() });
+    const response = await githubFetch(url, { headers: this.headers });
 
     if (!response.ok) {
       const text = await response.text();
@@ -876,11 +858,11 @@ export class GitHubClient {
   /**
    * True if git tag exists or a release (draft/published) uses this tag_name.
    */
-  async tagOrReleaseExists(tag: string): Promise<boolean> {
+  async isTagOrReleaseExists(tag: string): Promise<boolean> {
     const { owner, repo } = this.repoPath();
     const ref = await githubFetch(
       `https://api.github.com/repos/${owner}/${repo}/git/ref/tags/${encodeURIComponent(tag)}`,
-      { headers: this.headers() },
+      { headers: this.headers },
     );
 
     if (ref.ok) {

@@ -1,6 +1,7 @@
 export { CursorClient } from './CursorProvider';
 export type {
   GitHubIssue,
+  GitHubIssueState,
   GitHubMilestoneRef,
   GitHubPull,
 } from './GithubProvider';

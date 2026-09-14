@@ -1,3 +1,4 @@
+import { GitHubIssueState } from '@providers';
 import type { Role } from '@types';
 
 import type { Job, UiJobStatus } from './OrchestratorService.types';
@@ -433,7 +434,7 @@ export function groupAnalystIssuesByParent<
 /** Child is still in the fix pipeline (blocks parent re-QA). */
 export function childBugStillOpen(
   labels: string[],
-  state: 'open' | 'closed',
+  state: GitHubIssueState,
 ): boolean {
   if (state === 'closed') {
     return false;
@@ -453,7 +454,7 @@ export function childBugStillOpen(
 /** Open Fixes PR блокирует re-QA родителя, даже если ребёнок уже qa-passed. */
 export function childBlocksParentReQa(
   labels: string[],
-  state: 'open' | 'closed',
+  state: GitHubIssueState,
   hasOpenFixPr: boolean,
 ): boolean {
   if (hasOpenFixPr) {

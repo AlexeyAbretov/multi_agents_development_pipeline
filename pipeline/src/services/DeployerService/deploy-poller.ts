@@ -60,7 +60,7 @@ async function pollOnce(
   let releases;
 
   try {
-    releases = await github.listPublishedReleases();
+    releases = await github.getPublishedReleases();
   } catch (err) {
     logger.error({ err }, 'github list releases failed');
 
@@ -92,7 +92,7 @@ async function applyDeployLabels(
   const labeled: number[] = [];
   const milestone = await github.findMilestoneByTitle(tag);
   const issues = milestone
-    ? await github.listOpenIssuesForMilestone(milestone.number)
+    ? await github.getOpenIssuesForMilestone(milestone.number)
     : [];
 
   for (const issue of issues) {

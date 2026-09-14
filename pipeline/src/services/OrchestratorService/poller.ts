@@ -115,10 +115,10 @@ async function pollOnce(
   try {
     issues = mergeIssues(
       await Promise.all([
-        github.listOpenIssuesByLabel('needs-plan'),
-        github.listOpenIssuesByLabel('ready-for-dev'),
-        github.listOpenIssuesByLabel('in-qa'),
-        github.listOpenIssuesByLabel('qa-passed'),
+        github.getOpenIssuesByLabel('needs-plan'),
+        github.getOpenIssuesByLabel('ready-for-dev'),
+        github.getOpenIssuesByLabel('in-qa'),
+        github.getOpenIssuesByLabel('qa-passed'),
       ]),
     );
   } catch (err) {
@@ -443,7 +443,7 @@ async function releaseStartGate(
   let previousTag: string | null = null;
 
   try {
-    const open = await github.listOpenMilestones();
+    const open = await github.getOpenMilestones();
 
     dueTodayCount = open.filter(
       (item) =>
@@ -456,7 +456,7 @@ async function releaseStartGate(
 
   if (milestone) {
     try {
-      const issues = await github.listOpenIssuesForMilestone(milestone.number);
+      const issues = await github.getOpenIssuesForMilestone(milestone.number);
 
       hasOpenWorkItems = issues.some(
         (item) =>
@@ -469,7 +469,7 @@ async function releaseStartGate(
 
   if (tag) {
     try {
-      releaseExists = await github.tagOrReleaseExists(tag);
+      releaseExists = await github.isTagOrReleaseExists(tag);
     } catch {
       releaseExists = false;
     }

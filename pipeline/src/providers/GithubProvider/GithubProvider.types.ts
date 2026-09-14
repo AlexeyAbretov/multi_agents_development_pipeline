@@ -3,6 +3,7 @@ export type GitHubMilestoneRef = {
   number: number;
   title: string;
   due_on: string | null;
+  description: string | null;
 };
 
 export type GitHubMilestoneWithState = GitHubMilestoneRef & {
@@ -18,8 +19,10 @@ export type GitHubIssue = {
   milestone: GitHubMilestoneRef | null;
 };
 
+export type GitHubIssueState = 'open' | 'closed';
+
 export type GitHubIssueWithState = GitHubIssue & {
-  state: 'open' | 'closed';
+  state: GitHubIssueState;
 };
 
 export type GitHubPull = {
@@ -65,5 +68,5 @@ export type GitHubIssueRaw = {
 };
 
 export type GitHubIssueRawWithState = GitHubIssueRaw & {
-  state: 'open' | 'closed';
+  state: GitHubIssueState;
 };
