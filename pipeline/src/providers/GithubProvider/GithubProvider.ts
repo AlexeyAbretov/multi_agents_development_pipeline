@@ -1,22 +1,16 @@
-import type { Config } from "@config";
+import type { Config } from '@config';
 
-import { GITHUB_COMMENT_MAX } from "./GithubProvider.constants";
+import { GITHUB_COMMENT_MAX } from './GithubProvider.constants';
 import type {
   GitHubIssue,
   GitHubIssueRaw,
   GitHubPull,
-} from "./GithubProvider.types";
+  GitHubRelease,
+} from './GithubProvider.types';
 
-import type { GitHubRelease } from "../../deploy-rules";
-import { fixIssueWithPR } from "../../rules";
-import {
-  isEmptySincePreviousRelease,
-  previousReleaseTag,
-} from "../../schedule-rules";
-
-function labelNames(labels: GitHubIssueRaw["labels"]): string[] {
+function labelNames(labels: GitHubIssueRaw['labels']): string[] {
   return labels.map((label) =>
-    typeof label === "string" ? label : label.name,
+    typeof label === 'string' ? label : label.name,
   );
 }
 
@@ -38,6 +32,62 @@ function toGitHubIssue(item: GitHubIssueRaw): GitHubIssue {
   };
 }
 
+export function previousReleaseTag(
+  releases: Array<{ tag_name: string; published_at: string | null }>,
+  currentTag: string,
+): string | null {
+  const others = releases
+    .filter((item) => item.tag_name !== currentTag)
+    .sort((a, b) => {
+      const aTime = a.published_at ? Date.parse(a.published_at) : 0;
+      const bTime = b.published_at ? Date.parse(b.published_at) : 0;
+
+      return bTime - aTime;
+    });
+
+  return others[0]?.tag_name ?? null;
+}
+
+/**
+ * No previous published tag → first release, not empty.
+ * Unknown aheadBy → do not skip.
+ */
+export function isEmptySincePreviousRelease(params: {
+  previousTag: string | null;
+  aheadBy: number | null;
+}): boolean {
+  if (!params.previousTag) {
+    return false;
+  }
+
+  if (params.aheadBy === null) {
+    return false;
+  }
+
+  return params.aheadBy <= 0;
+}
+
+export function fixIssueWithPR(
+  pr: {
+    title: string;
+    body: string | null;
+    headRef: string;
+  },
+  issue: number,
+): boolean {
+  const text = `${pr.title}\n${pr.body ?? ''}`;
+  const keywords = new RegExp(
+    `(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\\s+#${issue}\\b`,
+    'i',
+  );
+
+  if (keywords.test(text)) {
+    return true;
+  }
+
+  return new RegExp(`^issue/${issue}(?:-|$)`).test(pr.headRef);
+}
+
 function isTransientNetworkError(err: unknown): boolean {
   const parts: string[] = [];
   let current: unknown = err;
@@ -53,7 +103,7 @@ function isTransientNetworkError(err: unknown): boolean {
   }
 
   return /ENOTFOUND|EAI_AGAIN|ECONNRESET|ETIMEDOUT|UND_ERR_SOCKET|fetch failed/i.test(
-    parts.join(" "),
+    parts.join(' '),
   );
 }
 
@@ -96,10 +146,10 @@ export class GitHubClient {
 
   private headers(): HeadersInit {
     return {
-      Accept: "application/vnd.github+json",
+      Accept: 'application/vnd.github+json',
       Authorization: `Bearer ${this.config.GITHUB_TOKEN}`,
-      "User-Agent": "llm-app-dev-orchestrator",
-      "X-GitHub-Api-Version": "2022-11-28",
+      'User-Agent': 'llm-app-dev-orchestrator',
+      'X-GitHub-Api-Version': '2022-11-28',
     };
   }
 
@@ -107,9 +157,9 @@ export class GitHubClient {
     const { owner, repo } = this.repoPath();
     const url = new URL(`https://api.github.com/repos/${owner}/${repo}/issues`);
 
-    url.searchParams.set("state", "open");
-    url.searchParams.set("labels", label);
-    url.searchParams.set("per_page", "50");
+    url.searchParams.set('state', 'open');
+    url.searchParams.set('labels', label);
+    url.searchParams.set('per_page', '50');
 
     const response = await githubFetch(url, { headers: this.headers() });
 
@@ -127,13 +177,13 @@ export class GitHubClient {
   }
 
   async findOpenFixPr(issue: number): Promise<GitHubPull | null> {
-    const items = await this.listPulls("open");
+    const items = await this.listPulls('open');
 
     return items.find((pr) => fixIssueWithPR(pr, issue)) ?? null;
   }
 
   async findMergedFixPr(issue: number): Promise<GitHubPull | null> {
-    const items = await this.listPulls("closed");
+    const items = await this.listPulls('closed');
 
     return items.find((pr) => pr.merged && fixIssueWithPR(pr, issue)) ?? null;
   }
@@ -147,8 +197,8 @@ export class GitHubClient {
     const response = await githubFetch(
       `https://api.github.com/repos/${owner}/${repo}/pulls/${pr}`,
       {
-        method: "PATCH",
-        headers: { ...this.headers(), "Content-Type": "application/json" },
+        method: 'PATCH',
+        headers: { ...this.headers(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ base }),
       },
     );
@@ -167,9 +217,9 @@ export class GitHubClient {
     const response = await githubFetch(
       `https://api.github.com/repos/${owner}/${repo}/issues/${issue}`,
       {
-        method: "PATCH",
-        headers: { ...this.headers(), "Content-Type": "application/json" },
-        body: JSON.stringify({ state: "closed" }),
+        method: 'PATCH',
+        headers: { ...this.headers(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ state: 'closed' }),
       },
     );
 
@@ -183,13 +233,13 @@ export class GitHubClient {
   }
 
   private async listPulls(
-    state: "open" | "closed",
+    state: 'open' | 'closed',
   ): Promise<Array<GitHubPull & { merged: boolean }>> {
     const { owner, repo } = this.repoPath();
     const url = new URL(`https://api.github.com/repos/${owner}/${repo}/pulls`);
 
-    url.searchParams.set("state", state);
-    url.searchParams.set("per_page", "50");
+    url.searchParams.set('state', state);
+    url.searchParams.set('per_page', '50');
 
     const response = await githubFetch(url, { headers: this.headers() });
 
@@ -214,8 +264,8 @@ export class GitHubClient {
       title: pr.title,
       body: pr.body,
       html_url: pr.html_url,
-      headRef: pr.head?.ref ?? "",
-      baseRef: pr.base?.ref ?? "",
+      headRef: pr.head?.ref ?? '',
+      baseRef: pr.base?.ref ?? '',
       merged: Boolean(pr.merged_at),
     }));
   }
@@ -225,8 +275,8 @@ export class GitHubClient {
     const response = await githubFetch(
       `https://api.github.com/repos/${owner}/${repo}/issues/${issue}/comments`,
       {
-        method: "POST",
-        headers: { ...this.headers(), "Content-Type": "application/json" },
+        method: 'POST',
+        headers: { ...this.headers(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ body }),
       },
     );
@@ -242,7 +292,7 @@ export class GitHubClient {
 
   async getIssue(
     issue: number,
-  ): Promise<GitHubIssue & { state: "open" | "closed" }> {
+  ): Promise<GitHubIssue & { state: 'open' | 'closed' }> {
     const { owner, repo } = this.repoPath();
     const response = await githubFetch(
       `https://api.github.com/repos/${owner}/${repo}/issues/${issue}`,
@@ -258,7 +308,7 @@ export class GitHubClient {
     }
 
     const item = (await response.json()) as GitHubIssueRaw & {
-      state: "open" | "closed";
+      state: 'open' | 'closed';
     };
 
     return {
@@ -272,8 +322,8 @@ export class GitHubClient {
     const response = await githubFetch(
       `https://api.github.com/repos/${owner}/${repo}/issues/${issue}`,
       {
-        method: "PATCH",
-        headers: { ...this.headers(), "Content-Type": "application/json" },
+        method: 'PATCH',
+        headers: { ...this.headers(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ body }),
       },
     );
@@ -296,8 +346,8 @@ export class GitHubClient {
     const response = await githubFetch(
       `https://api.github.com/repos/${owner}/${repo}/issues/${issue}/labels`,
       {
-        method: "POST",
-        headers: { ...this.headers(), "Content-Type": "application/json" },
+        method: 'POST',
+        headers: { ...this.headers(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ labels }),
       },
     );
@@ -316,7 +366,7 @@ export class GitHubClient {
     const encoded = encodeURIComponent(label);
     const response = await githubFetch(
       `https://api.github.com/repos/${owner}/${repo}/issues/${issue}/labels/${encoded}`,
-      { method: "DELETE", headers: this.headers() },
+      { method: 'DELETE', headers: this.headers() },
     );
 
     if (response.status === 404) {
@@ -337,8 +387,8 @@ export class GitHubClient {
     const response = await githubFetch(
       `https://api.github.com/repos/${owner}/${repo}/issues/${issue}/assignees`,
       {
-        method: "POST",
-        headers: { ...this.headers(), "Content-Type": "application/json" },
+        method: 'POST',
+        headers: { ...this.headers(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ assignees }),
       },
     );
@@ -366,8 +416,8 @@ export class GitHubClient {
     const response = await githubFetch(
       `https://api.github.com/repos/${owner}/${repo}/pulls/${pr}/requested_reviewers`,
       {
-        method: "POST",
-        headers: { ...this.headers(), "Content-Type": "application/json" },
+        method: 'POST',
+        headers: { ...this.headers(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ reviewers }),
       },
     );
@@ -421,7 +471,7 @@ export class GitHubClient {
       `https://api.github.com/repos/${owner}/${repo}/releases`,
     );
 
-    url.searchParams.set("per_page", "50");
+    url.searchParams.set('per_page', '50');
     const listed = await githubFetch(url, { headers: this.headers() });
 
     if (!listed.ok) {
@@ -467,8 +517,8 @@ export class GitHubClient {
       const response = await githubFetch(
         `https://api.github.com/repos/${owner}/${repo}/releases/${existing.id}`,
         {
-          method: "PATCH",
-          headers: { ...this.headers(), "Content-Type": "application/json" },
+          method: 'PATCH',
+          headers: { ...this.headers(), 'Content-Type': 'application/json' },
           body: JSON.stringify({
             tag_name: params.tag,
             name: params.name,
@@ -496,8 +546,8 @@ export class GitHubClient {
     const response = await githubFetch(
       `https://api.github.com/repos/${owner}/${repo}/releases`,
       {
-        method: "POST",
-        headers: { ...this.headers(), "Content-Type": "application/json" },
+        method: 'POST',
+        headers: { ...this.headers(), 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tag_name: params.tag,
           name: params.name,
@@ -532,7 +582,7 @@ export class GitHubClient {
       `https://api.github.com/repos/${owner}/${repo}/releases`,
     );
 
-    url.searchParams.set("per_page", "20");
+    url.searchParams.set('per_page', '20');
     const response = await githubFetch(url, { headers: this.headers() });
 
     if (!response.ok) {
@@ -573,8 +623,8 @@ export class GitHubClient {
     const response = await githubFetch(
       `https://api.github.com/repos/${owner}/${repo}/releases/${releaseId}`,
       {
-        method: "PATCH",
-        headers: { ...this.headers(), "Content-Type": "application/json" },
+        method: 'PATCH',
+        headers: { ...this.headers(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ body }),
       },
     );
@@ -596,8 +646,8 @@ export class GitHubClient {
       `https://api.github.com/repos/${owner}/${repo}/milestones`,
     );
 
-    url.searchParams.set("state", "open");
-    url.searchParams.set("per_page", "50");
+    url.searchParams.set('state', 'open');
+    url.searchParams.set('per_page', '50');
     const response = await githubFetch(url, { headers: this.headers() });
 
     if (!response.ok) {
@@ -635,8 +685,8 @@ export class GitHubClient {
       `https://api.github.com/repos/${owner}/${repo}/milestones`,
     );
 
-    url.searchParams.set("state", "all");
-    url.searchParams.set("per_page", "100");
+    url.searchParams.set('state', 'all');
+    url.searchParams.set('per_page', '100');
     const response = await githubFetch(url, { headers: this.headers() });
 
     if (!response.ok) {
@@ -668,8 +718,8 @@ export class GitHubClient {
     const response = await githubFetch(
       `https://api.github.com/repos/${owner}/${repo}/issues`,
       {
-        method: "POST",
-        headers: { ...this.headers(), "Content-Type": "application/json" },
+        method: 'POST',
+        headers: { ...this.headers(), 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: params.title,
           body: params.body,
@@ -697,8 +747,8 @@ export class GitHubClient {
     const response = await githubFetch(
       `https://api.github.com/repos/${owner}/${repo}/issues/${issue}`,
       {
-        method: "PATCH",
-        headers: { ...this.headers(), "Content-Type": "application/json" },
+        method: 'PATCH',
+        headers: { ...this.headers(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ milestone }),
       },
     );
@@ -718,8 +768,8 @@ export class GitHubClient {
     description?: string,
   ): Promise<void> {
     const { owner, repo } = this.repoPath();
-    const payload: { state: "closed"; description?: string } = {
-      state: "closed",
+    const payload: { state: 'closed'; description?: string } = {
+      state: 'closed',
     };
 
     if (description !== undefined) {
@@ -729,8 +779,8 @@ export class GitHubClient {
     const response = await githubFetch(
       `https://api.github.com/repos/${owner}/${repo}/milestones/${milestoneNumber}`,
       {
-        method: "PATCH",
-        headers: { ...this.headers(), "Content-Type": "application/json" },
+        method: 'PATCH',
+        headers: { ...this.headers(), 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       },
     );
@@ -805,7 +855,7 @@ export class GitHubClient {
 
     const item = (await response.json()) as { ahead_by?: number };
 
-    return typeof item.ahead_by === "number" ? item.ahead_by : null;
+    return typeof item.ahead_by === 'number' ? item.ahead_by : null;
   }
 
   async detectEmptySincePrevious(
@@ -839,9 +889,9 @@ export class GitHubClient {
     const { owner, repo } = this.repoPath();
     const url = new URL(`https://api.github.com/repos/${owner}/${repo}/issues`);
 
-    url.searchParams.set("state", "open");
-    url.searchParams.set("milestone", String(milestoneNumber));
-    url.searchParams.set("per_page", "50");
+    url.searchParams.set('state', 'open');
+    url.searchParams.set('milestone', String(milestoneNumber));
+    url.searchParams.set('per_page', '50');
     const response = await githubFetch(url, { headers: this.headers() });
 
     if (!response.ok) {
@@ -895,8 +945,8 @@ export function jobComment(params: {
   const lines = [
     `<!-- pipeline:job:${params.jobId} -->`,
     `Пайплайн: роль \`${params.role}\`, статус \`${params.status}\`.`,
-    params.agentId ? `agentId: \`${params.agentId}\`` : "agentId: —",
-    params.runId ? `runId: \`${params.runId}\`` : "runId: —",
+    params.agentId ? `agentId: \`${params.agentId}\`` : 'agentId: —',
+    params.runId ? `runId: \`${params.runId}\`` : 'runId: —',
   ];
 
   if (params.decision) {
@@ -907,12 +957,12 @@ export function jobComment(params: {
     lines.push(`Ошибка: ${params.error}`);
   }
 
-  return lines.join("\n");
+  return lines.join('\n');
 }
 
 export function agentResultComment(role: string, text: string): string {
   const header = `## Результат: ${role}\n\n`;
-  const trimmed = text.trim() || "(пустой ответ агента)";
+  const trimmed = text.trim() || '(пустой ответ агента)';
 
   if (header.length + trimmed.length <= GITHUB_COMMENT_MAX) {
     return header + trimmed;
@@ -922,6 +972,6 @@ export function agentResultComment(role: string, text: string): string {
 
   return (
     `${header}${trimmed.slice(0, budget)}` +
-    "\n\n… (обрезано, полный текст в Cursor SDK)"
+    '\n\n… (обрезано, полный текст в Cursor SDK)'
   );
 }

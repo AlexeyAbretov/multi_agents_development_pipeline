@@ -23,6 +23,17 @@ export type GitHubPull = {
   baseRef: string;
 };
 
+export type GitHubRelease = {
+  id: number;
+  tag_name: string;
+  name: string | null;
+  body: string | null;
+  html_url: string;
+  draft: boolean;
+  prerelease: boolean;
+  published_at: string | null;
+};
+
 export type GitHubIssueRaw = {
   number: number;
   title: string;

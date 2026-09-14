@@ -1,10 +1,9 @@
 import type { FastifyInstance } from "fastify";
 
-import type { Config } from "../config/config";
-import { DeployRequestStore } from "../deploy-request-store";
-import { DeployStore } from "../deploy-store";
-import type { JobStore } from "../jobs";
-import { mapJobToUiStatus } from "../rules";
+import type { Config } from "@config";
+
+import type { JobStore } from "./jobs";
+import { mapJobToUiStatus } from "./rules";
 
 export function registerApiRoutes(
   app: FastifyInstance,
@@ -30,18 +29,6 @@ export function registerApiRoutes(
       lastPollAt: snap.lastPollAt,
       githubRepo: config.GITHUB_REPO || null,
       jobs,
-    };
-  });
-
-  app.get("/api/deploys", async () => {
-    const deploys = new DeployStore(config.DATA_DIR).load().deploys;
-    const requests = new DeployRequestStore(config.DATA_DIR).load().requests;
-
-    return {
-      deploys: [...deploys].sort((a, b) => b.at.localeCompare(a.at)),
-      requests: [...requests].sort((a, b) =>
-        b.requestedAt.localeCompare(a.requestedAt),
-      ),
     };
   });
 }

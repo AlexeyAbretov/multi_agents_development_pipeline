@@ -249,41 +249,6 @@ export function decideReleaseGate(params: {
   return "ok";
 }
 
-export function previousReleaseTag(
-  releases: Array<{ tag_name: string; published_at: string | null }>,
-  currentTag: string,
-): string | null {
-  const others = releases
-    .filter((item) => item.tag_name !== currentTag)
-    .sort((a, b) => {
-      const aTime = a.published_at ? Date.parse(a.published_at) : 0;
-      const bTime = b.published_at ? Date.parse(b.published_at) : 0;
-
-      return bTime - aTime;
-    });
-
-  return others[0]?.tag_name ?? null;
-}
-
-/**
- * No previous published tag → first release, not empty.
- * Unknown aheadBy → do not skip.
- */
-export function isEmptySincePreviousRelease(params: {
-  previousTag: string | null;
-  aheadBy: number | null;
-}): boolean {
-  if (!params.previousTag) {
-    return false;
-  }
-
-  if (params.aheadBy === null) {
-    return false;
-  }
-
-  return params.aheadBy <= 0;
-}
-
 export function nothingToReleaseMarker(milestoneId: number): string {
   return `<!-- pipeline:nothing-to-release:${milestoneId} -->`;
 }

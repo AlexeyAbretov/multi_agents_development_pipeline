@@ -16,10 +16,10 @@ docker compose up --build -d
 | Сервис | Порт | Назначение |
 |--------|------|------------|
 | `orchestrator` | `127.0.0.1:3020` | Поллинг issues → Cursor Cloud; schedule; API `/api/jobs` |
-| `deployer` | `127.0.0.1:3021` | Published Release + очередь `deploy-requests.json`; docker.sock |
-| `pipeline-ui` | `127.0.0.1:3010` | Таблица джоб и деплоев (прокси `/api` → orchestrator) |
+| `deployer` | `127.0.0.1:3021` | Поллинг published Release; API `/api/deploys`; docker.sock |
+| `pipeline-ui` | `127.0.0.1:3010` | Таблица джоб и деплоев |
 
-Health: `/health` на 3020/3021. UI: http://127.0.0.1:3010/ (прокси `/api` → оркестратор; nginx резолвит имя сервиса на каждый запрос, чтобы после recreate оркестратора не было 502).
+Health: `/health` на 3020/3021. UI: http://127.0.0.1:3010/ (nginx: `/api/jobs` → orchestrator, `/api/deploys` → deployer; имена сервисов резолвятся на каждый запрос, чтобы после recreate не было 502).
 
 ## Логи
 
@@ -28,7 +28,7 @@ docker compose logs -f orchestrator
 docker compose logs -f deployer
 ```
 
-Ищите: `poll tick`, `developer dispatch`, `tester dispatch`, `skip in-flight job`, `schedule tick`, `deploy poll tick`, `blocked: no release`, `queued deploy request`.
+Ищите: `poll tick`, `developer dispatch`, `tester dispatch`, `skip in-flight job`, `schedule tick`, `deploy poll tick`, `blocked: no release`, `deploy start`.
 
 ## Остановить полл
 
@@ -38,7 +38,7 @@ docker compose stop orchestrator deployer pipeline-ui
 docker compose down
 ```
 
-Volume `pipeline_data` хранит `jobs.json`, `deploys.json`, `deploy-requests.json`, `schedule-state.json` — `down` его не удаляет.
+Volume `pipeline_data` хранит `jobs.json`, `deploys.json`, `schedule-state.json` — `down` его не удаляет.
 
 ## Schedule (P14)
 
@@ -46,20 +46,21 @@ Volume `pipeline_data` хранит `jobs.json`, `deploys.json`, `deploy-request
 - Milestone title = tag (`v1.2.0`): due завтра → служебная issue регресса `main`; due сегодня без регресса → hotfix (регресс в тот же день).
 - С прошлого tag в `main` нет коммитов → milestone закрывается с пометкой «нечего релизить», Release не создаётся.
 - Due сегодня, нет published Release и RM не может стартовать → комментарий `blocked: no release`, compose **не** трогаем.
-- Есть tag и ещё не в `deploys.json` → запись в `deploy-requests.json`; deployer выполняет один раз (идемпотентно на нескольких тиках).
+- Deployer сам смотрит published Releases (без очереди от schedule).
 
 ## Локальный запуск (без Docker)
 
-Нужен Node ≥ 22. Не держите одновременно контейнер `orchestrator` и локальный процесс на `:3020`.
+Нужен Node ≥ 22. Не держите одновременно контейнеры и локальные процессы на `:3020` / `:3021`.
 
 ```powershell
 cd pipeline
 copy .env.local.example .env.local   # DATA_DIR=./data, PROMPTS_DIR=./prompts
 npm ci
 npm run build
-npm start
+npm start                 # оркестратор :3020
+npm run start:deployer    # deployer :3021 (второй терминал)
 ```
 
-VSCode: Run and Debug → **Orchestrator** (`tsx` + `.env.local`). `npm run dev` `.env.local` не читает.
+VSCode: **Orchestrator**, **Deployer** или **Orchestrator + Deployer**. UI: `cd pipeline-ui && npm run dev` (прокси jobs→3020, deploys→3021).
 
 Подробнее: [`docs/AGENT_PIPELINE_SETUP.md`](../docs/AGENT_PIPELINE_SETUP.md) §10.

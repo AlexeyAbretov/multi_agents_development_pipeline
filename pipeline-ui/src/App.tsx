@@ -92,7 +92,8 @@ export function App() {
 
       {error ? (
         <p className="mb-6 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
-          Не удалось загрузить данные: {error}. Проверьте оркестратор на :3020.
+          Не удалось загрузить данные: {error}. Проверьте оркестратор
+          (:3020) и deployer (:3021).
         </p>
       ) : null}
 
@@ -196,23 +197,11 @@ function DeploysPanel({ data }: { data: DeploysResponse | null }) {
   if (!data) {
     return <p className="text-sm text-ink-700">Загрузка…</p>;
   }
-  if (data.deploys.length === 0 && data.requests.length === 0) {
+  if (data.deploys.length === 0) {
     return <p className="text-sm text-ink-700">Деплов пока нет.</p>;
   }
   return (
     <div className="space-y-4">
-      {data.requests.some((item) => item.status === "pending") ? (
-        <ul className="text-sm text-ink-700">
-          {data.requests
-            .filter((item) => item.status === "pending")
-            .map((item) => (
-              <li key={`${item.tag}-${item.requestedAt}`}>
-                В очереди: <span className="font-medium text-ink-900">{item.tag}</span> (
-                {item.milestoneTitle})
-              </li>
-            ))}
-        </ul>
-      ) : null}
       <div className="overflow-x-auto rounded-lg border border-ink-200 bg-white/80 shadow-sm">
         <table className="min-w-full text-left text-sm">
           <thead className="border-b border-ink-200 bg-ink-50/80 text-xs uppercase tracking-wide text-ink-700">

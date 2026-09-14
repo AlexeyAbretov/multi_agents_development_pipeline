@@ -3,5 +3,6 @@
   "eslint.useFlatConfig": true,
   "editor.codeActionsOnSave": {
     "source.fixAll.eslint": "explicit"
-  }
+  },
+  "eslint.execArgv": ["--disable-warning=DEP0190"]
 }

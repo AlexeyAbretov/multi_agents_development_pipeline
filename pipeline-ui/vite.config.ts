@@ -7,6 +7,7 @@ export default defineConfig({
     port: 3010,
     host: "127.0.0.1",
     proxy: {
+      "/api/deploys": "http://127.0.0.1:3021",
       "/api": "http://127.0.0.1:3020",
       "/health": "http://127.0.0.1:3020",
     },

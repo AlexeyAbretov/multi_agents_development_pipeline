@@ -2,8 +2,9 @@ import Fastify from "fastify";
 
 import { Config } from "@config";
 
-import { startDeployPoller } from "../../deploy-poller";
-import { DeployStore } from "../../deploy-store";
+import { startDeployPoller } from "./deploy-poller";
+import { DeployStore } from "./deploy-store";
+import { registerApiRoutes } from "./DeployerService.routes";
 
 const config = Config.loadConfig();
 const store = new DeployStore(config.DATA_DIR);
@@ -19,6 +20,8 @@ app.get("/health", async () => ({
   service: "deployer",
   deployMode: config.DEPLOY_MODE,
 }));
+
+registerApiRoutes(app, config);
 
 const poller = startDeployPoller(config, app.log, store);
 

@@ -11,11 +11,43 @@
                 "--import",
                 "tsx"
             ],
-            "program": "${workspaceFolder}/pipeline/src/index.ts",
+            "program": "${workspaceFolder}/pipeline/src/services/OrchestratorService/index.ts",
             "envFile": "${workspaceFolder}/pipeline/.env.local",
+            "env": {
+                "PORT": "3020"
+            },
             "skipFiles": [
                 "<node_internals>/**"
             ]
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Deployer",
+            "cwd": "${workspaceFolder}/pipeline",
+            "runtimeArgs": [
+                "--use-env-proxy",
+                "--import",
+                "tsx"
+            ],
+            "program": "${workspaceFolder}/pipeline/src/services/DeployerService/index.ts",
+            "envFile": "${workspaceFolder}/pipeline/.env.local",
+            "env": {
+                "PORT": "3021"
+            },
+            "skipFiles": [
+                "<node_internals>/**"
+            ]
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Orchestrator + Deployer",
+            "configurations": [
+                "Orchestrator",
+                "Deployer"
+            ],
+            "stopAll": true
         }
     ]
 }

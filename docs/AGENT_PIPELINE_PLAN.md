@@ -267,13 +267,13 @@ Issue → план → PR → issue-QA → merge человеком в `main` �
 
 1. Cron оркестратора (`SCHEDULE_INTERVAL_MS`, ~1 ч): open milestone due сегодня.
 2. Нет tag / Release → комментарий `blocked: no tag` на issues milestone; compose не трогать.
-3. Есть tag, ещё нет записи в `deploys.json` → `deploy-requests.json` → deployer (идемпотентно).
+3. Есть published Release → deployer сам деплоит (поллинг Releases, идемпотентно).
 4. Краткий `pipeline/README.md`: логи, stop полла, schedule.
 
 ### Проверка
 
 - [ ] Due сегодня без tag → комментарий, без compose
-- [ ] С tag → один деплой на несколько тиков cron / poll
+- [ ] С published Release → один деплой на несколько тиков poll
 
 ---
 
@@ -435,8 +435,8 @@ Issue → план → PR → issue-QA → merge человеком в `main` �
 Не отдельный этап плана. После P15 в репозитории:
 
 - `.vscode/launch.json` — конфигурация **Orchestrator** (`tsx` + `pipeline/.env.local`)
-- `npm start` — `node --use-env-proxy --env-file=.env.local dist/index.js`
-- HTTP API вынесен в `pipeline/src/routes/` (алиас `@routes`, сборка через `tsc-alias`)
+- `npm start` — `node --use-env-proxy --env-file=.env.local dist/services/OrchestratorService/index.js`
+- HTTP API в `pipeline/src/routes/` (алиас `@routes`, сборка через `tsc-alias`)
 
 Запуск: [AGENT_PIPELINE_SETUP.md](./AGENT_PIPELINE_SETUP.md) §10. Карта файлов: [AGENT_PIPELINE_ARCHITECTURE.md](./AGENT_PIPELINE_ARCHITECTURE.md) §3.1.
 
@@ -450,10 +450,10 @@ Issue → план → PR → issue-QA → merge человеком в `main` �
 ### Шаги
 
 1. Сервис `pipeline-ui` (React + Vite + TS + Tailwind), порт `127.0.0.1:3010`.
-2. API оркестратора: `GET /api/jobs`, `GET /api/deploys` (данные из volume, не docker logs).
+2. API: `GET /api/jobs` (orchestrator), `GET /api/deploys` (deployer); данные из volume, не docker logs.
 3. Таблица: issue, роль, UI-статус (`queued` / `running` / `failed` / `finished`), ссылки GitHub и Cursor.
 4. Полный транскрипт — ссылка на Cursor (`agentId`); Publish релиза — RM по milestone, не кнопка в UI.
-5. Compose: `pipeline-ui` + nginx proxy `/api` → orchestrator.
+5. Compose: `pipeline-ui` + nginx: `/api/jobs` → orchestrator, `/api/deploys` → deployer.
 
 ### Проверка
 

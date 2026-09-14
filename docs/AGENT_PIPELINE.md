@@ -146,7 +146,8 @@ Git — **только GitHub** (`origin`). Локальная Gitea не исп
 - due завтра → регресс (если ещё нет);
 - due сегодня → hotfix-регресс или ожидание RM;
 - due сегодня, нет published Release и RM не может стартовать (`needs-human` / открытые work-items после регресса) → комментарий `blocked: no release` (без compose).
-Есть published tag и нет записи в `deploys.json` → очередь для deployer (один деплой на tag).
+
+Deployer независимо поллит published GitHub Releases и деплоит один раз на tag (`deploys.json` + маркер в теле Release). Очереди от оркестратора нет.
 
 Ollama: `host.docker.internal:11434` для приложения каталога, не для оркестратора.
 

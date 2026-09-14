@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export type DeployRecord = {
-  /** GitHub release id, or 0 for schedule/tag-only deploy. */
+  /** GitHub release id. */
   releaseId: number;
   tag: string;
   status: "deployed" | "deploy-failed";

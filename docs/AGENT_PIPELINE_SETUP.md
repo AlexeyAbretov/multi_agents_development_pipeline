@@ -226,24 +226,28 @@ docker compose up -d
 
 ---
 
-## 10. Локальный запуск оркестратора (без Docker)
+## 10. Локальный запуск оркестратора и deployer (без Docker)
 
-Нужен **Node ≥ 22**. Docker-compose при этом можно не поднимать (или остановить `orchestrator`, чтобы не занять `:3020`).
+Нужен **Node ≥ 22**. Docker-compose при этом можно не поднимать (или остановить `orchestrator` / `deployer`, чтобы не занять `:3020` / `:3021`).
 
 ```powershell
 cd pipeline
 copy .env.local.example .env.local
 # Заполните GITHUB_TOKEN, GITHUB_REPO, CURSOR_API_KEY (как в §5).
 # DATA_DIR=./data и PROMPTS_DIR=./prompts уже в шаблоне.
+# PORT=3020 в .env.local — для оркестратора; deployer всегда слушает 3021.
 npm ci
 npm run build
-npm start
+npm start              # :3020
+npm run start:deployer # :3021 (второй терминал)
 ```
 
-Отладка в VSCode: конфигурация **Orchestrator** (`.vscode/launch.json`) — `tsx` + `pipeline/.env.local`, без предварительного `npm run build`.
+Отладка в VSCode: **Orchestrator**, **Deployer** или compound **Orchestrator + Deployer** (`.vscode/launch.json`) — `tsx` + `pipeline/.env.local`, без предварительного `npm run build`.
 
-`npm run dev` (`tsx watch`) **не** читает `.env.local`. Для отладки используйте F5 или `npm start`.
+UI локально: `cd pipeline-ui && npm run dev` — Vite на `:3010`, прокси `/api/jobs` → `:3020`, `/api/deploys` → `:3021`.
 
-`--use-env-proxy` в `npm start` включает системный/файловый `HTTP_PROXY` / `HTTPS_PROXY`. Deployer локально: `npm run start:deployer` (порт по умолчанию тоже `3020`, задайте `PORT=3021` в окружении).
+`npm run dev` / `npm run dev:deployer` (`tsx watch`) читают `.env.local` через `--env-file`.
+
+`--use-env-proxy` в `npm start` / `start:deployer` включает системный/файловый `HTTP_PROXY` / `HTTPS_PROXY`.
 
 Каталог `pipeline/data/` в git не коммитится. Карта файлов и алиасы: [AGENT_PIPELINE_ARCHITECTURE.md](./AGENT_PIPELINE_ARCHITECTURE.md) §3.1.

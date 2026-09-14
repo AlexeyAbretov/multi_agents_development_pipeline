@@ -1,5 +1,7 @@
 import { isRegressionIssue } from "./schedule-rules";
-import type { Job, Role, UiJobStatus } from "./types";
+import type { Job, UiJobStatus } from "./types";
+
+import type { Role } from "../../types";
 
 export type AnalystDecision = "ready-for-dev" | "needs-human";
 export type DeveloperDecision = "in-qa" | "needs-human";
@@ -266,27 +268,6 @@ export function decideReleaseManagerOutcome(
   }
 
   return "needs-human";
-}
-
-export function fixIssueWithPR(
-  pr: {
-    title: string;
-    body: string | null;
-    headRef: string;
-  },
-  issue: number,
-): boolean {
-  const text = `${pr.title}\n${pr.body ?? ""}`;
-  const keywords = new RegExp(
-    `(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\\s+#${issue}\\b`,
-    "i",
-  );
-
-  if (keywords.test(text)) {
-    return true;
-  }
-
-  return new RegExp(`^issue/${issue}(?:-|$)`).test(pr.headRef);
 }
 
 /** Completed developer starts allowed before needs-human (4th attempt

@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { inFlightKey, selectJobsToLaunch } from "../dist/dispatch.js";
+import {
+  inFlightKey,
+  selectJobsToLaunch,
+} from "../dist/services/OrchestratorService/dispatch.js";
 
 test("selectJobsToLaunch starts every eligible role in the same tick", () => {
   const launched = selectJobsToLaunch(

@@ -31,12 +31,6 @@ export type DeploysResponse = {
     detail: string;
     at: string;
   }>;
-  requests: Array<{
-    tag: string;
-    milestoneTitle: string;
-    status: string;
-    requestedAt: string;
-  }>;
 };
 
 export async function fetchJobs(): Promise<JobsResponse> {

@@ -42,7 +42,7 @@ GitHub labels          Job.status / Job.decision          UI (таблица :30
 
 ### 1.2. Автомат feature / bug (issue-QA)
 
-Триггер роли: `roleForLabels` в `pipeline/src/rules.ts`. Смена labels: `apply*Labels` в `pipeline/src/poller.ts`.
+Триггер роли: `roleForLabels` в `pipeline/src/rules.ts`. Смена labels: `apply*Labels` в `pipeline/src/services/OrchestratorService/poller.ts`.
 
 ```mermaid
 stateDiagram-v2
@@ -131,12 +131,14 @@ queued → running → finished | error | startup_error
 
 Два процесса из одного пакета `pipeline/`:
 
-- `node dist/index.js` — оркестратор (`src/index.ts`), порты `:3020`
-- `node dist/deployer.js` — deployer (`src/deployer.ts`), порт `:3021`
+- `node dist/services/OrchestratorService/index.js` — оркестратор (`src/services/OrchestratorService/`), порт `:3020`
+- `node dist/services/DeployerService/index.js` — deployer (`src/services/DeployerService/`), порт `:3021`
 
 Оба — Fastify + `setInterval`. Нет очереди, нет БД, нет Octokit. Состояние — JSON на volume `pipeline_data`.
 
 Паттерн: **чистые правила** (`rules.ts`, `schedule-rules.ts`, `dispatch.ts`, `deploy-rules.ts`) + **поллеры** (`poller.ts`, `schedule.ts`, `deploy-poller.ts`), которые ходят в GitHub / Cursor / docker.
+
+Общее (`config/`, `providers/`, `types`, `log`, `rules`, сторы деплоя) остаётся в `src/`. Код конкретного процесса — в его `services/*Service/`.
 
 ### 2.1. Пакеты `pipeline/`
 
@@ -149,7 +151,7 @@ queued → running → finished | error | startup_error
 | **tsx / typescript** | Dev-watch и сборка в `dist/`. Тесты: `node --test` по скомпилированному JS. |
 | **prettier** | Автоперенос строк (`printWidth: 80`) в `eslint --fix` / `npm run lint:fix`. Жёсткий потолок — `@stylistic/max-len`. |
 | **eslint-plugin-simple-import-sort** | Сортировка и группы импортов: `node:` → npm → `@providers`/`@routes` → `./` → `../`. |
-| **tsc-alias** | После `tsc` переписывает алиасы (`@routes`, `@providers`) и дописывает `.js` к относительным импортам в `dist/` (`resolveFullPaths`). Без этого `node dist/index.js` в Docker не резолвит алиасы и ESM-пути без расширения. Сборка: `npm run clean && tsc && tsc-alias`. Источники — `module`/`moduleResolution`: `ES2022`/`bundler`, импорты без `.js`. |
+| **tsc-alias** | После `tsc` переписывает алиасы (`@routes`, `@providers`) и дописывает `.js` к относительным импортам в `dist/` (`resolveFullPaths`). Без этого `node dist/services/OrchestratorService/index.js` в Docker не резолвит алиасы и ESM-пути без расширения. Сборка: `npm run clean && tsc && tsc-alias`. Источники — `module`/`moduleResolution`: `ES2022`/`bundler`, импорты без `.js`. |
 
 Чего нет намеренно:
 
@@ -159,7 +161,7 @@ queued → running → finished | error | startup_error
 
 ### 2.2. Пакеты `pipeline-ui/`
 
-React + Vite + Tailwind. UI только читает `GET /api/jobs` и `/api/deploys` раз в 5 с. Бизнес-логики нет. Nginx проксирует `/api` → orchestrator.
+React + Vite + Tailwind. UI только читает `GET /api/jobs` и `/api/deploys` раз в 5 с. Бизнес-логики нет. Nginx: `/api/jobs` → orchestrator, `/api/deploys` → deployer.
 
 ### 2.3. Протокол с агентом
 
@@ -179,21 +181,21 @@ React + Vite + Tailwind. UI только читает `GET /api/jobs` и `/api/d
 ## 3. Файлы и связи
 
 ```
-index.ts                    deployer.ts
-  │ config, JobStore          │ config, DeployStore
-  │ Fastify /health           │ Fastify /health
-  ├─ routes/ (@routes)        │
-  │    jobs + deploys         │
-  ├─ poller.ts                ├── GitHubClient
-  │    ├─ rules.ts            │
-  │    ├─ dispatch.ts         │
-  │    ├─ schedule-rules.ts   │
-  │    ├─ providers (@providers)
-  │    └─ schedule.ts (closeEmptyRelease)
-  └─ schedule.ts              └─ deploy-poller.ts
-       ├─ schedule-rules.ts        ├─ deploy-rules.ts
-       ├─ deploy-request-store     ├─ deploy-run.ts  (docker compose)
-       └─ schedule-state           └─ deploy-store.ts
+services/OrchestratorService/     services/DeployerService/
+  index.ts → OrchestratorService    index.ts → DeployerService
+  │ config, JobStore                │ config, DeployStore
+  │ Fastify /health                 │ Fastify /health
+  │ routes (@routes)                │
+  ├─ poller.ts                      ├── GitHubClient
+  │    ├─ rules.ts (общие)          │
+  │    ├─ dispatch.ts               │
+  │    ├─ schedule-rules.ts         │
+  │    ├─ providers (@providers)    │
+  │    └─ schedule.ts               │
+  └─ schedule.ts                    └─ deploy-poller.ts
+       ├─ schedule-rules.ts              ├─ deploy-rules.ts
+       └─ schedule-state                 ├─ deploy-run.ts
+                                         └─ deploy-store.ts (общие, UI)
 ```
 
 | Файл | Назначение |
@@ -202,26 +204,25 @@ index.ts                    deployer.ts
 | `pipeline/src/types.ts` | `Role`, `Job`, `JobStatus`, `UiJobStatus`. |
 | `pipeline/src/rules.ts` | Статусная модель issue: роль по labels, исход прогона, fix-round, дерево QA, маркеры ответа, проекция джоба в UI-статус. |
 | `pipeline/src/schedule-rules.ts` | Календарь milestone, tag `vN.N.N`, gate RM, пустой релиз, маркеры в комментариях. |
-| `pipeline/src/dispatch.ts` | Eligible пары `(issue, role)` в тике; роли не гейтят друг друга; skip только in-flight. |
-| `pipeline/src/poller.ts` | Тик `POLL_INTERVAL_MS`: список issues → роль → гейты → Cursor → смена labels. |
+| `pipeline/src/log.ts` | Структурные поля `issue` / `role` / `agentId` / `runId`. |
 | `pipeline/src/providers/index.ts` | Баррель внешних клиентов; алиас `@providers`. |
 | `pipeline/src/providers/GithubProvider/` | REST GitHub: issues, labels, PR `Fixes #`, releases, milestones. Класс `GitHubClient`. |
 | `pipeline/src/providers/CursorProvider/` | Промпт + issue/PR, `Agent.create` cloud, `run.wait()`. Класс `CursorClient`. `tester-regression.md` если label `regression`. |
-| `pipeline/src/jobs.ts` | `jobs.json`, идемпотентность, сброс ролей, drop после рестарта. |
-| `pipeline/src/routes/routes.ts` | HTTP `GET /api/jobs`, `/api/deploys` для UI. |
-| `pipeline/src/routes/index.ts` | Реэкспорт; алиас `@routes` в `tsconfig.json` (`paths`). |
-| `pipeline/src/log.ts` | Структурные поля `issue` / `role` / `agentId` / `runId`. |
-| `pipeline/src/schedule.ts` | Тик `SCHEDULE_INTERVAL_MS`: T−1/T, regression-issue, `blocked: no release`, очередь деплоя. |
-| `pipeline/src/schedule-state.ts` | Не спамить одинаковыми комментариями каждый час. |
-| `pipeline/src/deployer.ts` | Точка входа deployer. |
-| `pipeline/src/deploy-poller.ts` | Published Release → compose/stub → labels `deployed`/`deploy-failed`. |
-| `pipeline/src/deploy-run.ts` | `DEPLOY_MODE=stub` или `docker compose up -d` в `/product`. |
-| `pipeline/src/deploy-rules.ts` | Что считать деплоябельным Release, маркер в теле. |
-| `pipeline/src/deploy-store.ts` | `deploys.json`. |
-| `pipeline/src/deploy-request-store.ts` | `deploy-requests.json` (очередь от schedule). |
+| `pipeline/src/deploy-store.ts` | `deploys.json` (deployer пишет; UI читает). |
+| `pipeline/src/services/OrchestratorService/` | Точка входа оркестратора (`index.ts`). |
+| `…/OrchestratorService/dispatch.ts` | Eligible пары `(issue, role)` в тике; роли не гейтят друг друга; skip только in-flight. |
+| `…/OrchestratorService/poller.ts` | Тик `POLL_INTERVAL_MS`: список issues → роль → гейты → Cursor → смена labels. |
+| `…/OrchestratorService/jobs.ts` | `jobs.json`, идемпотентность, сброс ролей, drop после рестарта. |
+| `pipeline/src/routes/` | HTTP `GET /api/jobs`, `/api/deploys` для UI; алиас `@routes`. |
+| `…/OrchestratorService/schedule.ts` | Тик `SCHEDULE_INTERVAL_MS`: T−1/T, regression-issue, `blocked: no release`. |
+| `…/OrchestratorService/schedule-state.ts` | Не спамить одинаковыми комментариями каждый час. |
+| `pipeline/src/services/DeployerService/` | Точка входа deployer (`index.ts`). |
+| `…/DeployerService/deploy-poller.ts` | Published Release → compose/stub → labels `deployed`/`deploy-failed`. |
+| `…/DeployerService/deploy-rules.ts` | Что считать деплоябельным Release, маркер в теле. |
+| `…/DeployerService/deploy-run.ts` | `DEPLOY_MODE=stub` или `docker compose up -d` в `/product`. |
 | `pipeline/prompts/*.md` | Контракт с агентом: что писать в маркерах. |
 | `pipeline/test/rules.test.js`, `dispatch.test.js` | Правила без GitHub/Cursor. |
-| `.vscode/launch.json` | Отладка оркестратора: `tsx` + `pipeline/.env.local`. |
+| `.vscode/launch.json` | Отладка: **Orchestrator** (`:3020`), **Deployer** (`:3021`), compound оба. |
 
 Поток одного feature-тика:
 
@@ -235,17 +236,19 @@ index.ts                    deployer.ts
 
 ### 3.1. Сборка и локальный запуск
 
-Прод: `docker compose up` из корня (см. [SETUP](./AGENT_PIPELINE_SETUP.md)). Контейнер оркестратора: `node dist/index.js`, env из `pipeline/.env`, `DATA_DIR=/data`, `PROMPTS_DIR=/app/prompts`.
+Прод: `docker compose up` из корня (см. [SETUP](./AGENT_PIPELINE_SETUP.md)). Контейнер оркестратора: `node dist/services/OrchestratorService/index.js`, env из `pipeline/.env`, `DATA_DIR=/data`, `PROMPTS_DIR=/app/prompts`.
 
 Локально (без Docker), из `pipeline/`:
 
 | Способ | Что делает |
 |--------|------------|
-| VSCode **Run and Debug → Orchestrator** | `tsx` + `.env.local` (собирать `dist/` не нужно) |
-| `npm start` | `node --use-env-proxy --env-file=.env.local dist/index.js` (нужен `npm run build`) |
-| `npm run dev` | `tsx watch` **без** `.env.local` — переменные только из окружения процесса |
+| VSCode **Orchestrator** | `tsx` + `.env.local`, `PORT=3020` |
+| VSCode **Deployer** / compound | `tsx` + `.env.local`, `PORT=3021` |
+| `npm start` | оркестратор `:3020` (нужен `npm run build`) |
+| `npm run start:deployer` | deployer `:3021` (форсит порт поверх `.env.local`) |
+| `npm run dev` / `dev:deployer` | `tsx watch` + `--env-file=.env.local` |
 
-`--use-env-proxy` читает `HTTP_PROXY` / `HTTPS_PROXY` (корпоративный прокси). Не поднимайте локальный оркестратор на `:3020`, пока тот же порт занят контейнером.
+`--use-env-proxy` читает `HTTP_PROXY` / `HTTPS_PROXY` (корпоративный прокси). Не поднимайте локально `:3020` / `:3021`, пока те же порты заняты контейнерами.
 
 `.env.local`: `DATA_DIR=./data`, `PROMPTS_DIR=./prompts` (docker-пути `/data` и `/app/prompts` на хосте не существуют). Файл в git не коммитить; шаблон — `pipeline/.env.local.example`.
 
@@ -305,7 +308,7 @@ index.ts                    deployer.ts
 
 ### 4.6. Новый HTTP-маршрут UI
 
-Регистрация только в `registerApiRoutes` (`pipeline/src/routes/routes.ts`). Оркестратор подключает её через алиас `@routes` в `index.ts`. Не возвращать секреты и полный транскрипт Cursor — в UI достаточно ссылки на `agentId`.
+Регистрация только в `registerApiRoutes` (`pipeline/src/routes/routes.ts`). Оркестратор подключает её через алиас `@routes` в `OrchestratorService.ts`. Не возвращать секреты и полный транскрипт Cursor — в UI достаточно ссылки на `agentId`.
 
 ### 4.7. Новый внешний пакет
 

@@ -1,25 +1,21 @@
-export type GitHubRelease = {
+/** Поля релиза, нужные правилам деплоя (структурно совместим с GitHub). */
+export type DeployReleaseCandidate = {
   id: number;
-  tag_name: string;
-  name: string | null;
-  body: string | null;
-  html_url: string;
   draft: boolean;
-  prerelease: boolean;
   published_at: string | null;
 };
 
 /** Published (not draft) releases are eligible — including pre-release. */
 export function isDeployableRelease(
-  release: Pick<GitHubRelease, "draft">,
+  release: Pick<DeployReleaseCandidate, "draft">,
 ): boolean {
   return !release.draft;
 }
 
-export function releasesToDeploy(
-  releases: GitHubRelease[],
+export function releasesToDeploy<T extends DeployReleaseCandidate>(
+  releases: T[],
   alreadyDeployedIds: Set<number>,
-): GitHubRelease[] {
+): T[] {
   return releases
     .filter((release) => isDeployableRelease(release))
     .filter((release) => !alreadyDeployedIds.has(release.id))

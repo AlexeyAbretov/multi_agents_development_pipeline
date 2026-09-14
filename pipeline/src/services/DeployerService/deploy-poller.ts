@@ -3,7 +3,6 @@ import type { FastifyBaseLogger } from "fastify";
 import type { Config } from "@config";
 import { GitHubClient } from "@providers";
 
-import { DeployRequestStore } from "./deploy-request-store";
 import {
   appendDeployNote,
   releaseBodyHasDeployMarker,
@@ -11,7 +10,8 @@ import {
 } from "./deploy-rules";
 import { runProductDeploy } from "./deploy-run";
 import { DeployStore } from "./deploy-store";
-import { jobLog } from "./log";
+
+import { jobLog } from "../../log";
 
 export function startDeployPoller(
   config: Config,
@@ -19,7 +19,6 @@ export function startDeployPoller(
   store: DeployStore,
 ): { stop: () => void } {
   const github = new GitHubClient(config);
-  const requests = new DeployRequestStore(config.DATA_DIR);
   let busy = false;
 
   const tick = (): void => {
@@ -30,7 +29,7 @@ export function startDeployPoller(
     }
 
     busy = true;
-    void pollOnce(config, logger, store, requests, github).finally(() => {
+    void pollOnce(config, logger, store, github).finally(() => {
       busy = false;
     });
   };
@@ -49,7 +48,6 @@ async function pollOnce(
   config: Config,
   logger: FastifyBaseLogger,
   store: DeployStore,
-  requests: DeployRequestStore,
   github: GitHubClient,
 ): Promise<void> {
   jobLog(logger, {}, "deploy poll tick");
@@ -59,8 +57,6 @@ async function pollOnce(
 
     return;
   }
-
-  await processScheduleRequests(config, logger, store, requests, github);
 
   let releases;
 
@@ -86,97 +82,6 @@ async function pollOnce(
 
   for (const release of pending) {
     await handleRelease(config, logger, store, github, release);
-  }
-}
-
-async function processScheduleRequests(
-  config: Config,
-  logger: FastifyBaseLogger,
-  store: DeployStore,
-  requests: DeployRequestStore,
-  github: GitHubClient,
-): Promise<void> {
-  for (const request of requests.pending()) {
-    const fields = {
-      issue: request.milestoneId,
-      role: "deployer",
-      agentId: null,
-      runId: null,
-    };
-
-    if (store.hasTag(request.tag)) {
-      requests.mark(request.tag, request.requestedAt, "skipped");
-      jobLog(
-        logger,
-        fields,
-        `schedule request skip: ${request.tag} already deployed`,
-      );
-      continue;
-    }
-
-    const existing = await github.findReleaseByTag(request.tag);
-
-    if (existing && !existing.draft) {
-      // Prefer full release handle if published release exists.
-      const published = (await github.listPublishedReleases()).find(
-        (item) => item.id === existing.id,
-      );
-
-      if (published) {
-        await handleRelease(config, logger, store, github, published);
-        requests.mark(request.tag, request.requestedAt, "done");
-        continue;
-      }
-    }
-
-    jobLog(logger, fields, `schedule deploy start: ${request.tag}`);
-    const result = await runProductDeploy(config, request.tag);
-    const status = result.ok ? "deployed" : "deploy-failed";
-
-    store.record({
-      releaseId: existing?.id ?? 0,
-      tag: request.tag,
-      status,
-      mode: config.DEPLOY_MODE,
-      detail:
-        `${result.detail}\n` +
-        `(source: schedule milestone ${request.milestoneTitle})`,
-      at: new Date().toISOString(),
-    });
-
-    if (existing) {
-      try {
-        const full = (await github.listPublishedReleases()).find(
-          (item) => item.id === existing.id,
-        );
-        const body = full?.body ?? null;
-
-        await github.updateReleaseBody(
-          existing.id,
-          appendDeployNote(body, existing.id, status, result.detail),
-        );
-      } catch (err) {
-        logger.error(
-          { err, tag: request.tag },
-          "schedule release body update failed",
-        );
-      }
-    }
-
-    try {
-      await applyDeployLabels(github, status, request.tag);
-    } catch (err) {
-      logger.error({ err, tag: request.tag }, "schedule deploy labels failed");
-    }
-
-    requests.mark(request.tag, request.requestedAt, "done");
-    jobLog(
-      logger,
-      fields,
-      result.ok
-        ? `schedule deploy ok: ${request.tag}`
-        : `schedule deploy failed: ${request.tag}`,
-    );
   }
 }
 

@@ -53,6 +53,7 @@ services:
       - "127.0.0.1:3010:80"
     depends_on:
       - orchestrator
+      - deployer
     restart: unless-stopped
 
 volumes:

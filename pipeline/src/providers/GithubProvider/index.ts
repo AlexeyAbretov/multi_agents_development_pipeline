@@ -1,2 +1,13 @@
-export { agentResultComment, GitHubClient, jobComment } from "./GithubProvider";
-export type { GitHubIssue, GitHubPull } from "./GithubProvider.types";
+export {
+  agentResultComment,
+  fixIssueWithPR,
+  GitHubClient,
+  isEmptySincePreviousRelease,
+  jobComment,
+  previousReleaseTag,
+} from "./GithubProvider";
+export type {
+  GitHubIssue,
+  GitHubPull,
+  GitHubRelease,
+} from "./GithubProvider.types";

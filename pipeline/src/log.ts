@@ -1,6 +1,6 @@
 import type { FastifyBaseLogger } from "fastify";
 
-export type JobLogFields = {
+type JobLogFields = {
   issue: number | null;
   role: string | null;
   agentId: string | null;

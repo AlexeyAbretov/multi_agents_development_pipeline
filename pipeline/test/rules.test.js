@@ -5,7 +5,7 @@ import {
   isDeployableRelease,
   releaseBodyHasDeployMarker,
   releasesToDeploy,
-} from "../dist/deploy-rules.js";
+} from "../dist/services/DeployerService/deploy-rules.js";
 import {
   childBugStillOpen,
   childBlocksParentReQa,
@@ -27,21 +27,23 @@ import {
   mapJobToUiStatus,
   upsertChildBugIssuesInBody,
   upsertFixRoundInBody,
-} from "../dist/rules.js";
+} from "../dist/services/OrchestratorService/rules.js";
+import {
+  isEmptySincePreviousRelease,
+  previousReleaseTag,
+} from "../dist/providers/GithubProvider/GithubProvider.js";
 import {
   blockedNoReleaseComment,
   bodyHasBlockedNoReleaseMarker,
   calendarDateInTimeZone,
   daysUntilDue,
   decideReleaseGate,
-  isEmptySincePreviousRelease,
   isMilestoneDueOn,
   isRegressionIssue,
   nothingToReleaseComment,
-  previousReleaseTag,
   tagFromMilestoneTitle,
   upsertNothingToReleaseDescription,
-} from "../dist/schedule-rules.js";
+} from "../dist/services/OrchestratorService/schedule-rules.js";
 
 test("extractTesterBugIssues parses issue numbers and removes duplicates", () => {
   assert.deepEqual(

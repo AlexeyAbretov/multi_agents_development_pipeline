@@ -2,7 +2,9 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import type { Job, Role } from "./types";
+import type { Job } from "./types";
+
+import type { Role } from "../../types";
 
 type StoreFile = {
   lastPollAt: string | null;

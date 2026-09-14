@@ -34,6 +34,6 @@ docker compose logs -f orchestrator
 docker compose down
 ```
 
-Локально без Docker (оркестратор): `copy pipeline\.env.local.example pipeline\.env.local` → заполнить секреты → `cd pipeline && npm ci && npm start`. Отладка: VSCode **Orchestrator**. Подробнее: [docs/AGENT_PIPELINE_SETUP.md](docs/AGENT_PIPELINE_SETUP.md) §10.
+Локально без Docker: `copy pipeline\.env.local.example pipeline\.env.local` → заполнить секреты → `cd pipeline && npm ci && npm start` (`:3020`) и `npm run start:deployer` (`:3021`). Отладка: VSCode **Orchestrator**, **Deployer** или **Orchestrator + Deployer**. Подробнее: [docs/AGENT_PIPELINE_SETUP.md](docs/AGENT_PIPELINE_SETUP.md) §10.
 
 Целевой продукт настраивается в `pipeline/.env` или `pipeline/.env.local` (`GITHUB_REPO`, `CURSOR_REPO_URL`). Для деплоя — `PRODUCT_WORKSPACE_HOST` в корневом `.env`.

@@ -12,7 +12,6 @@ import {
 
 import { inFlightKey, selectJobsToLaunch } from "./dispatch";
 import { JobStore } from "./jobs";
-import { jobLog } from "./log";
 import {
   childBlocksParentReQa,
   classifyTesterBugHandoff,
@@ -43,7 +42,9 @@ import {
   isReleaseWorkIssue,
   tagFromMilestoneTitle,
 } from "./schedule-rules";
-import type { Role } from "./types";
+
+import { jobLog } from "../../log";
+import type { Role } from "../../types";
 
 export function startPoller(
   config: Config,

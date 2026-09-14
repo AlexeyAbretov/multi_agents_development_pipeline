@@ -3,9 +3,9 @@ import type { FastifyBaseLogger } from "fastify";
 import type { Config } from "@config";
 import { GitHubClient, type GitHubIssue } from "@providers";
 
-import { DeployRequestStore } from "./deploy-request-store";
-import { DeployStore } from "./deploy-store";
-import { jobLog } from "./log";
+import { ScheduleStateStore } from "./schedule-state";
+
+import { jobLog } from "../../log";
 import {
   blockedNoReleaseComment,
   bodyHasBlockedNoReleaseMarker,
@@ -21,7 +21,6 @@ import {
   tagFromMilestoneTitle,
   upsertNothingToReleaseDescription,
 } from "./schedule-rules";
-import { ScheduleStateStore } from "./schedule-state";
 
 type Milestone = {
   id: number;
@@ -35,8 +34,6 @@ export function startSchedulePoller(
   logger: FastifyBaseLogger,
 ): { stop: () => void } {
   const github = new GitHubClient(config);
-  const deployStore = new DeployStore(config.DATA_DIR);
-  const requests = new DeployRequestStore(config.DATA_DIR);
   const state = new ScheduleStateStore(config.DATA_DIR);
   let busy = false;
 
@@ -48,14 +45,7 @@ export function startSchedulePoller(
     }
 
     busy = true;
-    void scheduleOnce(
-      config,
-      logger,
-      github,
-      deployStore,
-      requests,
-      state,
-    ).finally(() => {
+    void scheduleOnce(config, logger, github, state).finally(() => {
       busy = false;
     });
   };
@@ -74,8 +64,6 @@ async function scheduleOnce(
   config: Config,
   logger: FastifyBaseLogger,
   github: GitHubClient,
-  deployStore: DeployStore,
-  requests: DeployRequestStore,
   state: ScheduleStateStore,
 ): Promise<void> {
   jobLog(logger, {}, "schedule tick");
@@ -142,15 +130,7 @@ async function scheduleOnce(
       continue;
     }
 
-    await handleDueToday(
-      config,
-      logger,
-      github,
-      deployStore,
-      requests,
-      state,
-      milestone,
-    );
+    await handleDueToday(config, logger, github, state, milestone);
   }
 }
 
@@ -340,8 +320,6 @@ async function handleDueToday(
   config: Config,
   logger: FastifyBaseLogger,
   github: GitHubClient,
-  deployStore: DeployStore,
-  requests: DeployRequestStore,
   state: ScheduleStateStore,
   milestone: Milestone,
 ): Promise<void> {
@@ -368,27 +346,11 @@ async function handleDueToday(
   }
 
   if (hasTag) {
-    if (deployStore.hasTag(tag)) {
-      jobLog(logger, fields, `schedule skip: ${tag} already in deploys.json`);
-
-      return;
-    }
-
-    const enqueued = requests.enqueue({
-      tag,
-      milestoneId: milestone.id,
-      milestoneTitle: milestone.title,
-    });
-
-    if (enqueued) {
-      jobLog(logger, fields, `schedule: queued deploy request for ${tag}`);
-    } else {
-      jobLog(
-        logger,
-        fields,
-        `schedule: deploy request for ${tag} already pending/done`,
-      );
-    }
+    jobLog(
+      logger,
+      fields,
+      `schedule: ${tag} exists; deployer watches published Release`,
+    );
 
     return;
   }
