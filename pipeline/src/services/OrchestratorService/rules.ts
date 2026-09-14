@@ -1,7 +1,7 @@
 import { GitHubIssueState } from '@providers';
 import type { Role } from '@types';
 
-import type { Job, UiJobStatus } from './OrchestratorService.types';
+import type { Job, JobStatus, UiJobStatus } from './OrchestratorService.types';
 import { isRegressionIssue } from './schedule-rules';
 
 export type AnalystDecision = 'ready-for-dev' | 'needs-human';
@@ -431,24 +431,16 @@ export function groupAnalystIssuesByParent<
   return batches;
 }
 
-/** Child is still in the fix pipeline (blocks parent re-QA). */
+const CHILD_DONE_LABELS = ['qa-passed', 'deployed', 'needs-human'] as const;
+
 export function childBugStillOpen(
   labels: string[],
   state: GitHubIssueState,
 ): boolean {
-  if (state === 'closed') {
-    return false;
-  }
-
-  if (labels.includes('qa-passed') || labels.includes('deployed')) {
-    return false;
-  }
-
-  if (labels.includes('needs-human')) {
-    return false;
-  }
-
-  return true;
+  return (
+    state !== 'closed' &&
+    !CHILD_DONE_LABELS.some((label) => labels.includes(label))
+  );
 }
 
 /** Open Fixes PR блокирует re-QA родителя, даже если ребёнок уже qa-passed. */
@@ -457,11 +449,7 @@ export function childBlocksParentReQa(
   state: GitHubIssueState,
   hasOpenFixPr: boolean,
 ): boolean {
-  if (hasOpenFixPr) {
-    return true;
-  }
-
-  return childBugStillOpen(labels, state);
+  return hasOpenFixPr || childBugStillOpen(labels, state);
 }
 
 /** Дочерний qa-passed без открытого PR, фикс уже смержен — можно закрыть
@@ -472,39 +460,28 @@ export function shouldCloseMergedChildIssue(params: {
   hasOpenFixPr: boolean;
   hasMergedFixPr: boolean;
 }): boolean {
-  if (parseRelatedParentIssue(params.body) === null) {
-    return false;
-  }
-
-  if (!params.labels.includes('qa-passed')) {
-    return false;
-  }
-
-  if (params.hasOpenFixPr) {
-    return false;
-  }
-
-  return params.hasMergedFixPr;
+  return (
+    parseRelatedParentIssue(params.body) !== null &&
+    params.labels.includes('qa-passed') &&
+    !params.hasOpenFixPr &&
+    params.hasMergedFixPr
+  );
 }
+
+const JOB_STATUS_TO_UI: Record<JobStatus, UiJobStatus> = {
+  queued: 'queued',
+  running: 'running',
+  error: 'failed',
+  startup_error: 'failed',
+  finished: 'finished',
+};
 
 export function mapJobToUiStatus(
   job: Pick<Job, 'status' | 'decision'>,
 ): UiJobStatus {
-  if (job.status === 'queued') {
-    return 'queued';
-  }
-
-  if (job.status === 'running') {
-    return 'running';
-  }
-
-  if (job.status === 'error' || job.status === 'startup_error') {
+  if (job.status === 'finished' && job.decision === 'needs-human') {
     return 'failed';
   }
 
-  if (job.decision === 'needs-human') {
-    return 'failed';
-  }
-
-  return 'finished';
+  return JOB_STATUS_TO_UI[job.status];
 }

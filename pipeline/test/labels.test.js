@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  GITHUB_PIPELINE_LABELS,
-  missingPipelineLabels,
-} from "../dist/providers/GithubProvider/GithubProvider.js";
+  getMissingPipelineLabels,
+} from "../dist/providers/GithubProvider/GithubProvider.utils.js";
+import { GITHUB_PIPELINE_LABELS } from "../dist/providers/GithubProvider/GithubProvider.constants.js";
 
 const CONTRACT_LABELS = [
   "bug",
@@ -38,15 +38,15 @@ test("pipeline label names are unique", () => {
   assert.equal(names.length, new Set(names).size);
 });
 
-test("missingPipelineLabels returns all when repo has none", () => {
+test("getMissingPipelineLabels returns all when repo has none", () => {
   assert.equal(
-    missingPipelineLabels([]).length,
+    getMissingPipelineLabels([]).length,
     GITHUB_PIPELINE_LABELS.length,
   );
 });
 
-test("missingPipelineLabels skips existing names case-insensitively", () => {
-  const names = missingPipelineLabels(["BUG", "needs-plan"]).map(
+test("getMissingPipelineLabels skips existing names case-insensitively", () => {
+  const names = getMissingPipelineLabels(["BUG", "needs-plan"]).map(
     (label) => label.name,
   );
 

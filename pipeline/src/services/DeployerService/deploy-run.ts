@@ -5,7 +5,7 @@ import type { Config } from '@config';
 
 const execFileAsync = promisify(execFile);
 
-export type DeployRunResult = {
+type DeployRunResult = {
   ok: boolean;
   detail: string;
 };

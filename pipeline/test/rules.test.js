@@ -31,8 +31,8 @@ import {
 } from "../dist/services/OrchestratorService/rules.js";
 import {
   isEmptySincePreviousRelease,
-  previousReleaseTag,
-} from "../dist/providers/GithubProvider/GithubProvider.js";
+  getPreviousReleaseTag,
+} from "../dist/providers/GithubProvider/GithubProvider.utils.js";
 import {
   blockedNoReleaseComment,
   bodyHasBlockedNoReleaseMarker,
@@ -404,7 +404,7 @@ test("empty since previous release", () => {
   assert.equal(isEmptySincePreviousRelease({ previousTag: "v1.0.0", aheadBy: 0 }), true);
   assert.equal(isEmptySincePreviousRelease({ previousTag: "v1.0.0", aheadBy: 3 }), false);
   assert.equal(
-    previousReleaseTag(
+    getPreviousReleaseTag(
       [
         { tag_name: "v1.1.0", published_at: "2026-09-08T00:00:00Z" },
         { tag_name: "v1.0.0", published_at: "2026-08-01T00:00:00Z" },
