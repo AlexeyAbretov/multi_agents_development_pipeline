@@ -30,9 +30,9 @@ GitHub labels          Job.status / Job.decision          UI (таблица :30
 
 | Ось | Labels | Влияет на автомат |
 |-----|--------|-------------------|
-| Тип | `bug`, `feature`, `regression` | Да: без типа или regression роль не выбирается |
+| Тип | `bug`, `feature`, `mvp`, `regression` | Да: без типа или regression роль не выбирается |
 | Приоритет | `p0` … `p3` | Нет |
-| Состояние | `needs-plan`, `in-analysis`, `ready-for-dev`, `in-dev`, `in-qa`, `qa-in-progress`, `qa-passed`, `deployed`, `deploy-failed`, `needs-human` | Да |
+| Состояние | `needs-plan`, `in-analysis`, `ready-for-dev`, `in-dev`, `in-qa`, `qa-in-progress`, `qa-passed`, `deployed`, `deploy-failed`, `needs-human`, `to-approve`, `approved` | Да |
 
 `needs-human` — стоп-кран: `roleForLabels` возвращает `null`, никакая роль не стартует.
 
@@ -66,6 +66,24 @@ stateDiagram-v2
 ```
 
 После `qa-passed` на `bug`/`feature` автоматика **останавливается**. Merge в `main` делает человек. Релиз-менеджер от этой issue **не** вызывается.
+
+### 1.2b. Автомат mvp (план проекта)
+
+```mermaid
+stateDiagram-v2
+  [*] --> needs_plan: человек: mvp + needs-plan
+  needs_plan --> in_analysis: старт analyst
+  in_analysis --> needs_human: PIPELINE_LABELS: needs-human
+  in_analysis --> to_approve: PIPELINE_LABELS: to-approve
+  needs_human --> needs_plan: человек ответил, снова needs-plan
+  to_approve --> needs_plan: человек хочет правки плана
+  to_approve --> approved: человек: -to-approve +approved
+  approved --> in_analysis: старт analyst (создание задач)
+  in_analysis --> needs_human: нет задач / ошибка
+  in_analysis --> closed: PIPELINE_MVP_TASKS + done
+```
+
+`to-approve` — ожидание человека, роль не стартует. Повторный analyst на `needs-plan` / `approved` сбрасывает джоб `(issue, analyst)`. Созданные задачи — корневые `feature`/`bug` + `needs-plan`, не дети QA (`Related to #` запрещён). MVP после `done` закрывается.
 
 ### 1.3. Цикл QA (дочерние bugs)
 
@@ -108,7 +126,7 @@ flowchart TD
 
 ```
 queued → running → finished | error | startup_error
-                    └── decision: ready-for-dev | in-qa | qa-passed | released | needs-human
+                    └── decision: ready-for-dev | to-approve | done | in-qa | qa-passed | released | needs-human
 ```
 
 Пара `(issue, role)` создаётся один раз (`JobStore.create`). Чтобы роль стартовала снова (re-QA, новый круг плана), запись **удаляется** (`remove` / `removeRoles`). После recreate контейнера `dropUnfinishedJobs` вычищает `running`/`queued` — облачный агент к тому моменту уже мёртв.
@@ -171,6 +189,7 @@ React + Vite + Tailwind. UI только читает `GET /api/jobs` и `/api/d
 |--------|-----------|------------|
 | `PIPELINE_LABELS:` | все роли | `decide*Outcome` в `OrchestratorService/rules.ts` |
 | `PIPELINE_BUG_ISSUES:` | tester, tester-regression | `extractTesterBugIssues` |
+| `PIPELINE_MVP_TASKS:` | analyst на `mvp` + `approved` | `extractMvpTaskIssues` |
 | `PIPELINE_RELEASE_TAG:` | RM | `extractReleaseTag` |
 | `PIPELINE_CHANGELOG_BEGIN` … `END` | RM | `extractReleaseChangelog` |
 
@@ -229,7 +248,7 @@ services/OrchestratorService/     services/DeployerService/
 
 Поток одного feature-тика:
 
-1. `poller` тянет open issues с `needs-plan` \| `ready-for-dev` \| `in-qa` \| `qa-passed`.
+1. `poller` тянет open issues с `needs-plan` \| `ready-for-dev` \| `in-qa` \| `qa-passed` \| `approved`.
 2. `roleForLabels` → роль или skip.
 3. `selectJobsToLaunch` отфильтровывает in-flight.
 4. `handleIssue`: гейты (PR, fix-round, дети, RM gate) → `JobStore.create` → промежуточный label → `CursorClient.runCloudAgent` → `decide*Outcome` → `apply*Labels`.
@@ -277,7 +296,7 @@ services/OrchestratorService/     services/DeployerService/
 8. Тесты: `rules.test.js` на `roleForLabels` и `decide*`; `labels.test.js` — имя в `GITHUB_PIPELINE_LABELS`.
 9. UI — только если нужен отдельный столбец; labels UI не показывает.
 
-Не смешивать type-labels (`bug`) и state-labels. `roleForLabels` сначала требует тип **или** regression.
+Не смешивать type-labels (`bug`, `mvp`) и state-labels. `roleForLabels` сначала требует тип **или** regression.
 
 Чеклист одного изменения статуса: контракт → `GITHUB_PIPELINE_LABELS` + `ensure-labels` → `roleForLabels` + listing → apply/decide + промпт → сброс в QA-цикле → `npm test` в `pipeline/`.
 

@@ -5,7 +5,7 @@
 Архитектура кода: [AGENT_PIPELINE_ARCHITECTURE.md](./AGENT_PIPELINE_ARCHITECTURE.md).  
 Этапы разработки: [AGENT_PIPELINE_PLAN.md](./AGENT_PIPELINE_PLAN.md).
 
-Сейчас из коробки поднимаются **P0–P16 + UI**: оркестратор, deployer, очередь на `http://127.0.0.1:3010/`. Локальная отладка оркестратора (VSCode / `npm start`) — §10.
+Сейчас из коробки поднимаются **P0–P17 + UI**: оркестратор, deployer, очередь на `http://127.0.0.1:3010/`. Локальная отладка оркестратора (VSCode / `npm start`) — §10.
 
 Checkout **целевого продукта** (каталог, API и т.д.) для оркестратора **не нужен** — Cursor Cloud клонирует его по `CURSOR_REPO_URL`. Для `DEPLOY_MODE=compose` нужен отдельный clone продукта на хосте (`PRODUCT_WORKSPACE_HOST`).
 
@@ -14,7 +14,7 @@ Checkout **целевого продукта** (каталог, API и т.д.) �
 ## Что должно получиться
 
 1. Контейнер слушает `http://127.0.0.1:3020/health` → `{"status":"ok"}`.
-2. На GitHub **целевого продукта** создаёте issue с labels `feature` (или `bug`) **и** `needs-plan`.
+2. На GitHub **целевого продукта** создаёте issue с labels `feature` (или `bug`) **и** `needs-plan`. Стартовая задача проекта: `mvp` **и** `needs-plan`.
 3. В течение ~30 с оркестратор стартует Cursor Cloud: снимает `needs-plan`, ставит `in-analysis`, пишет комментарий с `agentId` / `runId`.
 4. После ответа аналитика: комментарий со статусом, **отдельный комментарий с текстом плана**, снимается `in-analysis`, ставится `ready-for-dev` или `needs-human`.
 5. На `ready-for-dev` стартует разработчик: снимается `ready-for-dev`, ставится `in-dev`, не дожидаясь окончания других облачных агентов. Несколько очередей разработчика идут параллельно. После открытого PR `Fixes #N` — `in-qa` (не merge в `main`).
@@ -72,8 +72,11 @@ npm run ensure-labels -- owner/your-product-repo
 |-----|--------|
 | `bug` | тип |
 | `feature` | тип |
+| `mvp` | тип: стартовая задача проекта |
 | `needs-plan` | очередь аналитика |
 | `in-analysis` | аналитик работает |
+| `to-approve` | план MVP ждёт человека |
+| `approved` | план MVP подтверждён, создание задач |
 | `ready-for-dev` | план принят, очередь разработчика |
 | `in-dev` | разработчик работает |
 | `in-qa` | PR ждёт QA или исправления дефектов |
@@ -191,7 +194,7 @@ Volume `multi_agents_development_pipeline_pipeline_data` (или `<project>_pipe
 ## 7. Первая задача
 
 1. New issue в **репозитории продукта**.
-2. Labels: **`feature` или `bug`** + **`needs-plan`**.
+2. Labels: **`feature` или `bug`** + **`needs-plan`**. Для плана проекта: **`mvp`** + **`needs-plan`**.
 3. Ждите ≤ `POLL_INTERVAL_MS` (по умолчанию 30 с).
 
 Подробнее про цикл QA, календарный релиз и deploy — [AGENT_PIPELINE.md](./AGENT_PIPELINE.md) §3–§4.

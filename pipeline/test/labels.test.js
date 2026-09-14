@@ -7,6 +7,7 @@ import {
 import { GITHUB_PIPELINE_LABELS } from "../dist/providers/GithubProvider/GithubProvider.constants.js";
 
 const CONTRACT_LABELS = [
+  "approved",
   "bug",
   "deploy-failed",
   "deployed",
@@ -14,6 +15,7 @@ const CONTRACT_LABELS = [
   "in-analysis",
   "in-dev",
   "in-qa",
+  "mvp",
   "needs-human",
   "needs-plan",
   "p0",
@@ -24,6 +26,7 @@ const CONTRACT_LABELS = [
   "qa-passed",
   "ready-for-dev",
   "regression",
+  "to-approve",
 ];
 
 test("pipeline labels catalog matches contract", () => {

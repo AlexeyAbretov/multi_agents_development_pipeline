@@ -41,6 +41,7 @@ Merge в `main` — только после явного подтвержден�
 | P14 | `pipeline/14-calendar-releases` |
 | P15 | `pipeline/15-empty-release-skip` |
 | P16 | `pipeline/16-in-dev-drops-ready-for-dev` |
+| P17 | `pipeline/17-mvp-analyst` |
 
 ## Обзор
 
@@ -62,9 +63,10 @@ P13 Параллельный разработчик и QA        ~2ч
 P14 Календарный релиз (milestone, published) ~4ч
 P15 Пустой релиз: закрыть milestone          ~1ч
 P16 `in-dev` снимает `ready-for-dev`         ~1ч
+P17 тип `mvp`: план аналитика → апрув → задачи ~3ч
 UI  Таблица джоб и логи орка              ~3ч  (после P2)
                                         ────
-                                        ~44ч
+                                        ~47ч
 ```
 
 Оценка без отладки биллинга Cursor и без полноценного E2E Ollama.
@@ -429,6 +431,30 @@ Issue → план → PR → issue-QA → merge человеком в `main` �
 
 - [x] Unit: `ready-for-dev` → developer; `in-dev` и `ready-for-dev`+`in-dev` → null
 - [x] `npm test` в `pipeline/` зелёный
+
+---
+
+## P17: Тип MVP — план проекта аналитиком
+
+**Ветка:** `pipeline/17-mvp-analyst`
+
+**Цель:** стартовая issue `mvp`: аналитик составляет план, человек подтверждает, аналитик создаёт `feature`/`bug`, MVP закрывается.
+
+### Шаги
+
+1. Тип `mvp`, состояния `to-approve` / `approved`. Каталог labels + `ensure-labels`.
+2. `roleForLabels`: `mvp` + `needs-plan` или `approved` → analyst; не developer/tester/RM.
+3. Цикл Q&A: `needs-human` → человек → `needs-plan` (сброс джоба analyst). План: `to-approve`. Апрув человека: `approved`.
+4. На `approved` аналитик создаёт задачи, маркер `PIPELINE_MVP_TASKS` + `done`. Оркестратор: `needs-plan` на детях, закрыть MVP.
+5. Промпт `analyst.md`; контракт §3; полл `approved`.
+
+### Проверка
+
+- [x] Unit: `mvp` + `needs-plan` / `approved` → analyst; `to-approve` → null
+- [x] Unit: `decideAnalystOutcome` mvp-plan / mvp-spawn
+- [x] Unit: каталог labels содержит `mvp`, `to-approve`, `approved`
+- [x] `npm test` в `pipeline/` зелёный
+- [ ] `npm run ensure-labels` создаёт новые labels в репо продукта
 
 ---
 

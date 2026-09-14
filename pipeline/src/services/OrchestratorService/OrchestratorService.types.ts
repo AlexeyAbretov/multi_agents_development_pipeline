@@ -11,8 +11,8 @@ export type Job = {
   agentId: string | null;
   runId: string | null;
   error: string | null;
-  /** Итог оркестратора: ready-for-dev, in-qa, qa-passed, released,
-   * needs-human, … */
+  /** Итог оркестратора: ready-for-dev, to-approve, done, in-qa,
+   * qa-passed, released, needs-human, … */
   decision: string | null;
   createdAt: string;
   updatedAt: string;

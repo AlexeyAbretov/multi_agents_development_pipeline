@@ -3,12 +3,20 @@ export type CursorMilestone = {
   due_on: string | null;
 };
 
+export type CursorIssueComment = {
+  user: string;
+  body: string;
+  createdAt: string;
+};
+
 export type CursorIssue = {
   number: number;
   title: string;
   body: string | null;
   html_url: string;
+  labels?: string[];
   milestone: CursorMilestone | null;
+  comments?: CursorIssueComment[];
 };
 
 export type CursorPull = {

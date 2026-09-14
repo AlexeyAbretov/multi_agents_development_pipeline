@@ -1,6 +1,7 @@
 export { GitHubClient } from './GithubProvider';
 export type {
   GitHubIssue,
+  GitHubIssueComment,
   GitHubIssueState,
   GitHubMilestoneRef,
   GitHubPull,

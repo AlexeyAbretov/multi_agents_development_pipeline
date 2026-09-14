@@ -4,10 +4,40 @@ import type { Role } from '@types';
 import type { Job, JobStatus, UiJobStatus } from './OrchestratorService.types';
 import { isRegressionIssue } from './schedule-rules';
 
-export type AnalystDecision = 'ready-for-dev' | 'needs-human';
+export type AnalystDecision =
+  'ready-for-dev' | 'needs-human' | 'to-approve' | 'done';
+export type AnalystKind = 'work' | 'mvp-plan' | 'mvp-spawn';
 export type DeveloperDecision = 'in-qa' | 'needs-human';
 export type TesterDecision = 'in-qa' | 'qa-passed' | 'needs-human';
 export type ReleaseManagerDecision = 'released' | 'needs-human';
+
+export function isMvpIssue(labels: string[]): boolean {
+  return labels.includes('mvp');
+}
+
+export function hasWorkType(labels: string[]): boolean {
+  return labels.includes('bug') || labels.includes('feature');
+}
+
+export function analystKind(labels: string[]): AnalystKind | null {
+  if (isMvpIssue(labels)) {
+    if (labels.includes('needs-plan')) {
+      return 'mvp-plan';
+    }
+
+    if (labels.includes('approved')) {
+      return 'mvp-spawn';
+    }
+
+    return null;
+  }
+
+  if (hasWorkType(labels)) {
+    return 'work';
+  }
+
+  return null;
+}
 
 export function isQaRole(role: Role): boolean {
   return role === 'tester' || role === 'tester-regression';
@@ -22,14 +52,23 @@ export function roleForLabels(
   }
 
   const regression = isRegressionIssue(labels, body);
-  const hasType = labels.includes('bug') || labels.includes('feature');
+  const workType = hasWorkType(labels);
+  const mvp = isMvpIssue(labels);
 
-  if (!hasType && !regression) {
+  if (!workType && !regression && !mvp) {
+    return null;
+  }
+
+  if (mvp) {
+    if (labels.includes('needs-plan') || labels.includes('approved')) {
+      return 'analyst';
+    }
+
     return null;
   }
 
   if (
-    hasType &&
+    workType &&
     labels.includes('needs-plan') &&
     !labels.includes('ready-for-dev')
   ) {
@@ -37,7 +76,7 @@ export function roleForLabels(
   }
 
   if (
-    hasType &&
+    workType &&
     labels.includes('ready-for-dev') &&
     !labels.includes('needs-plan') &&
     !labels.includes('in-dev') &&
@@ -55,7 +94,7 @@ export function roleForLabels(
       return 'tester-regression';
     }
 
-    if (hasType) {
+    if (workType) {
       return 'tester';
     }
   }
@@ -70,8 +109,48 @@ export function roleForLabels(
 export function decideAnalystOutcome(
   runStatus: 'finished' | 'error' | 'startup_error',
   resultText: string | null,
+  kind: AnalystKind = 'work',
 ): AnalystDecision {
   if (runStatus !== 'finished') {
+    return 'needs-human';
+  }
+
+  if (kind === 'mvp-plan') {
+    const marker = resultText?.match(
+      /PIPELINE_LABELS:\s*(needs-human|to-approve)/i,
+    );
+
+    if (marker) {
+      return marker[1].toLowerCase() as AnalystDecision;
+    }
+
+    if (resultText && /needs-human/i.test(resultText)) {
+      return 'needs-human';
+    }
+
+    return 'to-approve';
+  }
+
+  if (kind === 'mvp-spawn') {
+    const marker = resultText?.match(
+      /^PIPELINE_LABELS:\s*(needs-human|done)\s*$/im,
+    );
+    const tasks = extractMvpTaskIssues(resultText);
+
+    if (!marker || tasks === null) {
+      return 'needs-human';
+    }
+
+    const requested = marker[1].toLowerCase();
+
+    if (requested === 'needs-human') {
+      return 'needs-human';
+    }
+
+    if (requested === 'done' && tasks.length > 0) {
+      return 'done';
+    }
+
     return 'needs-human';
   }
 
@@ -165,11 +244,15 @@ export function classifyTesterBugHandoff(
   return 'ok';
 }
 
-export function extractTesterBugIssues(
+function extractIssueListMarker(
   resultText: string | null,
+  markerName: string,
 ): number[] | null {
   const marker = resultText?.match(
-    /^PIPELINE_BUG_ISSUES:\s*(none|(?:#?\d+(?:\s*,\s*#?\d+)*))\s*$/im,
+    new RegExp(
+      `^${markerName}:\\s*(none|(?:#?\\d+(?:\\s*,\\s*#?\\d+)*))\\s*$`,
+      'im',
+    ),
   );
 
   if (!marker) {
@@ -188,6 +271,18 @@ export function extractTesterBugIssues(
         .filter((value) => Number.isSafeInteger(value) && value > 0),
     ),
   ];
+}
+
+export function extractTesterBugIssues(
+  resultText: string | null,
+): number[] | null {
+  return extractIssueListMarker(resultText, 'PIPELINE_BUG_ISSUES');
+}
+
+export function extractMvpTaskIssues(
+  resultText: string | null,
+): number[] | null {
+  return extractIssueListMarker(resultText, 'PIPELINE_MVP_TASKS');
 }
 
 export function extractReleaseTag(resultText: string | null): string | null {
@@ -346,6 +441,70 @@ export function parseChildBugIssues(body: string | null): number[] {
         .filter((value) => Number.isSafeInteger(value) && value > 0),
     ),
   ];
+}
+
+export function parseMvpTaskIssues(body: string | null): number[] {
+  if (!body) {
+    return [];
+  }
+
+  const marker = body.match(/<!--\s*pipeline:mvp-tasks:([0-9,\s]+)\s*-->/i);
+
+  if (!marker) {
+    return [];
+  }
+
+  return [
+    ...new Set(
+      marker[1]
+        .split(',')
+        .map((value) => Number(value.trim()))
+        .filter((value) => Number.isSafeInteger(value) && value > 0),
+    ),
+  ];
+}
+
+export function upsertMvpTaskIssuesInBody(
+  body: string | null,
+  tasks: number[],
+): string {
+  const unique = [
+    ...new Set(tasks.filter((n) => Number.isSafeInteger(n) && n > 0)),
+  ];
+  const marker = `<!-- pipeline:mvp-tasks:${unique.join(',')} -->`;
+  const base = (body ?? '')
+    .replace(/<!--\s*pipeline:mvp-tasks:[0-9,\s]*\s*-->/gi, '')
+    .trimEnd();
+
+  if (unique.length === 0) {
+    return base;
+  }
+
+  if (!base) {
+    return marker;
+  }
+
+  return `${base}\n\n${marker}`;
+}
+
+/** Повторный analyst на MVP: Q&A (needs-plan) или создание задач
+ * (approved). Не сбрасывать in-flight. */
+export function shouldResetMvpAnalystJob(params: {
+  labels: string[];
+  jobStatus: JobStatus | null | undefined;
+}): boolean {
+  if (!isMvpIssue(params.labels)) {
+    return false;
+  }
+
+  const waiting =
+    params.labels.includes('needs-plan') || params.labels.includes('approved');
+
+  if (!waiting || !params.jobStatus) {
+    return false;
+  }
+
+  return params.jobStatus !== 'running' && params.jobStatus !== 'queued';
 }
 
 export function upsertChildBugIssuesInBody(

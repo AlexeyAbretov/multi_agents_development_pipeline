@@ -10,24 +10,31 @@ import {
   childBugStillOpen,
   childBlocksParentReQa,
   classifyTesterBugHandoff,
+  analystKind,
+  decideAnalystOutcome,
   decideReleaseManagerOutcome,
   decideTesterOutcome,
-  fixRoundBlocksDeveloper,
-  groupAnalystIssuesByParent,
-  isChildBugCandidate,
-  parseChildBugIssues,
-  parseFixRound,
-  parseRelatedParentIssue,
-  shouldCloseMergedChildIssue,
+  extractMvpTaskIssues,
   extractReleaseChangelog,
   extractReleasePrNumbers,
   extractReleaseTag,
-  isQaRole,
-  roleForLabels,
   extractTesterBugIssues,
+  fixRoundBlocksDeveloper,
+  groupAnalystIssuesByParent,
+  isChildBugCandidate,
+  isMvpIssue,
+  isQaRole,
   mapJobToUiStatus,
+  parseChildBugIssues,
+  parseFixRound,
+  parseMvpTaskIssues,
+  parseRelatedParentIssue,
+  roleForLabels,
+  shouldCloseMergedChildIssue,
+  shouldResetMvpAnalystJob,
   upsertChildBugIssuesInBody,
   upsertFixRoundInBody,
+  upsertMvpTaskIssuesInBody,
 } from "../dist/services/OrchestratorService/rules.js";
 import {
   isEmptySincePreviousRelease,
@@ -41,6 +48,7 @@ import {
   decideReleaseGate,
   isMilestoneDueOn,
   isRegressionIssue,
+  isReleaseWorkIssue,
   nothingToReleaseComment,
   tagFromMilestoneTitle,
   upsertNothingToReleaseDescription,
@@ -111,6 +119,144 @@ test("analyst starts on needs-plan and skips while in-analysis", () => {
   assert.equal(roleForLabels(["bug", "in-dev"]), null);
   assert.equal(roleForLabels(["bug", "ready-for-dev", "in-dev"]), null);
   assert.equal(roleForLabels(["bug", "needs-plan", "needs-human"]), null);
+});
+
+test("mvp starts analyst on needs-plan or approved", () => {
+  assert.equal(roleForLabels(["mvp", "needs-plan"]), "analyst");
+  assert.equal(roleForLabels(["mvp", "approved"]), "analyst");
+  assert.equal(roleForLabels(["mvp", "needs-plan", "approved"]), "analyst");
+  assert.equal(roleForLabels(["mvp", "to-approve"]), null);
+  assert.equal(roleForLabels(["mvp", "in-analysis"]), null);
+  assert.equal(roleForLabels(["mvp", "needs-plan", "in-analysis"]), null);
+  assert.equal(roleForLabels(["mvp", "approved", "needs-human"]), null);
+  assert.equal(roleForLabels(["mvp", "ready-for-dev"]), null);
+  assert.equal(roleForLabels(["mvp", "in-qa"]), null);
+  assert.equal(analystKind(["mvp", "needs-plan"]), "mvp-plan");
+  assert.equal(analystKind(["mvp", "approved"]), "mvp-spawn");
+  assert.equal(analystKind(["mvp", "to-approve"]), null);
+  assert.equal(analystKind(["feature", "needs-plan"]), "work");
+  assert.equal(isMvpIssue(["mvp", "needs-plan"]), true);
+});
+
+test("analyst work and mvp decisions follow PIPELINE_LABELS", () => {
+  assert.equal(
+    decideAnalystOutcome("finished", "PIPELINE_LABELS: ready-for-dev"),
+    "ready-for-dev",
+  );
+  assert.equal(
+    decideAnalystOutcome("finished", "PIPELINE_LABELS: needs-human"),
+    "needs-human",
+  );
+  assert.equal(
+    decideAnalystOutcome(
+      "finished",
+      "план\nPIPELINE_LABELS: to-approve",
+      "mvp-plan",
+    ),
+    "to-approve",
+  );
+  assert.equal(
+    decideAnalystOutcome(
+      "finished",
+      "вопросы\nPIPELINE_LABELS: needs-human",
+      "mvp-plan",
+    ),
+    "needs-human",
+  );
+  assert.equal(
+    decideAnalystOutcome("finished", "план без маркера", "mvp-plan"),
+    "to-approve",
+  );
+  assert.equal(
+    decideAnalystOutcome(
+      "finished",
+      "PIPELINE_LABELS: ready-for-dev",
+      "mvp-plan",
+    ),
+    "to-approve",
+  );
+  assert.equal(
+    decideAnalystOutcome(
+      "finished",
+      "PIPELINE_MVP_TASKS: 12,13\nPIPELINE_LABELS: done",
+      "mvp-spawn",
+    ),
+    "done",
+  );
+  assert.equal(
+    decideAnalystOutcome(
+      "finished",
+      "PIPELINE_MVP_TASKS: none\nPIPELINE_LABELS: done",
+      "mvp-spawn",
+    ),
+    "needs-human",
+  );
+  assert.equal(
+    decideAnalystOutcome(
+      "finished",
+      "PIPELINE_MVP_TASKS: 12\nPIPELINE_LABELS: needs-human",
+      "mvp-spawn",
+    ),
+    "needs-human",
+  );
+  assert.equal(decideAnalystOutcome("error", "PIPELINE_LABELS: done", "mvp-spawn"), "needs-human");
+});
+
+test("extractMvpTaskIssues parses numbers like tester bugs", () => {
+  assert.deepEqual(
+    extractMvpTaskIssues("ok\nPIPELINE_MVP_TASKS: #12, 13,12\nPIPELINE_LABELS: done"),
+    [12, 13],
+  );
+  assert.deepEqual(extractMvpTaskIssues("PIPELINE_MVP_TASKS: none"), []);
+  assert.equal(extractMvpTaskIssues("PIPELINE_LABELS: done"), null);
+});
+
+test("mvp task markers round-trip in issue body", () => {
+  const body = upsertMvpTaskIssuesInBody("план проекта", [12, 13, 12]);
+  assert.deepEqual(parseMvpTaskIssues(body), [12, 13]);
+  assert.match(body, /pipeline:mvp-tasks:12,13/);
+});
+
+test("shouldResetMvpAnalystJob only for finished mvp re-entry", () => {
+  assert.equal(
+    shouldResetMvpAnalystJob({
+      labels: ["mvp", "needs-plan"],
+      jobStatus: "finished",
+    }),
+    true,
+  );
+  assert.equal(
+    shouldResetMvpAnalystJob({
+      labels: ["mvp", "approved"],
+      jobStatus: "error",
+    }),
+    true,
+  );
+  assert.equal(
+    shouldResetMvpAnalystJob({
+      labels: ["mvp", "needs-plan"],
+      jobStatus: "running",
+    }),
+    false,
+  );
+  assert.equal(
+    shouldResetMvpAnalystJob({
+      labels: ["mvp", "to-approve"],
+      jobStatus: "finished",
+    }),
+    false,
+  );
+  assert.equal(
+    shouldResetMvpAnalystJob({
+      labels: ["feature", "needs-plan"],
+      jobStatus: "finished",
+    }),
+    false,
+  );
+  assert.equal(
+    shouldResetMvpAnalystJob({ labels: ["mvp", "needs-plan"], jobStatus: null }),
+    false,
+  );
 });
 
 test("release-manager starts on regression qa-passed only", () => {
@@ -373,6 +519,9 @@ test("milestone due and tag from title", () => {
   assert.equal(daysUntilDue("2026-09-08T00:00:00Z", "UTC", new Date("2026-09-08T12:00:00Z")), 0);
   assert.equal(isRegressionIssue(["regression"], null), true);
   assert.equal(isRegressionIssue(["bug"], "<!-- pipeline:regression:12 -->"), true);
+  assert.equal(isReleaseWorkIssue(["bug"]), true);
+  assert.equal(isReleaseWorkIssue(["mvp", "to-approve"]), true);
+  assert.equal(isReleaseWorkIssue(["regression"]), false);
   assert.equal(calendarDateInTimeZone(new Date("2026-09-08T22:00:00Z"), "Europe/Moscow"), "2026-09-09");
 });
 

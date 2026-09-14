@@ -29,7 +29,7 @@ Git — **только GitHub** (`origin`). Локальная Gitea не исп
 
 | Роль | Где | Делает | Не делает |
 |------|-----|--------|-----------|
-| Аналитик | Cursor Cloud | План в комментарии issue по конституции и MVP | Код, merge, деплой |
+| Аналитик | Cursor Cloud | План в комментарии issue по конституции и MVP; для `mvp` — план проекта и после апрува создание `feature`/`bug` | Код, merge, деплой |
 | Разработчик | Cursor Cloud | Ветка `issue/<n>-…`, PR | Merge в `main`, деплой |
 | Тестировщик | Cloud + GitHub Actions | Issue-QA по PR (`tester`) | Merge, tag, Publish, E2E vision без локального прогона |
 | Тестировщик регресса | Cloud + GitHub Actions | Регресс `main` по milestone (`tester-regression`) | Merge, tag, Publish, E2E vision без локального прогона |
@@ -44,6 +44,7 @@ Git — **только GitHub** (`origin`). Локальная Gitea не исп
 
 - `bug`
 - `feature`
+- `mvp` (стартовая задача проекта: аналитик планирует и после апрува создаёт `feature`/`bug`)
 - `regression` (служебная issue регресса `main`, не продукт)
 
 ### Приоритет (взаимоисключающие)
@@ -64,6 +65,8 @@ Git — **только GitHub** (`origin`). Локальная Gitea не исп
 | `deployed` | Локальный деплой успешен |
 | `deploy-failed` | Локальный деплой упал |
 | `needs-human` | Автоматика остановилась |
+| `to-approve` | План MVP ждёт подтверждения человека |
+| `approved` | План MVP подтверждён, очередь создания задач |
 
 ### Milestone = релиз
 
@@ -80,6 +83,8 @@ Git — **только GitHub** (`origin`). Локальная Gitea не исп
 Два open milestone с due сегодня и валидным title → `needs-human`, RM не стартует.
 
 Старт аналитика: labels `bug` или `feature` **и** `needs-plan`. Перед запуском: `needs-plan` → `in-analysis`. Несколько таких issue стартуют **параллельно** и не ждут окончания других ролей. После прогона оркестратор снимает `in-analysis` и ставит `ready-for-dev` или `needs-human` (по маркеру `PIPELINE_LABELS:` в ответе агента или при ошибке Cursor).
+
+**MVP (стартовая задача проекта):** человек создаёт issue с `mvp` **и** `needs-plan`. Аналитик: `needs-plan` → `in-analysis`. Итог плана: `to-approve` (план готов) или `needs-human` (вопросы). Человек отвечает в комментарии, снимает `needs-human`, снова ставит `needs-plan` — цикл, джоб analyst сбрасывается. Когда план устраивает: снимает `to-approve`, ставит `approved`. Оркестратор снова запускает аналитика (`approved` → `in-analysis`): агент создаёт корневые `feature`/`bug` (без `Related to #` на MVP), возвращает `PIPELINE_MVP_TASKS:` и `PIPELINE_LABELS: done`. Оркестратор вешает на них `needs-plan` (тип `feature`/`bug` как у агента, иначе `feature`), копирует milestone, пишет `<!-- pipeline:mvp-tasks:… -->` и **закрывает** MVP. Ошибка создания задач → `needs-human`. На `mvp` не стартуют developer, tester и RM. Открытый `mvp` в milestone для RM — как открытый `bug`/`feature` (блок релиза).
 
 Старт разработчика: `bug` или `feature` **и** `ready-for-dev`, нет открытого PR `Fixes #N` (или ветки `issue/<n>-…`). При старте оркестратор снимает `ready-for-dev` и ставит `in-dev`. Несколько таких issue стартуют **параллельно** и не ждут окончания других ролей. Дочерний баг (`Related to #N`): `startingRef` = head открытого PR родителя; после PR оркестратор сменяет base на эту ветку, если Cursor открыл PR в `main`. После PR: снимает `in-dev`, ставит `in-qa`. Если агент упал или PR нет — `needs-human` (снимает `in-dev`). Если PR уже открыт, агент не стартует: снимает `ready-for-dev`, ставит `in-qa` (base всё равно поправляется).
 
@@ -102,7 +107,7 @@ Git — **только GitHub** (`origin`). Локальная Gitea не исп
 **T** (due сегодня):
 
 - регресс ещё не стартовал → тот же протокол **в тот же день** (hotfix);
-- регресс `qa-passed`, published Release с этим tag нет, в milestone нет открытых `bug`/`feature` → старт RM на регресс-issue;
+- регресс `qa-passed`, published Release с этим tag нет, в milestone нет открытых `bug`/`feature`/`mvp` → старт RM на регресс-issue;
 - регресс красный / `needs-human` / ещё `qa-in-progress` → RM не стартует; при `needs-human` или открытых work-items после `qa-passed` — комментарий `blocked: no release`, compose не трогать.
 
 Старт RM: labels `regression` **и** `qa-passed`; milestone due сегодня; нет published Release с tag = title. Агент возвращает tag (= title) и changelog. Оркестратор создаёт **published** GitHub Release (`draft: false`, tag создаётся вместе с Release) и закрывает milestone. Ошибка → `needs-human` на регресс-issue.
@@ -124,7 +129,7 @@ Git — **только GitHub** (`origin`). Локальная Gitea не исп
 1. Не создаёт draft. Не мержит PR.
 2. Tag = title milestone, без «следующего patch по догадке».
 3. Тело Release — `PIPELINE_CHANGELOG_*` (merged в `main` с прошлого tag / issues milestone).
-4. Стоп (`needs-human` / skip): title ≠ `vN.N.N`; два due сегодня; регресс не `qa-passed`; открытые `bug`/`feature` в milestone; tag/Release уже есть; CI `main` красный.
+4. Стоп (`needs-human` / skip): title ≠ `vN.N.N`; два due сегодня; регресс не `qa-passed`; открытые `bug`/`feature`/`mvp` в milestone; tag/Release уже есть; CI `main` красный.
 5. С прошлого published Release в `main` нет новых коммитов (`ahead_by = 0`): GitHub Release **не** создаётся. Оркестратор пишет пометку `<!-- pipeline:nothing-to-release:… -->` (описание milestone + комментарий), закрывает milestone и служебную regression-issue. Первый релиз (нет предыдущего tag) не пропускается.
 
 Деплой по-прежнему только от **published** Release (локальный deployer).

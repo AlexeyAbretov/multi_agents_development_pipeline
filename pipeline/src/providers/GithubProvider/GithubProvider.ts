@@ -3,6 +3,8 @@ import type { Config } from '@config';
 import { GITHUB_PIPELINE_LABELS } from './GithubProvider.constants';
 import type {
   GitHubIssue,
+  GitHubIssueComment,
+  GitHubIssueCommentRaw,
   GitHubIssueRaw,
   GitHubIssueRawWithState,
   GitHubIssueState,
@@ -21,6 +23,7 @@ import {
   getPreviousReleaseTag,
   githubFetch,
   isEmptySincePreviousRelease,
+  isOrchestratorJobComment,
 } from './GithubProvider.utils';
 
 export { GITHUB_PIPELINE_LABELS } from './GithubProvider.constants';
@@ -184,6 +187,36 @@ export class GitHubClient {
         `GitHub comment ${response.status}: ${text.slice(0, 500)}`,
       );
     }
+  }
+
+  async listIssueComments(issue: number): Promise<GitHubIssueComment[]> {
+    const { owner, repo } = this.repoPath();
+    const url = new URL(
+      `https://api.github.com/repos/${owner}/${repo}/issues/${issue}/comments`,
+    );
+
+    url.searchParams.set('per_page', '100');
+
+    const response = await githubFetch(url, { headers: this.headers });
+
+    if (!response.ok) {
+      const text = await response.text();
+
+      throw new Error(
+        `GitHub comments ${response.status}: ${text.slice(0, 500)}`,
+      );
+    }
+
+    const items = (await response.json()) as GitHubIssueCommentRaw[];
+
+    return items
+      .filter((item) => !isOrchestratorJobComment(item.body))
+      .map((item) => ({
+        id: item.id,
+        user: item.user?.login ?? 'unknown',
+        body: item.body ?? '',
+        createdAt: item.created_at,
+      }));
   }
 
   async getIssue(issue: number): Promise<GitHubIssueWithState> {
