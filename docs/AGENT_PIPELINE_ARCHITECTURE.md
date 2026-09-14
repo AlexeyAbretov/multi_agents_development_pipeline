@@ -335,6 +335,7 @@ pipeline/src/providers/<Name>Provider/
 - Папка: суффикс `Provider` (`GithubProvider`, `CursorProvider`, `LogProvider`)
 - Класс: суффикс `Client` (`GitHubClient`, `CursorClient`, `LogClient`)
 - Снаружи импорт только из `@providers` (`pipeline/src/providers/index.ts`)
-- Типы другого провайдера — из его `*.types.ts`, не из `@providers` (без циклов)
+- Провайдеры не импортируют друг друга. Нужный срез полей — в своих
+  `*.types.ts`; оркестратор передаёт структурно совместимые объекты
 - Отдельный TS-алиас на каждый провайдер не нужен
 - Новый провайдер: папка + реэкспорт в барреле + вызов из поллера. SDK остаётся внутри `*Provider.ts`

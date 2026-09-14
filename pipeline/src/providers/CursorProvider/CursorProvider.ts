@@ -6,12 +6,12 @@ import { Agent, CursorAgentError } from '@cursor/sdk';
 import type { Config } from '@config';
 import type { Role } from '@types';
 
-import type { CursorRunResult, CursorRunStarted } from './CursorProvider.types';
-
 import type {
-  GitHubIssue,
-  GitHubPull,
-} from '../GithubProvider/GithubProvider.types';
+  CursorIssue,
+  CursorPull,
+  CursorRunResult,
+  CursorRunStarted,
+} from './CursorProvider.types';
 
 function loadPrompt(promptsDir: string, role: Role): string {
   return readFileSync(join(promptsDir, `${role}.md`), 'utf8');
@@ -19,8 +19,8 @@ function loadPrompt(promptsDir: string, role: Role): string {
 
 function buildMessage(
   rolePrompt: string,
-  issue: GitHubIssue,
-  pull?: GitHubPull,
+  issue: CursorIssue,
+  pull?: CursorPull,
   role?: Role,
 ): string {
   const lines = [
@@ -73,9 +73,9 @@ export class CursorClient {
 
   async runCloudAgent(
     role: Role,
-    issue: GitHubIssue,
+    issue: CursorIssue,
     onStarted: (ids: CursorRunStarted) => Promise<void>,
-    pull?: GitHubPull,
+    pull?: CursorPull,
   ): Promise<CursorRunResult> {
     let agentId: string | null = null;
     let runId: string | null = null;

@@ -1,2 +1,6 @@
 export { CursorClient } from './CursorProvider';
-export type { CursorRunResult } from './CursorProvider.types';
+export type {
+  CursorIssue,
+  CursorPull,
+  CursorRunResult,
+} from './CursorProvider.types';
