@@ -36,7 +36,7 @@ GitHub labels          Job.status / Job.decision          UI (таблица :30
 
 `needs-human` — стоп-кран: `roleForLabels` возвращает `null`, никакая роль не стартует.
 
-Промежуточные `in-analysis`, `in-dev`, `qa-in-progress` — замки «агент работает». Пока они висят, та же роль повторно не выбирается (`in-analysis` режет все роли; `in-dev` режет developer; `qa-in-progress` режет tester). При старте разработчика оркестратор снимает `ready-for-dev` и ставит `in-dev` (как аналитик: `needs-plan` → `in-analysis`).
+Промежуточные `in-analysis`, `in-dev`, `qa-in-progress` — замки «агент работает». Пока они висят, та же роль повторно не выбирается (`in-analysis` режет все роли; `in-dev` режет developer; `qa-in-progress` режет tester и tester-regression). При старте разработчика оркестратор снимает `ready-for-dev` и ставит `in-dev` (как аналитик: `needs-plan` → `in-analysis`).
 
 `deployed` / `deploy-failed` ставит **deployer**, не оркестратор ролей. `roleForLabels` их не читает.
 
@@ -92,7 +92,7 @@ flowchart TD
   T --> Empty
   Empty -->|да| Close["закрыть milestone, регресс/RM не стартуют"]
   Empty -->|нет| Reg["служебная issue: regression + in-qa"]
-  Reg --> RT[tester-regression.md на main]
+  Reg --> RT[tester-regression на main]
   RT -->|баги| RootBugs["корневые bug в том же milestone\nбез Related to # на регресс"]
   RT -->|none| RPass[qa-passed на regression-issue]
   RPass --> Gate{decideReleaseGate}
@@ -170,7 +170,7 @@ React + Vite + Tailwind. UI только читает `GET /api/jobs` и `/api/d
 | Маркер | Кто пишет | Кто читает |
 |--------|-----------|------------|
 | `PIPELINE_LABELS:` | все роли | `decide*Outcome` в `rules.ts` |
-| `PIPELINE_BUG_ISSUES:` | tester | `extractTesterBugIssues` |
+| `PIPELINE_BUG_ISSUES:` | tester, tester-regression | `extractTesterBugIssues` |
 | `PIPELINE_RELEASE_TAG:` | RM | `extractReleaseTag` |
 | `PIPELINE_CHANGELOG_BEGIN` … `END` | RM | `extractReleaseChangelog` |
 
@@ -206,7 +206,7 @@ services/OrchestratorService/     services/DeployerService/
 | `pipeline/src/schedule-rules.ts` | Календарь milestone, tag `vN.N.N`, gate RM, пустой релиз, маркеры в комментариях. |
 | `pipeline/src/providers/index.ts` | Баррель внешних клиентов; алиас `@providers`. |
 | `pipeline/src/providers/GithubProvider/` | REST GitHub: issues, labels, PR `Fixes #`, releases, milestones. Класс `GitHubClient`. |
-| `pipeline/src/providers/CursorProvider/` | Промпт + issue/PR, `Agent.create` cloud, `run.wait()`. Класс `CursorClient`. `tester-regression.md` если label `regression`. |
+| `pipeline/src/providers/CursorProvider/` | Промпт + issue/PR, `Agent.create` cloud, `run.wait()`. Класс `CursorClient`. Промпт: `pipeline/prompts/<role>.md`. |
 | `pipeline/src/providers/LogProvider/` | Структурный лог `issue` / `role` / `agentId` / `runId`. Класс `LogClient`. Fastify logger внутри провайдера. |
 | `pipeline/src/deploy-store.ts` | `deploys.json` (deployer пишет; UI читает). |
 | `pipeline/src/services/OrchestratorService/` | Точка входа оркестратора (`index.ts`). |
@@ -287,7 +287,7 @@ services/OrchestratorService/     services/DeployerService/
 1. Тип `Role` в `types.ts`.
 2. `selectJobsToLaunch` в `dispatch.ts` — новая роль стартует в том же тике, что и остальные (роли не гейтят друг друга).
 3. Ветка в `roleForLabels` — уникальный набор labels.
-4. Промпт `pipeline/prompts/<role>.md` — `CursorClient` грузит `${role}.md` (исключение только `tester` + label `regression` → `tester-regression.md`).
+4. Промпт `pipeline/prompts/<role>.md` — `CursorClient` грузит `${role}.md`.
 5. В `handleIssue`: pre-labels, гейты, `decide*Outcome`, `apply*Labels`, комментарии.
 6. Если роль должна повторяться — `store.remove` по событию (как tester после детей).
 7. Тесты dispatch: новая роль стартует вместе с остальными; skip только in-flight `(issue, role)`.

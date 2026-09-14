@@ -22,6 +22,7 @@ import {
   extractReleaseChangelog,
   extractReleasePrNumbers,
   extractReleaseTag,
+  isQaRole,
   roleForLabels,
   extractTesterBugIssues,
   mapJobToUiStatus,
@@ -115,8 +116,19 @@ test("analyst starts on needs-plan and skips while in-analysis", () => {
 test("release-manager starts on regression qa-passed only", () => {
   assert.equal(roleForLabels(["feature", "qa-passed"]), null);
   assert.equal(roleForLabels(["regression", "qa-passed"]), "release-manager");
-  assert.equal(roleForLabels(["regression", "in-qa"]), "tester");
+  assert.equal(roleForLabels(["regression", "in-qa"]), "tester-regression");
+  assert.equal(
+    roleForLabels(["regression", "in-qa", "qa-in-progress"]),
+    null,
+  );
   assert.equal(roleForLabels(["regression", "qa-passed", "needs-human"]), null);
+});
+
+test("isQaRole covers issue-QA and regression testers", () => {
+  assert.equal(isQaRole("tester"), true);
+  assert.equal(isQaRole("tester-regression"), true);
+  assert.equal(isQaRole("analyst"), false);
+  assert.equal(isQaRole("release-manager"), false);
 });
 
 test("release-manager does not start on feature or child bugs", () => {

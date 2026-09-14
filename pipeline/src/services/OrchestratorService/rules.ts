@@ -1,12 +1,16 @@
+import type { Role } from '@types';
+
 import type { Job, UiJobStatus } from './OrchestratorService.types';
 import { isRegressionIssue } from './schedule-rules';
-
-import type { Role } from '../../types';
 
 export type AnalystDecision = 'ready-for-dev' | 'needs-human';
 export type DeveloperDecision = 'in-qa' | 'needs-human';
 export type TesterDecision = 'in-qa' | 'qa-passed' | 'needs-human';
 export type ReleaseManagerDecision = 'released' | 'needs-human';
+
+export function isQaRole(role: Role): boolean {
+  return role === 'tester' || role === 'tester-regression';
+}
 
 export function roleForLabels(
   labels: string[],
@@ -46,7 +50,13 @@ export function roleForLabels(
     !labels.includes('qa-in-progress') &&
     !labels.includes('qa-passed')
   ) {
-    return 'tester';
+    if (regression) {
+      return 'tester-regression';
+    }
+
+    if (hasType) {
+      return 'tester';
+    }
   }
 
   if (regression && labels.includes('qa-passed')) {

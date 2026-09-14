@@ -31,7 +31,8 @@ Git — **только GitHub** (`origin`). Локальная Gitea не исп
 |------|-----|--------|-----------|
 | Аналитик | Cursor Cloud | План в комментарии issue по конституции и MVP | Код, merge, деплой |
 | Разработчик | Cursor Cloud | Ветка `issue/<n>-…`, PR | Merge в `main`, деплой |
-| Тестировщик | Cloud + GitHub Actions | Issue-QA по PR **или** регресс `main` по milestone | Merge, tag, Publish, E2E vision без локального прогона |
+| Тестировщик | Cloud + GitHub Actions | Issue-QA по PR (`tester`) | Merge, tag, Publish, E2E vision без локального прогона |
+| Тестировщик регресса | Cloud + GitHub Actions | Регресс `main` по milestone (`tester-regression`) | Merge, tag, Publish, E2E vision без локального прогона |
 | Релиз-менеджер | Cursor Cloud | Changelog + **published** GitHub Release по milestone | Draft, merge в `main`, деплой, релиз без зелёного регресса |
 | Девопс | Локальный deployer | `compose up` по tag/Release, статус в GitHub | Работать из облака |
 
@@ -96,7 +97,7 @@ Git — **только GitHub** (`origin`). Локальная Gitea не исп
 - labels: `regression` + `in-qa`
 - тело: маркер `<!-- pipeline:regression:<milestone_id> -->`
 
-Тестировщик регрессит **`main`** (не PR). Промпт: `tester-regression.md`. Баги регресса — новые корневые `bug` в том же milestone, **без** `Related to #` на regression-issue. Пока они открыты, RM не стартует. После `qa-passed` регресса и due сегодня — старт RM.
+Тестировщик регрессит **`main`** (не PR). Роль: `tester-regression`, промпт: `tester-regression.md`. Баги регресса — новые корневые `bug` в том же milestone, **без** `Related to #` на regression-issue. Пока они открыты, RM не стартует. После `qa-passed` регресса и due сегодня — старт RM.
 
 **T** (due сегодня):
 
@@ -134,7 +135,7 @@ Git — **только GitHub** (`origin`). Локальная Gitea не исп
 - Связь с GitHub: **поллинг** (без входящего webhook и без туннеля).
 - Опционально позже: self-hosted GitHub Actions runner только для деплоя.
 - Секреты оркестратора в `pipeline/.env` (Docker) или `pipeline/.env.local` (локальный npm / VSCode), не в git: `GITHUB_TOKEN` (лучше раздельные read vs release), `CURSOR_API_KEY`. Каталог — корневой `.env` (Mongo, Ollama). Локальный запуск: [AGENT_PIPELINE_SETUP.md](./AGENT_PIPELINE_SETUP.md) §10.
-- Идемпотентность: одно активное облачное задание на пару `(issue, role)`. Регресс и RM — на служебной regression-issue, не на feature/bug. При старте оркестратора джобы `running`/`queued` из прошлого процесса удаляются (агент после recreate контейнера уже мёртв). Полл **не** ждёт завершения Cursor `run.wait()`: тик только находит работу и стартует агентов. Несколько пар могут быть `running` одновременно. Все eligible роли (analyst, developer, tester, RM) стартуют в одном тике **параллельно** и не гейтят друг друга. Повторный тик ту же пару не дублирует (`jobs.json` + in-flight). Гейты самой issue (PR, fix-round, дети, календарь RM) остаются.
+- Идемпотентность: одно активное облачное задание на пару `(issue, role)`. Регресс и RM — на служебной regression-issue, не на feature/bug. При старте оркестратора джобы `running`/`queued` из прошлого процесса удаляются (агент после recreate контейнера уже мёртв). Полл **не** ждёт завершения Cursor `run.wait()`: тик только находит работу и стартует агентов. Несколько пар могут быть `running` одновременно. Все eligible роли (analyst, developer, tester, tester-regression, RM) стартуют в одном тике **параллельно** и не гейтят друг друга. Повторный тик ту же пару не дублирует (`jobs.json` + in-flight). Гейты самой issue (PR, fix-round, дети, календарь RM) остаются.
 - В записи джоба обязательно: `cursorAgentId`, `cursorRunId`, URL issue/PR, статус, timestamps.
 
 Контейнер оркестратора **не** монтирует docker.sock. Сокет только у `deployer` (`docker-compose.yml` в репозитории пайплайна, health `http://127.0.0.1:3021/health`).
@@ -165,7 +166,7 @@ Ollama: `host.docker.internal:11434` для приложения каталог�
 UI (отдельный порт **`127.0.0.1:3010`**, сервис `pipeline-ui`):
 
 1. Таблица очереди из `GET /api/jobs` (volume `jobs.json`): issue, роль, статус, ссылки GitHub / Cursor.
-2. Статусы `tester` (в том числе регресс) и `release-manager` на regression-issue — без кнопки Publish в UI.
+2. Статусы `tester`, `tester-regression` и `release-manager` на regression-issue — без кнопки Publish в UI.
 3. Деплои: `GET /api/deploys`. Полный транскрипт агента — в Cursor по `agentId`.
 
 Порт UI не публиковать в интернет без защиты.

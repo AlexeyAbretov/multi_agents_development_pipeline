@@ -6,7 +6,6 @@ import { Agent, CursorAgentError } from '@cursor/sdk';
 import type { Config } from '@config';
 import type { Role } from '@types';
 
-import { TESTER_REGRESSION_PROMPT } from './CursorProvider.constants';
 import type { CursorRunResult, CursorRunStarted } from './CursorProvider.types';
 
 import type {
@@ -14,15 +13,7 @@ import type {
   GitHubPull,
 } from '../GithubProvider/GithubProvider.types';
 
-function loadPrompt(
-  promptsDir: string,
-  role: Role,
-  issue: GitHubIssue,
-): string {
-  if (role === 'tester' && issue.labels.includes('regression')) {
-    return readFileSync(join(promptsDir, TESTER_REGRESSION_PROMPT), 'utf8');
-  }
-
+function loadPrompt(promptsDir: string, role: Role): string {
   return readFileSync(join(promptsDir, `${role}.md`), 'utf8');
 }
 
@@ -112,7 +103,7 @@ export class CursorClient {
       agentId = agent.agentId;
       const run = await agent.send(
         buildMessage(
-          loadPrompt(this.config.PROMPTS_DIR, role, issue),
+          loadPrompt(this.config.PROMPTS_DIR, role),
           issue,
           pull,
           role,

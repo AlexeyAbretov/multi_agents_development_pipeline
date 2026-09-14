@@ -13,6 +13,7 @@ test("selectJobsToLaunch starts every eligible role in the same tick", () => {
       { issue: { number: 3 }, role: "developer" },
       { issue: { number: 4 }, role: "release-manager" },
       { issue: { number: 5 }, role: "developer" },
+      { issue: { number: 6 }, role: "tester-regression" },
     ],
     new Set(),
   );
@@ -24,6 +25,7 @@ test("selectJobsToLaunch starts every eligible role in the same tick", () => {
       "developer:3",
       "release-manager:4",
       "developer:5",
+      "tester-regression:6",
     ],
   );
 });

@@ -1,1 +1,2 @@
-export type Role = 'analyst' | 'developer' | 'tester' | 'release-manager';
+export type Role =
+  'analyst' | 'developer' | 'tester' | 'tester-regression' | 'release-manager';

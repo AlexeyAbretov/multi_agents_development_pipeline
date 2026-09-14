@@ -26,6 +26,7 @@ import {
   extractTesterBugIssues,
   fixRoundBlocksDeveloper,
   groupAnalystIssuesByParent,
+  isQaRole,
   MAX_FIX_ROUNDS,
   MAX_TESTER_CHILD_BUGS,
   parseChildBugIssues,
@@ -40,7 +41,6 @@ import { closeEmptyRelease } from './schedule';
 import {
   daysUntilDue,
   decideReleaseGate,
-  isRegressionIssue,
   isReleaseWorkIssue,
   tagFromMilestoneTitle,
 } from './schedule-rules';
@@ -267,6 +267,7 @@ async function labelTesterBugs(
       'analyst',
       'developer',
       'tester',
+      'tester-regression',
       'release-manager',
     ]);
     await github.removeIssueLabel(issue, 'in-analysis');
@@ -559,9 +560,8 @@ async function handleIssue(
   }
 
   let linkedPull: GitHubPull | undefined;
-  const regression = isRegressionIssue(issue.labels, issue.body);
 
-  if ((role === 'tester' || role === 'release-manager') && !regression) {
+  if (role === 'tester') {
     try {
       linkedPull = (await github.findOpenFixPr(issue.number)) ?? undefined;
     } catch (err) {
@@ -570,7 +570,7 @@ async function handleIssue(
       return;
     }
 
-    if (role === 'tester' && !linkedPull) {
+    if (!linkedPull) {
       try {
         await applyTesterLabels(github, issue.number, 'needs-human');
         await github.commentOnIssue(
@@ -660,14 +660,14 @@ async function handleIssue(
     }
   }
 
-  if (role === 'tester') {
+  if (isQaRole(role)) {
     try {
       const blocking = await childBugsBlockingReQa(github, issue.body);
 
       if (blocking.length > 0) {
         logger.job(
           fields,
-          `skip tester: waiting for child bugs ${blocking
+          `skip ${role}: waiting for child bugs ${blocking
             .map((n) => `#${n}`)
             .join(', ')}`,
         );
@@ -677,10 +677,10 @@ async function handleIssue(
 
       if (
         parseChildBugIssues(issue.body).length > 0 &&
-        (await store.find(issue.number, 'tester'))
+        (await store.find(issue.number, role))
       ) {
-        await store.remove(issue.number, 'tester');
-        logger.job(fields, 'cleared tester job for re-QA after child bugs');
+        await store.remove(issue.number, role);
+        logger.job(fields, `cleared ${role} job for re-QA after child bugs`);
       }
     } catch (err) {
       logger.error(
@@ -794,7 +794,7 @@ async function handleIssue(
     }
   }
 
-  if (role === 'tester') {
+  if (isQaRole(role)) {
     try {
       await github.removeIssueLabel(issue.number, 'in-qa');
       await github.addIssueLabels(issue.number, ['qa-in-progress']);
@@ -919,7 +919,7 @@ async function handleIssue(
     }
   }
 
-  if (role === 'tester') {
+  if (isQaRole(role)) {
     const bugIssues = extractTesterBugIssues(result.text);
     let testerDecision = decideTesterOutcome(
       result.status,
