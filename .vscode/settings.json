@@ -4,6 +4,5 @@
   "editor.codeActionsOnSave": {
     "source.fixAll.eslint": "explicit"
   },
-  "eslint.execArgv": ["--disable-warning=DEP0190"],
-  "git.path": "C:/development/ai/multi_agents_development_pipeline/scripts/git-with-hooks.exe"
+  "eslint.execArgv": ["--disable-warning=DEP0190"]
 }
