@@ -17,4 +17,4 @@ COPY --from=build /app/dist ./dist
 COPY prompts ./prompts
 EXPOSE 3020
 # root: доступ к docker.sock у deployer; orchestrator тоже user 0 в compose
-CMD ["node", "dist/index.js"]
+CMD ["node", "dist/services/OrchestratorService/index.js"]

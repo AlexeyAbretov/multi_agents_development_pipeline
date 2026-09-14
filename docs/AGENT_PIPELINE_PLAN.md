@@ -8,7 +8,7 @@
 
 | Трек | Ветки | Документ |
 |------|--------|----------|
-| Каталог | `stage/N-…` | [MVP_PLAN.md](./MVP_PLAN.md) |
+| Каталог | `stage/N-…` | план MVP в репозитории продукта |
 | Пайплайн | `pipeline/N-…` | этот файл |
 
 Merge в `main` — только после явного подтверждения пользователя (как в [CONSTITUTION.md §3](./CONSTITUTION.md#3-git-workflow)).
@@ -40,6 +40,7 @@ Merge в `main` — только после явного подтвержден�
 | P13 | `pipeline/13-parallel-developers` |
 | P14 | `pipeline/14-calendar-releases` |
 | P15 | `pipeline/15-empty-release-skip` |
+| P16 | `pipeline/16-in-dev-drops-ready-for-dev` |
 
 ## Обзор
 
@@ -60,9 +61,10 @@ P12 Вынос в отдельный репозиторий        ~3ч
 P13 Параллельный разработчик и QA        ~2ч
 P14 Календарный релиз (milestone, published) ~4ч
 P15 Пустой релиз: закрыть milestone          ~1ч
+P16 `in-dev` снимает `ready-for-dev`         ~1ч
 UI  Таблица джоб и логи орка              ~3ч  (после P2)
                                         ────
-                                        ~43ч
+                                        ~44ч
 ```
 
 Оценка без отладки биллинга Cursor и без полноценного E2E Ollama.
@@ -432,11 +434,11 @@ Issue → план → PR → issue-QA → merge человеком в `main` �
 
 ## Локальная отладка оркестратора
 
-Не отдельный этап плана. После P15 в репозитории:
+Не отдельный этап плана. После P16 в репозитории:
 
 - `.vscode/launch.json` — конфигурация **Orchestrator** (`tsx` + `pipeline/.env.local`)
 - `npm start` — `node --use-env-proxy --env-file=.env.local dist/services/OrchestratorService/index.js`
-- HTTP API в `pipeline/src/routes/` (алиас `@routes`, сборка через `tsc-alias`)
+- HTTP API в `OrchestratorService.routes.ts` / `DeployerService.routes.ts` (сборка через `tsc-alias` для `@config` / `@providers` / `@types`)
 
 Запуск: [AGENT_PIPELINE_SETUP.md](./AGENT_PIPELINE_SETUP.md) §10. Карта файлов: [AGENT_PIPELINE_ARCHITECTURE.md](./AGENT_PIPELINE_ARCHITECTURE.md) §3.1.
 

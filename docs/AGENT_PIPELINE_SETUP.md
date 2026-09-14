@@ -5,7 +5,7 @@
 Архитектура кода: [AGENT_PIPELINE_ARCHITECTURE.md](./AGENT_PIPELINE_ARCHITECTURE.md).  
 Этапы разработки: [AGENT_PIPELINE_PLAN.md](./AGENT_PIPELINE_PLAN.md).
 
-Сейчас из коробки поднимаются **P0–P15 + UI**: оркестратор, deployer, очередь на `http://127.0.0.1:3010/`. Локальная отладка оркестратора (VSCode / `npm start`) — §10.
+Сейчас из коробки поднимаются **P0–P16 + UI**: оркестратор, deployer, очередь на `http://127.0.0.1:3010/`. Локальная отладка оркестратора (VSCode / `npm start`) — §10.
 
 Checkout **целевого продукта** (каталог, API и т.д.) для оркестратора **не нужен** — Cursor Cloud клонирует его по `CURSOR_REPO_URL`. Для `DEPLOY_MODE=compose` нужен отдельный clone продукта на хосте (`PRODUCT_WORKSPACE_HOST`).
 

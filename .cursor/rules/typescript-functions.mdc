@@ -12,7 +12,7 @@ alwaysApply: false
 
 Вложенные поля и «нет значения → дефолт» — через Elvis: `?.` и `??`. Не через `"x" in obj`, цепочки `&&` и тернарники. Пустую строку / `0` как «нет значения» по-прежнему обрабатывай через `||`.
 
-Импорты — группы через пустую строку, сверху вниз: `node:` → npm (включая scoped `@cursor/sdk`) → локальные алиасы `tsconfig` (`@config`, `@providers`, `@routes`) → `./` → `../`. Алиасы — отдельная группа **после** внешних, не смешивать с пакетами.
+Импорты — группы через пустую строку, сверху вниз: `node:` → npm (включая scoped `@cursor/sdk`) → локальные алиасы `tsconfig` (`@config`, `@providers`, `@types`) → `./` → `../`. Алиасы — отдельная группа **после** внешних, не смешивать с пакетами.
 
 Линтер: `cd pipeline && npm run lint` (правка: `npm run lint:fix`). `npm run build` и git pre-commit тоже гоняют lint и падают при ошибках. `--fix` сортирует импорты (`simple-import-sort`) и переносит строки через Prettier (`printWidth: 80`). Неразбиваемые строки (длинный литерал без пробелов) — вручную. Elvis: `@typescript-eslint/prefer-optional-chain`, `prefer-nullish-coalescing`.
 
@@ -57,6 +57,7 @@ import { Agent } from "@cursor/sdk";
 
 import type { Config } from "@config";
 import { GitHubClient } from "@providers";
+import type { Role } from "@types";
 
 import { JobStore } from "./jobs";
 ```
