@@ -1,0 +1,7 @@
+{
+  "name": "multi-agents-development-pipeline",
+  "private": true,
+  "scripts": {
+    "ensure-labels": "npm --prefix pipeline run ensure-labels --"
+  }
+}

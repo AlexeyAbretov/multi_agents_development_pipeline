@@ -1,9 +1,11 @@
 export {
   agentResultComment,
   fixIssueWithPR,
+  GITHUB_PIPELINE_LABELS,
   GitHubClient,
   isEmptySincePreviousRelease,
   jobComment,
+  missingPipelineLabels,
   previousReleaseTag,
 } from './GithubProvider';
 export type {
@@ -14,4 +16,5 @@ export type {
   GitHubPull,
   GitHubPullWithMerged,
   GitHubRelease,
+  PipelineLabel,
 } from './GithubProvider.types';

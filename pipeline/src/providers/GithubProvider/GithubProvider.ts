@@ -403,9 +403,16 @@ export class GitHubClient {
 
     if (!response.ok) {
       const text = await response.text();
+      const accepted = response.headers.get('X-Accepted-GitHub-Permissions');
+      const hint =
+        response.status === 403
+          ? ' Fine-grained PAT needs Issues: Read and write on this repo.'
+          : '';
+      const extra = accepted ? ` accepted: ${accepted}` : '';
 
       throw new Error(
-        `GitHub create label ${response.status}: ${text.slice(0, 500)}`,
+        `GitHub create label ${response.status}: ` +
+          `${text.slice(0, 500)}${hint}${extra}`,
       );
     }
   }

@@ -8,12 +8,15 @@ export type {
   GitHubPull,
   GitHubPullWithMerged,
   GitHubRelease,
+  PipelineLabel,
 } from './GithubProvider';
 export {
   agentResultComment,
   fixIssueWithPR,
+  GITHUB_PIPELINE_LABELS,
   GitHubClient,
   isEmptySincePreviousRelease,
   jobComment,
+  missingPipelineLabels,
   previousReleaseTag,
 } from './GithubProvider';

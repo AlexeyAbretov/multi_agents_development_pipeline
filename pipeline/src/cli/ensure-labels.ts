@@ -1,8 +1,46 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { parseEnv } from 'node:util';
+
 import { Config } from '@config';
 import { GitHubClient } from '@providers';
 
 function printUsage(): void {
   console.error('usage: npm run ensure-labels -- [owner/repo]');
+}
+
+function envSearchDirs(): string[] {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const pipelineDir = resolve(here, '../..');
+
+  return [...new Set([process.cwd(), pipelineDir])];
+}
+
+function loadEnvFile(): void {
+  const files = ['.env.local', '.env'];
+
+  for (const dir of envSearchDirs()) {
+    for (const file of files) {
+      const path = resolve(dir, file);
+
+      if (!existsSync(path)) {
+        continue;
+      }
+
+      const parsed = parseEnv(readFileSync(path, 'utf8'));
+
+      for (const [key, value] of Object.entries(parsed)) {
+        if (value === undefined) {
+          continue;
+        }
+
+        process.env[key] ??= value;
+      }
+
+      return;
+    }
+  }
 }
 
 function repoFromArg(value: string | undefined): string | undefined {
@@ -25,6 +63,8 @@ async function main(): Promise<void> {
     printUsage();
     process.exit(0);
   }
+
+  loadEnvFile();
 
   const repo = repoFromArg(process.argv[2]);
 
