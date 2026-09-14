@@ -2,12 +2,12 @@ import type { FastifyBaseLogger } from 'fastify';
 
 import type { Config } from '@config';
 import {
-  agentResultComment,
   CursorClient,
+  generateAgentResultComment,
+  generateJobComment,
   GitHubClient,
   type GitHubIssue,
   type GitHubPull,
-  jobComment,
   LogClient,
 } from '@providers';
 import type { Role } from '@types';
@@ -832,7 +832,7 @@ async function handleIssue(
       try {
         await github.commentOnIssue(
           issue.number,
-          jobComment({
+          generateJobComment({
             jobId: job.id,
             role,
             agentId,
@@ -1072,7 +1072,7 @@ async function handleIssue(
   try {
     await github.commentOnIssue(
       issue.number,
-      jobComment({
+      generateJobComment({
         jobId: job.id,
         role,
         agentId: result.agentId,
@@ -1090,7 +1090,7 @@ async function handleIssue(
     try {
       await github.commentOnIssue(
         issue.number,
-        agentResultComment(role, result.text),
+        generateAgentResultComment(role, result.text),
       );
     } catch (err) {
       logger.error({ err, issue: issue.number }, 'github plan comment failed');

@@ -1,6 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-
 import { Agent, CursorAgentError } from '@cursor/sdk';
 
 import type { Config } from '@config';
@@ -12,61 +9,7 @@ import type {
   CursorRunResult,
   CursorRunStarted,
 } from './CursorProvider.types';
-
-function loadPrompt(promptsDir: string, role: Role): string {
-  return readFileSync(join(promptsDir, `${role}.md`), 'utf8');
-}
-
-function buildMessage(
-  rolePrompt: string,
-  issue: CursorIssue,
-  pull?: CursorPull,
-  role?: Role,
-): string {
-  const lines = [
-    rolePrompt.trim(),
-    '',
-    '## Issue',
-    `Номер: #${issue.number}`,
-    `URL: ${issue.html_url}`,
-    `Заголовок: ${issue.title}`,
-    '',
-    issue.body?.trim() || '(пустое описание)',
-  ];
-
-  if (issue.milestone) {
-    lines.push(
-      '',
-      '## Milestone',
-      `Title (tag): ${issue.milestone.title}`,
-      `Due: ${issue.milestone.due_on ?? '(нет due)'}`,
-    );
-  }
-
-  if (pull) {
-    lines.push(
-      '',
-      '## Pull request',
-      `Номер: #${pull.number}`,
-      `URL: ${pull.html_url}`,
-      `Ветка: ${pull.headRef}`,
-      `Заголовок: ${pull.title}`,
-    );
-
-    if (role === 'developer') {
-      lines.push(
-        '',
-        `База твоего PR: \`${pull.headRef}\` — **не** \`main\`.`,
-        'Открой PR командой `gh pr create --base ' +
-          pull.headRef +
-          '` (Cursor autoCreatePR часто целится в default ' +
-          'branch — сразу смени base, если открылся в main).',
-      );
-    }
-  }
-
-  return lines.join('\n');
-}
+import { buildMessage, loadPrompt } from './CursorProvider.utils';
 
 export class CursorClient {
   constructor(private readonly config: Config) {}

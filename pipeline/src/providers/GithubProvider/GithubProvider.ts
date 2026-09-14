@@ -1,15 +1,11 @@
 import type { Config } from '@config';
 
-import {
-  GITHUB_COMMENT_MAX,
-  GITHUB_PIPELINE_LABELS,
-} from './GithubProvider.constants';
+import { GITHUB_PIPELINE_LABELS } from './GithubProvider.constants';
 import type {
   GitHubIssue,
   GitHubIssueRaw,
   GitHubIssueRawWithState,
   GitHubIssueWithState,
-  GitHubLabelRaw,
   GitHubMilestoneRef,
   GitHubMilestoneWithState,
   GitHubPull,
@@ -17,134 +13,16 @@ import type {
   GitHubRelease,
   PipelineLabel,
 } from './GithubProvider.types';
+import {
+  convertRawIssuetoGitHubIssue,
+  fixIssueWithPR,
+  getMissingPipelineLabels,
+  getPreviousReleaseTag,
+  githubFetch,
+  isEmptySincePreviousRelease,
+} from './GithubProvider.utils';
 
 export { GITHUB_PIPELINE_LABELS } from './GithubProvider.constants';
-
-function labelNames(labels: GitHubLabelRaw[]): string[] {
-  return labels.map((label) =>
-    typeof label === 'string' ? label : label.name,
-  );
-}
-
-function toGitHubIssue(item: GitHubIssueRaw): GitHubIssue {
-  return {
-    number: item.number,
-    title: item.title,
-    body: item.body,
-    html_url: item.html_url,
-    labels: labelNames(item.labels),
-    milestone: item.milestone ?? null,
-  };
-}
-
-export function previousReleaseTag(
-  releases: Array<{ tag_name: string; published_at: string | null }>,
-  currentTag: string,
-): string | null {
-  const others = releases
-    .filter((item) => item.tag_name !== currentTag)
-    .sort((a, b) => {
-      const aTime = a.published_at ? Date.parse(a.published_at) : 0;
-      const bTime = b.published_at ? Date.parse(b.published_at) : 0;
-
-      return bTime - aTime;
-    });
-
-  return others[0]?.tag_name ?? null;
-}
-
-/**
- * No previous published tag → first release, not empty.
- * Unknown aheadBy → do not skip.
- */
-export function isEmptySincePreviousRelease(params: {
-  previousTag: string | null;
-  aheadBy: number | null;
-}): boolean {
-  if (!params.previousTag) {
-    return false;
-  }
-
-  if (params.aheadBy === null) {
-    return false;
-  }
-
-  return params.aheadBy <= 0;
-}
-
-export function fixIssueWithPR(
-  pr: {
-    title: string;
-    body: string | null;
-    headRef: string;
-  },
-  issue: number,
-): boolean {
-  const text = `${pr.title}\n${pr.body ?? ''}`;
-  const keywords = new RegExp(
-    `(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\\s+#${issue}\\b`,
-    'i',
-  );
-
-  if (keywords.test(text)) {
-    return true;
-  }
-
-  return new RegExp(`^issue/${issue}(?:-|$)`).test(pr.headRef);
-}
-
-export function missingPipelineLabels(
-  existingNames: string[],
-): PipelineLabel[] {
-  const have = new Set(existingNames.map((name) => name.toLowerCase()));
-
-  return GITHUB_PIPELINE_LABELS.filter(
-    (label) => !have.has(label.name.toLowerCase()),
-  );
-}
-
-function isTransientNetworkError(err: unknown): boolean {
-  const parts: string[] = [];
-  let current: unknown = err;
-
-  for (let i = 0; i < 4 && current; i++) {
-    if (current instanceof Error) {
-      parts.push(current.message, current.name);
-      current = current.cause;
-    } else {
-      parts.push(String(current));
-      break;
-    }
-  }
-
-  return /ENOTFOUND|EAI_AGAIN|ECONNRESET|ETIMEDOUT|UND_ERR_SOCKET|fetch failed/i.test(
-    parts.join(' '),
-  );
-}
-
-async function githubFetch(
-  url: string | URL,
-  init?: RequestInit,
-): Promise<Response> {
-  const attempts = 3;
-  let last: unknown;
-
-  for (let i = 0; i < attempts; i++) {
-    try {
-      return await fetch(url, init);
-    } catch (err) {
-      last = err;
-
-      if (!isTransientNetworkError(err) || i === attempts - 1) {
-        throw err;
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, 400 * (i + 1)));
-    }
-  }
-
-  throw last;
-}
 
 export class GitHubClient {
   constructor(private readonly config: Config) {}
@@ -188,7 +66,9 @@ export class GitHubClient {
 
     const items = (await response.json()) as GitHubIssueRaw[];
 
-    return items.filter((item) => !item.pull_request).map(toGitHubIssue);
+    return items
+      .filter((item) => !item.pull_request)
+      .map(convertRawIssuetoGitHubIssue);
   }
 
   async findOpenFixPr(issue: number): Promise<GitHubPull | null> {
@@ -323,7 +203,7 @@ export class GitHubClient {
     const item = (await response.json()) as GitHubIssueRawWithState;
 
     return {
-      ...toGitHubIssue(item),
+      ...convertRawIssuetoGitHubIssue(item),
       state: item.state,
     };
   }
@@ -422,7 +302,7 @@ export class GitHubClient {
     skipped: string[];
   }> {
     const existing = await this.listRepoLabels();
-    const toCreate = missingPipelineLabels(existing);
+    const toCreate = getMissingPipelineLabels(existing);
     const created: string[] = [];
 
     for (const label of toCreate) {
@@ -823,7 +703,7 @@ export class GitHubClient {
 
     const item = (await response.json()) as GitHubIssueRaw;
 
-    return toGitHubIssue(item);
+    return convertRawIssuetoGitHubIssue(item);
   }
 
   async setIssueMilestone(issue: number, milestone: number): Promise<void> {
@@ -947,7 +827,7 @@ export class GitHubClient {
     head: string,
   ): Promise<{ empty: boolean; previousTag: string | null }> {
     const releases = await this.listPublishedReleases();
-    const previousTag = previousReleaseTag(releases, currentTag);
+    const previousTag = getPreviousReleaseTag(releases, currentTag);
 
     if (!previousTag) {
       return { empty: false, previousTag: null };
@@ -988,7 +868,9 @@ export class GitHubClient {
 
     const items = (await response.json()) as GitHubIssueRaw[];
 
-    return items.filter((item) => !item.pull_request).map(toGitHubIssue);
+    return items
+      .filter((item) => !item.pull_request)
+      .map(convertRawIssuetoGitHubIssue);
   }
 
   /**
@@ -1015,47 +897,4 @@ export class GitHubClient {
 
     return release !== null;
   }
-}
-
-export function jobComment(params: {
-  jobId: string;
-  role: string;
-  agentId: string | null;
-  runId: string | null;
-  status: string;
-  error?: string | null;
-  decision?: string | null;
-}): string {
-  const lines = [
-    `<!-- pipeline:job:${params.jobId} -->`,
-    `Пайплайн: роль \`${params.role}\`, статус \`${params.status}\`.`,
-    params.agentId ? `agentId: \`${params.agentId}\`` : 'agentId: —',
-    params.runId ? `runId: \`${params.runId}\`` : 'runId: —',
-  ];
-
-  if (params.decision) {
-    lines.push(`Решение: \`${params.decision}\`.`);
-  }
-
-  if (params.error) {
-    lines.push(`Ошибка: ${params.error}`);
-  }
-
-  return lines.join('\n');
-}
-
-export function agentResultComment(role: string, text: string): string {
-  const header = `## Результат: ${role}\n\n`;
-  const trimmed = text.trim() || '(пустой ответ агента)';
-
-  if (header.length + trimmed.length <= GITHUB_COMMENT_MAX) {
-    return header + trimmed;
-  }
-
-  const budget = GITHUB_COMMENT_MAX - header.length - 40;
-
-  return (
-    `${header}${trimmed.slice(0, budget)}` +
-    '\n\n… (обрезано, полный текст в Cursor SDK)'
-  );
 }
