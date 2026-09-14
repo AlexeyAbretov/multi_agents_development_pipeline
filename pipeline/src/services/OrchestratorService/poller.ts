@@ -8,7 +8,9 @@ import {
   type GitHubIssue,
   type GitHubPull,
   jobComment,
+  LogClient,
 } from '@providers';
+import type { Role } from '@types';
 
 import { inFlightKey, selectJobsToLaunch } from './dispatch';
 import { JobStore } from './jobs';
@@ -43,22 +45,20 @@ import {
   tagFromMilestoneTitle,
 } from './schedule-rules';
 
-import { jobLog } from '../../log';
-import type { Role } from '../../types';
-
 export function startPoller(
   config: Config,
-  logger: FastifyBaseLogger,
+  appLogger: FastifyBaseLogger,
   store: JobStore,
 ): { stop: () => void } {
   const github = new GitHubClient(config);
   const cursor = new CursorClient(config);
+  const logger = new LogClient(appLogger);
   let listing = false;
   const inFlight = new Set<string>();
 
   const tick = (): void => {
     if (listing) {
-      jobLog(logger, {}, 'poll skip: previous tick still running');
+      logger.job({}, 'poll skip: previous tick still running');
 
       return;
     }
@@ -95,16 +95,16 @@ function mergeIssues(groups: GitHubIssue[][]): GitHubIssue[] {
 
 async function pollOnce(
   config: Config,
-  logger: FastifyBaseLogger,
+  logger: LogClient,
   store: JobStore,
   github: GitHubClient,
   cursor: CursorClient,
   inFlight: Set<string>,
 ): Promise<void> {
-  jobLog(logger, {}, 'poll tick');
+  logger.job({}, 'poll tick');
 
   if (!config.GITHUB_TOKEN || !config.GITHUB_REPO) {
-    jobLog(logger, {}, 'poll skip: GITHUB_TOKEN or GITHUB_REPO empty');
+    logger.job({}, 'poll skip: GITHUB_TOKEN or GITHUB_REPO empty');
 
     return;
   }
@@ -135,8 +135,7 @@ async function pollOnce(
     if (!role) {
       const parent = parseRelatedParentIssue(issue.body);
 
-      jobLog(
-        logger,
+      logger.job(
         { issue: issue.number, role: null, agentId: null, runId: null },
         parent && issue.labels.includes('qa-passed')
           ? `skip RM: child bug Related to #${parent}`
@@ -156,8 +155,7 @@ async function pollOnce(
 
   for (const batch of groupAnalystIssuesByParent(analystIssues)) {
     if (batch.length > 1) {
-      jobLog(
-        logger,
+      logger.job(
         {
           issue: batch[0]?.number ?? null,
           role: 'analyst',
@@ -173,8 +171,7 @@ async function pollOnce(
 
   for (const { issue, role } of work) {
     if (inFlight.has(inFlightKey(issue.number, role))) {
-      jobLog(
-        logger,
+      logger.job(
         { issue: issue.number, role, agentId: null, runId: null },
         'skip in-flight job',
       );
@@ -192,8 +189,7 @@ async function pollOnce(
   }
 
   for (const [role, numbers] of launchedByRole) {
-    jobLog(
-      logger,
+    logger.job(
       {
         issue: numbers[0] ?? null,
         role,
@@ -323,7 +319,7 @@ async function childBugsBlockingReQa(
 
 async function closeMergedChildBugs(
   github: GitHubClient,
-  logger: FastifyBaseLogger,
+  logger: LogClient,
   issues: GitHubIssue[],
 ): Promise<void> {
   for (const issue of issues) {
@@ -355,8 +351,7 @@ async function closeMergedChildBugs(
           'Закрываю дочерний баг.',
       );
       await github.closeIssue(issue.number);
-      jobLog(
-        logger,
+      logger.job(
         { issue: issue.number, role: null, agentId: null, runId: null },
         `closed child bug after merged PR #${merged!.number}`,
       );
@@ -371,7 +366,7 @@ async function closeMergedChildBugs(
 
 async function retargetChildPullIfNeeded(
   github: GitHubClient,
-  logger: FastifyBaseLogger,
+  logger: LogClient,
   issue: GitHubIssue,
 ): Promise<void> {
   const parent = parseRelatedParentIssue(issue.body);
@@ -398,8 +393,7 @@ async function retargetChildPullIfNeeded(
       `Пайплайн: base PR #${childPr.number} сменён на ` +
         `\`${parentPr.headRef}\` (ветка родителя #${parent}), не main.`,
     );
-    jobLog(
-      logger,
+    logger.job(
       { issue: issue.number, role: 'developer', agentId: null, runId: null },
       `retargeted PR #${childPr.number} base ` +
         `${childPr.baseRef} → ${parentPr.headRef}`,
@@ -511,7 +505,7 @@ async function releaseStartGate(
 
 async function handleIssue(
   config: Config,
-  logger: FastifyBaseLogger,
+  logger: LogClient,
   store: JobStore,
   github: GitHubClient,
   cursor: CursorClient,
@@ -529,7 +523,7 @@ async function handleIssue(
           `Пайплайн: лимит \`fix-round\` (${MAX_FIX_ROUNDS}) исчерпан — ` +
             'разработчик не стартует, нужен человек.',
         );
-        jobLog(logger, fields, 'labels: fix-round limit → needs-human');
+        logger.job(fields, 'labels: fix-round limit → needs-human');
       } catch (err) {
         logger.error(
           { err, issue: issue.number },
@@ -553,7 +547,7 @@ async function handleIssue(
     if (hasPr) {
       try {
         await applyDeveloperLabels(github, issue.number, 'in-qa');
-        jobLog(logger, fields, 'labels: PR already open → in-qa');
+        logger.job(fields, 'labels: PR already open → in-qa');
       } catch (err) {
         logger.error({ err, issue: issue.number }, 'github labels failed');
       }
@@ -586,7 +580,7 @@ async function handleIssue(
             'Допишите `Fixes #N` в тело PR (не затирая старые Fixes) ' +
             'или снимите `in-qa`.',
         );
-        jobLog(logger, fields, 'labels: no Fixes PR → needs-human');
+        logger.job(fields, 'labels: no Fixes PR → needs-human');
       } catch (err) {
         logger.error(
           { err, issue: issue.number },
@@ -622,7 +616,7 @@ async function handleIssue(
         }
       }
 
-      jobLog(logger, fields, `skip RM: ${gate.reason}`);
+      logger.job(fields, `skip RM: ${gate.reason}`);
 
       return;
     }
@@ -651,8 +645,7 @@ async function handleIssue(
         linkedPull = (await github.findOpenFixPr(parent)) ?? undefined;
 
         if (linkedPull) {
-          jobLog(
-            logger,
+          logger.job(
             fields,
             `child developer startingRef: ${linkedPull.headRef} ` +
               `(parent #${parent})`,
@@ -672,8 +665,7 @@ async function handleIssue(
       const blocking = await childBugsBlockingReQa(github, issue.body);
 
       if (blocking.length > 0) {
-        jobLog(
-          logger,
+        logger.job(
           fields,
           `skip tester: waiting for child bugs ${blocking
             .map((n) => `#${n}`)
@@ -688,7 +680,7 @@ async function handleIssue(
         (await store.find(issue.number, 'tester'))
       ) {
         await store.remove(issue.number, 'tester');
-        jobLog(logger, fields, 'cleared tester job for re-QA after child bugs');
+        logger.job(fields, 'cleared tester job for re-QA after child bugs');
       }
     } catch (err) {
       logger.error(
@@ -701,17 +693,13 @@ async function handleIssue(
   }
 
   if (await store.find(issue.number, role)) {
-    jobLog(logger, fields, 'skip existing job');
+    logger.job(fields, 'skip existing job');
 
     return;
   }
 
   if (!config.CURSOR_API_KEY || !config.CURSOR_REPO_URL) {
-    jobLog(
-      logger,
-      fields,
-      'poll skip: CURSOR_API_KEY or CURSOR_REPO_URL empty',
-    );
+    logger.job(fields, 'poll skip: CURSOR_API_KEY or CURSOR_REPO_URL empty');
 
     return;
   }
@@ -719,7 +707,7 @@ async function handleIssue(
   const job = await store.create(issue.number, role);
 
   if (!job) {
-    jobLog(logger, fields, 'skip existing job');
+    logger.job(fields, 'skip existing job');
 
     return;
   }
@@ -730,7 +718,7 @@ async function handleIssue(
     try {
       await github.removeIssueLabel(issue.number, 'needs-plan');
       await github.addIssueLabels(issue.number, ['in-analysis']);
-      jobLog(logger, fields, 'labels: -needs-plan +in-analysis');
+      logger.job(fields, 'labels: -needs-plan +in-analysis');
     } catch (err) {
       await store.update(job.id, {
         status: 'startup_error',
@@ -761,7 +749,7 @@ async function handleIssue(
 
       await github.updateIssueBody(issue.number, body);
       issue = { ...issue, body };
-      jobLog(logger, fields, `fix-round: ${nextRound}`);
+      logger.job(fields, `fix-round: ${nextRound}`);
     } catch (err) {
       await store.update(job.id, {
         status: 'startup_error',
@@ -783,7 +771,7 @@ async function handleIssue(
     try {
       await github.removeIssueLabel(issue.number, 'ready-for-dev');
       await github.addIssueLabels(issue.number, ['in-dev']);
-      jobLog(logger, fields, 'labels: -ready-for-dev +in-dev');
+      logger.job(fields, 'labels: -ready-for-dev +in-dev');
     } catch (err) {
       await store.update(job.id, {
         status: 'startup_error',
@@ -810,7 +798,7 @@ async function handleIssue(
     try {
       await github.removeIssueLabel(issue.number, 'in-qa');
       await github.addIssueLabels(issue.number, ['qa-in-progress']);
-      jobLog(logger, fields, 'labels: -in-qa +qa-in-progress');
+      logger.job(fields, 'labels: -in-qa +qa-in-progress');
     } catch (err) {
       await store.update(job.id, {
         status: 'startup_error',
@@ -830,15 +818,14 @@ async function handleIssue(
     }
   }
 
-  jobLog(logger, { ...fields }, 'cursor agent starting');
+  logger.job({ ...fields }, 'cursor agent starting');
 
   const result = await cursor.runCloudAgent(
     role,
     issue,
     async ({ agentId, runId }) => {
       await store.update(job.id, { agentId, runId });
-      jobLog(
-        logger,
+      logger.job(
         { issue: issue.number, role, agentId, runId },
         'cursor run started',
       );
@@ -868,8 +855,7 @@ async function handleIssue(
     runId: result.runId,
     error: result.error,
   });
-  jobLog(
-    logger,
+  logger.job(
     {
       issue: issue.number,
       role,
@@ -887,8 +873,7 @@ async function handleIssue(
     decision = analystDecision;
     try {
       await applyAnalystLabels(github, issue.number, analystDecision);
-      jobLog(
-        logger,
+      logger.job(
         {
           issue: issue.number,
           role,
@@ -916,8 +901,7 @@ async function handleIssue(
     decision = developerDecision;
     try {
       await applyDeveloperLabels(github, issue.number, developerDecision);
-      jobLog(
-        logger,
+      logger.job(
         {
           issue: issue.number,
           role,
@@ -965,8 +949,7 @@ async function handleIssue(
           );
         }
 
-        jobLog(
-          logger,
+        logger.job(
           {
             issue: issue.number,
             role,
@@ -984,8 +967,7 @@ async function handleIssue(
             bugIssues ?? [],
           );
 
-          jobLog(
-            logger,
+          logger.job(
             {
               issue: issue.number,
               role,
@@ -1011,8 +993,7 @@ async function handleIssue(
     decision = testerDecision;
     try {
       await applyTesterLabels(github, issue.number, testerDecision);
-      jobLog(
-        logger,
+      logger.job(
         {
           issue: issue.number,
           role,
@@ -1049,8 +1030,7 @@ async function handleIssue(
           changelog,
         );
 
-        jobLog(
-          logger,
+        logger.job(
           {
             issue: issue.number,
             role,
@@ -1070,8 +1050,7 @@ async function handleIssue(
     if (releaseDecision === 'needs-human') {
       try {
         await github.addIssueLabels(issue.number, ['needs-human']);
-        jobLog(
-          logger,
+        logger.job(
           {
             issue: issue.number,
             role,

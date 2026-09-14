@@ -20,3 +20,5 @@ export {
   missingPipelineLabels,
   previousReleaseTag,
 } from './GithubProvider';
+export type { JobLogFields } from './LogProvider';
+export { LogClient } from './LogProvider';

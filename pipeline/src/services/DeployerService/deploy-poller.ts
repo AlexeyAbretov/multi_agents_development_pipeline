@@ -1,7 +1,7 @@
 import type { FastifyBaseLogger } from 'fastify';
 
 import type { Config } from '@config';
-import { GitHubClient } from '@providers';
+import { GitHubClient, LogClient } from '@providers';
 
 import {
   appendDeployNote,
@@ -11,19 +11,18 @@ import {
 import { runProductDeploy } from './deploy-run';
 import { DeployStore } from './deploy-store';
 
-import { jobLog } from '../../log';
-
 export function startDeployPoller(
   config: Config,
-  logger: FastifyBaseLogger,
+  appLogger: FastifyBaseLogger,
   store: DeployStore,
 ): { stop: () => void } {
   const github = new GitHubClient(config);
+  const logger = new LogClient(appLogger);
   let busy = false;
 
   const tick = (): void => {
     if (busy) {
-      jobLog(logger, {}, 'deploy poll skip: previous tick still running');
+      logger.job({}, 'deploy poll skip: previous tick still running');
 
       return;
     }
@@ -46,14 +45,14 @@ export function startDeployPoller(
 
 async function pollOnce(
   config: Config,
-  logger: FastifyBaseLogger,
+  logger: LogClient,
   store: DeployStore,
   github: GitHubClient,
 ): Promise<void> {
-  jobLog(logger, {}, 'deploy poll tick');
+  logger.job({}, 'deploy poll tick');
 
   if (!config.GITHUB_TOKEN || !config.GITHUB_REPO) {
-    jobLog(logger, {}, 'deploy poll skip: GITHUB_TOKEN or GITHUB_REPO empty');
+    logger.job({}, 'deploy poll skip: GITHUB_TOKEN or GITHUB_REPO empty');
 
     return;
   }
@@ -75,7 +74,7 @@ async function pollOnce(
   );
 
   if (pending.length === 0) {
-    jobLog(logger, {}, 'deploy: no new published releases');
+    logger.job({}, 'deploy: no new published releases');
 
     return;
   }
@@ -117,7 +116,7 @@ async function applyDeployLabels(
 
 async function handleRelease(
   config: Config,
-  logger: FastifyBaseLogger,
+  logger: LogClient,
   store: DeployStore,
   github: GitHubClient,
   release: {
@@ -135,16 +134,12 @@ async function handleRelease(
   };
 
   if (store.hasTag(release.tag_name) || store.has(release.id)) {
-    jobLog(logger, fields, `deploy skip idempotent: ${release.tag_name}`);
+    logger.job(fields, `deploy skip idempotent: ${release.tag_name}`);
 
     return;
   }
 
-  jobLog(
-    logger,
-    fields,
-    `deploy start: ${release.tag_name} (${release.html_url})`,
-  );
+  logger.job(fields, `deploy start: ${release.tag_name} (${release.html_url})`);
 
   const result = await runProductDeploy(config, release.tag_name);
   const status = result.ok ? 'deployed' : 'deploy-failed';
@@ -173,8 +168,7 @@ async function handleRelease(
   try {
     const labeled = await applyDeployLabels(github, status, release.tag_name);
 
-    jobLog(
-      logger,
+    logger.job(
       fields,
       labeled.length
         ? `labels +${status} on ${labeled.map((n) => `#${n}`).join(', ')}`
@@ -184,8 +178,7 @@ async function handleRelease(
     logger.error({ err, releaseId: release.id }, 'github deploy labels failed');
   }
 
-  jobLog(
-    logger,
+  logger.job(
     fields,
     result.ok
       ? `deploy ok: ${release.tag_name}`

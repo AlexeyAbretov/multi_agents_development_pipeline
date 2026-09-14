@@ -138,7 +138,7 @@ queued → running → finished | error | startup_error
 
 Паттерн: **чистые правила** (`rules.ts`, `schedule-rules.ts`, `dispatch.ts`, `deploy-rules.ts`) + **поллеры** (`poller.ts`, `schedule.ts`, `deploy-poller.ts`), которые ходят в GitHub / Cursor / docker.
 
-Общее (`config/`, `providers/`, `types`, `log`, `rules`, сторы деплоя) остаётся в `src/`. Код конкретного процесса — в его `services/*Service/`.
+Общее (`config/`, `providers/`, `types`, `rules`, сторы деплоя) остаётся в `src/`. Код конкретного процесса — в его `services/*Service/`.
 
 ### 2.1. Пакеты `pipeline/`
 
@@ -204,10 +204,10 @@ services/OrchestratorService/     services/DeployerService/
 | `pipeline/src/types.ts` | `Role`, `Job`, `JobStatus`, `UiJobStatus`. |
 | `pipeline/src/rules.ts` | Статусная модель issue: роль по labels, исход прогона, fix-round, дерево QA, маркеры ответа, проекция джоба в UI-статус. |
 | `pipeline/src/schedule-rules.ts` | Календарь milestone, tag `vN.N.N`, gate RM, пустой релиз, маркеры в комментариях. |
-| `pipeline/src/log.ts` | Структурные поля `issue` / `role` / `agentId` / `runId`. |
 | `pipeline/src/providers/index.ts` | Баррель внешних клиентов; алиас `@providers`. |
 | `pipeline/src/providers/GithubProvider/` | REST GitHub: issues, labels, PR `Fixes #`, releases, milestones. Класс `GitHubClient`. |
 | `pipeline/src/providers/CursorProvider/` | Промпт + issue/PR, `Agent.create` cloud, `run.wait()`. Класс `CursorClient`. `tester-regression.md` если label `regression`. |
+| `pipeline/src/providers/LogProvider/` | Структурный лог `issue` / `role` / `agentId` / `runId`. Класс `LogClient`. Fastify logger внутри провайдера. |
 | `pipeline/src/deploy-store.ts` | `deploys.json` (deployer пишет; UI читает). |
 | `pipeline/src/services/OrchestratorService/` | Точка входа оркестратора (`index.ts`). |
 | `…/OrchestratorService/dispatch.ts` | Eligible пары `(issue, role)` в тике; роли не гейтят друг друга; skip только in-flight. |
@@ -332,8 +332,8 @@ pipeline/src/providers/<Name>Provider/
   <Name>Provider.constants.ts константы (лимиты, имена файлов)
 ```
 
-- Папка: суффикс `Provider` (`GithubProvider`, `CursorProvider`)
-- Класс: суффикс `Client` (`GitHubClient`, `CursorClient`)
+- Папка: суффикс `Provider` (`GithubProvider`, `CursorProvider`, `LogProvider`)
+- Класс: суффикс `Client` (`GitHubClient`, `CursorClient`, `LogClient`)
 - Снаружи импорт только из `@providers` (`pipeline/src/providers/index.ts`)
 - Типы другого провайдера — из его `*.types.ts`, не из `@providers` (без циклов)
 - Отдельный TS-алиас на каждый провайдер не нужен

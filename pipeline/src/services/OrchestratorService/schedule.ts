@@ -5,6 +5,7 @@ import {
   GitHubClient,
   type GitHubIssue,
   type GitHubMilestoneRef,
+  LogClient,
 } from '@providers';
 
 import {
@@ -24,19 +25,18 @@ import {
 } from './schedule-rules';
 import { ScheduleStateStore } from './schedule-state';
 
-import { jobLog } from '../../log';
-
 export function startSchedulePoller(
   config: Config,
-  logger: FastifyBaseLogger,
+  appLogger: FastifyBaseLogger,
 ): { stop: () => void } {
   const github = new GitHubClient(config);
+  const logger = new LogClient(appLogger);
   const state = new ScheduleStateStore(config.DATA_DIR);
   let busy = false;
 
   const tick = (): void => {
     if (busy) {
-      jobLog(logger, {}, 'schedule skip: previous tick still running');
+      logger.job({}, 'schedule skip: previous tick still running');
 
       return;
     }
@@ -59,14 +59,14 @@ export function startSchedulePoller(
 
 async function scheduleOnce(
   config: Config,
-  logger: FastifyBaseLogger,
+  logger: LogClient,
   github: GitHubClient,
   state: ScheduleStateStore,
 ): Promise<void> {
-  jobLog(logger, {}, 'schedule tick');
+  logger.job({}, 'schedule tick');
 
   if (!config.GITHUB_TOKEN || !config.GITHUB_REPO) {
-    jobLog(logger, {}, 'schedule skip: GITHUB_TOKEN or GITHUB_REPO empty');
+    logger.job({}, 'schedule skip: GITHUB_TOKEN or GITHUB_REPO empty');
 
     return;
   }
@@ -119,7 +119,7 @@ async function scheduleOnce(
   }
 
   if (dueToday.length === 0 && dueTomorrow.length === 0) {
-    jobLog(logger, {}, 'schedule: no release milestones due today or tomorrow');
+    logger.job({}, 'schedule: no release milestones due today or tomorrow');
   }
 
   for (const milestone of dueToday) {
@@ -133,7 +133,7 @@ async function scheduleOnce(
 
 export async function closeEmptyRelease(
   github: GitHubClient,
-  logger: FastifyBaseLogger,
+  logger: LogClient,
   milestone: Pick<GitHubMilestoneRef, 'id' | 'number' | 'title'>,
   previousTag: string,
 ): Promise<void> {
@@ -168,8 +168,7 @@ export async function closeEmptyRelease(
     milestone.number,
     upsertNothingToReleaseDescription(current.description, comment),
   );
-  jobLog(
-    logger,
+  logger.job(
     fields,
     `closed milestone ${milestone.title}: nothing to ` +
       `release since ${previousTag}`,
@@ -178,7 +177,7 @@ export async function closeEmptyRelease(
 
 async function skipIfEmptyRelease(
   config: Config,
-  logger: FastifyBaseLogger,
+  logger: LogClient,
   github: GitHubClient,
   milestone: GitHubMilestoneRef,
 ): Promise<boolean> {
@@ -213,7 +212,7 @@ async function skipIfEmptyRelease(
 
 async function notifyDuplicateDue(
   config: Config,
-  logger: FastifyBaseLogger,
+  logger: LogClient,
   github: GitHubClient,
   state: ScheduleStateStore,
   dueToday: GitHubMilestoneRef[],
@@ -221,7 +220,7 @@ async function notifyDuplicateDue(
   const day = calendarDateInTimeZone(new Date(), config.SCHEDULE_TZ);
 
   if (state.wasDuplicateDueNotified(day)) {
-    jobLog(logger, {}, `schedule: duplicate due already notified for ${day}`);
+    logger.job({}, `schedule: duplicate due already notified for ${day}`);
 
     return;
   }
@@ -242,8 +241,7 @@ async function notifyDuplicateDue(
     }
 
     state.markDuplicateDueNotified(day);
-    jobLog(
-      logger,
+    logger.job(
       {},
       'blocked: duplicate due today (' +
         `${titles.join(', ')}); RM will not start`,
@@ -254,7 +252,7 @@ async function notifyDuplicateDue(
 }
 
 async function ensureRegressionIssue(
-  logger: FastifyBaseLogger,
+  logger: LogClient,
   github: GitHubClient,
   milestone: GitHubMilestoneRef,
   hotfix: boolean,
@@ -279,8 +277,7 @@ async function ensureRegressionIssue(
     );
 
     if (existing) {
-      jobLog(
-        logger,
+      logger.job(
         { ...fields, issue: existing.number },
         `regression issue already exists #${existing.number}`,
       );
@@ -300,8 +297,7 @@ async function ensureRegressionIssue(
       created.number,
       `Пайплайн: старт регресса \`main\` (${kind}) перед релизом \`${tag}\`.`,
     );
-    jobLog(
-      logger,
+    logger.job(
       { ...fields, issue: created.number },
       `created regression issue #${created.number} (${kind})`,
     );
@@ -315,7 +311,7 @@ async function ensureRegressionIssue(
 
 async function handleDueToday(
   config: Config,
-  logger: FastifyBaseLogger,
+  logger: LogClient,
   github: GitHubClient,
   state: ScheduleStateStore,
   milestone: GitHubMilestoneRef,
@@ -343,8 +339,7 @@ async function handleDueToday(
   }
 
   if (hasTag) {
-    jobLog(
-      logger,
+    logger.job(
       fields,
       `schedule: ${tag} exists; deployer watches published Release`,
     );
@@ -378,8 +373,7 @@ async function handleDueToday(
       hasOpenWorkItems,
     })
   ) {
-    jobLog(
-      logger,
+    logger.job(
       fields,
       `schedule: ${tag} waiting for regression/RM ` +
         '(no published release yet)',
@@ -389,8 +383,7 @@ async function handleDueToday(
   }
 
   if (state.wasBlockedNotified(milestone.id)) {
-    jobLog(
-      logger,
+    logger.job(
       fields,
       `blocked: no release for ${milestone.title} (already notified)`,
     );
@@ -401,8 +394,7 @@ async function handleDueToday(
   const target = regression ?? issues[0];
 
   if (!target) {
-    jobLog(
-      logger,
+    logger.job(
       fields,
       `blocked: no release for ${milestone.title} ` + '(no issues to comment)',
     );
@@ -423,8 +415,7 @@ async function handleDueToday(
       blockedNoReleaseComment(milestone.title, milestone.id),
     );
     state.markBlockedNotified(milestone.id);
-    jobLog(
-      logger,
+    logger.job(
       fields,
       `blocked: no release for milestone ${milestone.title}; ` +
         'compose not touched',

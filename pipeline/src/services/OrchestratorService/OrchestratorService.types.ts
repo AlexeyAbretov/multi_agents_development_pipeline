@@ -1,4 +1,4 @@
-import { Role } from '../../types';
+import { Role } from '@types';
 
 export type JobStatus =
   'queued' | 'running' | 'finished' | 'error' | 'startup_error';

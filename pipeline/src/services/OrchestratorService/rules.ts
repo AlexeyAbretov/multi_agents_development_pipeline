@@ -1,5 +1,5 @@
+import type { Job, UiJobStatus } from './OrchestratorService.types';
 import { isRegressionIssue } from './schedule-rules';
-import type { Job, UiJobStatus } from './types';
 
 import type { Role } from '../../types';
 

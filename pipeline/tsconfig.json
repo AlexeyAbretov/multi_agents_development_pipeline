@@ -7,6 +7,7 @@
     "rootDir": "src",
     "paths": {
       "@config": ["./src/config/index.ts"],
+      "@types": ["./src/types/index.ts"],
       "@providers": ["./src/providers/index.ts"]
     },
     "strict": true,
