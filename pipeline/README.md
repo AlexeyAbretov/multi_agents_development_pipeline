@@ -15,11 +15,11 @@ docker compose up --build -d
 
 | Сервис | Порт | Назначение |
 |--------|------|------------|
-| `orchestrator` | `127.0.0.1:3020` | Поллинг issues → Cursor Cloud; schedule; API `/api/jobs` |
-| `deployer` | `127.0.0.1:3021` | Поллинг published Release; API `/api/deploys`; docker.sock |
-| `pipeline-ui` | `127.0.0.1:3010` | Таблица джоб и деплоев |
+| `orchestrator` | `ORCHESTRATOR_PORT` | Поллинг issues → Cursor Cloud; schedule; API `/api/jobs` |
+| `deployer` | `DEPLOYER_PORT` | Поллинг published Release; API `/api/deploys`; docker.sock |
+| `pipeline-ui` | `PIPELINE_UI_PORT` | Таблица джоб и деплоев |
 
-Health: `/health` на 3020/3021. UI: http://127.0.0.1:3010/ (nginx: `/api/jobs` → orchestrator, `/api/deploys` → deployer; имена сервисов резолвятся на каждый запрос, чтобы после recreate не было 502).
+Номера — [`ports.env`](./ports.env). Health: `/health` у оркестратора и deployer. UI проксирует `/api/jobs` → orchestrator, `/api/deploys` → deployer (имена сервисов резолвятся на каждый запрос, чтобы после recreate не было 502).
 
 ## Логи
 
@@ -50,17 +50,17 @@ Volume `pipeline_data` хранит `jobs.json`, `deploys.json`, `schedule-state
 
 ## Локальный запуск (без Docker)
 
-Нужен Node ≥ 22. Не держите одновременно контейнеры и локальные процессы на `:3020` / `:3021`.
+Нужен Node ≥ 22. Не держите одновременно контейнеры и локальные процессы на тех же портах.
 
 ```powershell
 cd pipeline
 copy .env.local.example .env.local   # DATA_DIR=./data, PROMPTS_DIR=./prompts
 npm ci
 npm run build
-npm start                 # оркестратор :3020
-npm run start:deployer    # deployer :3021 (второй терминал)
+npm start                 # ORCHESTRATOR_PORT
+npm run start:deployer    # DEPLOYER_PORT (второй терминал)
 ```
 
-VSCode: **Orchestrator**, **Deployer** или **Orchestrator + Deployer**. UI: `cd pipeline-ui && npm run dev` (прокси jobs→3020, deploys→3021).
+VSCode: **Orchestrator**, **Deployer** или **Orchestrator + Deployer**. UI: `cd pipeline-ui && npm run dev` (прокси из `ports.env`).
 
 Подробнее: [`docs/AGENT_PIPELINE_SETUP.md`](../docs/AGENT_PIPELINE_SETUP.md) §10.

@@ -14,7 +14,7 @@
 Источник правды процесса — **labels на GitHub Issue**, не `jobs.json`. Оркестратор читает labels, запускает роль и **переписывает** labels. Джоб — журнал «уже запускали пару `(issue, роль)`».
 
 ```
-GitHub labels          Job.status / Job.decision          UI (таблица :3010)
+GitHub labels          Job.status / Job.decision          UI (таблица)
 (процесс продукта)     (идемпотентность оркестратора)     (проекция джоба)
 ```
 
@@ -149,8 +149,8 @@ queued → running → finished | error | startup_error
 
 Два процесса из одного пакета `pipeline/`:
 
-- `node dist/services/OrchestratorService/index.js` — оркестратор (`src/services/OrchestratorService/`), порт `:3020`
-- `node dist/services/DeployerService/index.js` — deployer (`src/services/DeployerService/`), порт `:3021`
+- `node dist/services/OrchestratorService/index.js` — оркестратор (`src/services/OrchestratorService/`), `ORCHESTRATOR_PORT`
+- `node dist/services/DeployerService/index.js` — deployer (`src/services/DeployerService/`), `DEPLOYER_PORT`
 
 Оба — Fastify + `setInterval`. Нет очереди, нет БД, нет Octokit. Состояние — JSON на volume `pipeline_data`.
 
@@ -179,7 +179,7 @@ queued → running → finished | error | startup_error
 
 ### 2.2. Пакеты `pipeline-ui/`
 
-React + Vite + Tailwind. UI только читает `GET /api/jobs` и `/api/deploys` раз в 5 с. Бизнес-логики нет. Nginx: `/api/jobs` → orchestrator, `/api/deploys` → deployer.
+React + Vite + Tailwind. UI только читает `GET /api/jobs` и `/api/deploys` раз в 5 с. Бизнес-логики нет. Nginx: `/api/jobs` → orchestrator, `/api/deploys` → deployer (порты из `pipeline/ports.env`, envsubst при старте контейнера).
 
 ### 2.3. Протокол с агентом
 
@@ -220,7 +220,9 @@ services/OrchestratorService/     services/DeployerService/
 
 | Файл | Назначение |
 |------|------------|
-| `pipeline/src/config/` | Env → класс `Config` (`GITHUB_REPO`, `CURSOR_*`, `ownerRepo`, интервалы, `DEPLOY_MODE`). Алиас `@config`. |
+| `pipeline/ports.env` | Номера портов (`ORCHESTRATOR_PORT`, `DEPLOYER_PORT`, `PIPELINE_UI_PORT`). Единственный источник; compose / Config / Vite / nginx / npm читают этот файл. |
+| `docker-compose.yml` | Include `docker-compose.services.yml` с `env_file: pipeline/ports.env`. |
+| `pipeline/src/config/` | Env → класс `Config` (`GITHUB_REPO`, `CURSOR_*`, `ownerRepo`, интервалы, `DEPLOY_MODE`). Алиас `@config`. Порт процесса — `PORT`, default из `ports.env`. |
 | `pipeline/src/types/` | Общий тип `Role`. Алиас `@types`. |
 | `pipeline/src/providers/index.ts` | Баррель внешних клиентов; алиас `@providers`. |
 | `pipeline/src/providers/GithubProvider/` | REST GitHub: issues, labels, PR `Fixes #`, releases, milestones, каталог labels. Класс `GitHubClient`. |
@@ -245,7 +247,7 @@ services/OrchestratorService/     services/DeployerService/
 | `…/DeployerService/deploy-store.ts` | `deploys.json` (deployer пишет; UI читает через HTTP). |
 | `pipeline/prompts/*.md` | Контракт с агентом: что писать в маркерах. |
 | `pipeline/test/rules.test.js`, `dispatch.test.js`, `labels.test.js`, `jobs.test.js` | Правила, dispatch, labels, журнал `jobs.json` без GitHub/Cursor. |
-| `.vscode/launch.json` | Отладка: **Orchestrator** (`:3020`), **Deployer** (`:3021`), compound оба. |
+| `.vscode/launch.json` | Отладка: **Orchestrator**, **Deployer** (через `run-deployer.mjs`), compound оба. Порты из `pipeline/ports.env`. |
 
 Поток одного feature-тика:
 
@@ -265,13 +267,13 @@ services/OrchestratorService/     services/DeployerService/
 
 | Способ | Что делает |
 |--------|------------|
-| VSCode **Orchestrator** | `tsx` + `.env.local`, `PORT=3020` |
-| VSCode **Deployer** / compound | `tsx` + `.env.local`, `PORT=3021` |
-| `npm start` | оркестратор `:3020` (нужен `npm run build`) |
-| `npm run start:deployer` | deployer `:3021` (форсит порт поверх `.env.local`) |
+| VSCode **Orchestrator** | `tsx` + `.env.local`, порт из `ORCHESTRATOR_PORT` |
+| VSCode **Deployer** / compound | `tsx` + `.env.local` + `run-deployer.mjs` (`DEPLOYER_PORT`) |
+| `npm start` | оркестратор (нужен `npm run build`) |
+| `npm run start:deployer` | deployer (форсит `DEPLOYER_PORT` поверх `.env.local`) |
 | `npm run dev` / `dev:deployer` | `tsx watch` + `--env-file=.env.local` |
 
-`--use-env-proxy` читает `HTTP_PROXY` / `HTTPS_PROXY` (корпоративный прокси). Не поднимайте локально `:3020` / `:3021`, пока те же порты заняты контейнерами.
+`--use-env-proxy` читает `HTTP_PROXY` / `HTTPS_PROXY` (корпоративный прокси). Не поднимайте локально те же порты, пока они заняты контейнерами.
 
 `.env.local`: `DATA_DIR=./data`, `PROMPTS_DIR=./prompts` (docker-пути `/data` и `/app/prompts` на хосте не существуют). Файл в git не коммитить; шаблон — `pipeline/.env.local.example`.
 

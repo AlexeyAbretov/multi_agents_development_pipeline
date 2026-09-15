@@ -5,7 +5,7 @@
 Архитектура кода: [AGENT_PIPELINE_ARCHITECTURE.md](./AGENT_PIPELINE_ARCHITECTURE.md).  
 Этапы разработки: [AGENT_PIPELINE_PLAN.md](./AGENT_PIPELINE_PLAN.md).
 
-Сейчас из коробки поднимаются **P0–P17 + UI**: оркестратор, deployer, очередь на `http://127.0.0.1:3010/`. Локальная отладка оркестратора (VSCode / `npm start`) — §10.
+Сейчас из коробки поднимаются **P0–P17 + UI**: оркестратор, deployer, очередь. Порты — [`pipeline/ports.env`](../pipeline/ports.env) (по умолчанию UI `http://127.0.0.1:3010/`). Локальная отладка оркестратора (VSCode / `npm start`) — §10.
 
 Checkout **целевого продукта** (каталог, API и т.д.) для оркестратора **не нужен** — Cursor Cloud клонирует его по `CURSOR_REPO_URL`. Для `DEPLOY_MODE=compose` нужен отдельный clone продукта на хосте (`PRODUCT_WORKSPACE_HOST`).
 
@@ -13,7 +13,7 @@ Checkout **целевого продукта** (каталог, API и т.д.) �
 
 ## Что должно получиться
 
-1. Контейнер слушает `http://127.0.0.1:3020/health` → `{"status":"ok"}`.
+1. Контейнер оркестратора отвечает `{"status":"ok"}` на `/health` (порт `ORCHESTRATOR_PORT` в [`pipeline/ports.env`](../pipeline/ports.env)).
 2. На GitHub **целевого продукта** создаёте issue с labels `feature` (или `bug`) **и** `needs-plan`. Стартовая задача проекта: `mvp` **и** `needs-plan`.
 3. В течение ~30 с оркестратор стартует Cursor Cloud: снимает `needs-plan`, ставит `in-analysis`, пишет комментарий с `agentId` / `runId`.
 4. После ответа аналитика: комментарий со статусом, **отдельный комментарий с текстом плана**, снимается `in-analysis`, ставится `ready-for-dev` или `needs-human`.
@@ -161,7 +161,7 @@ SCHEDULE_TZ=Europe/Moscow
 docker compose up --build -d
 ```
 
-Проверка:
+Проверка (порты по умолчанию из [`pipeline/ports.env`](../pipeline/ports.env)):
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:3020/health
@@ -225,11 +225,11 @@ docker compose up -d
 | `set PRODUCT_WORKSPACE_HOST in .env` | Создайте корневой `.env` из `.env.example` |
 | compose failed: no such file | `PRODUCT_WORKSPACE_HOST` указывает на clone продукта с `docker-compose.yml` |
 | `ENOENT` / `DATA_DIR` `/data` при `npm start` | В `.env.local` нужны хостовые пути: `DATA_DIR=./data`, `PROMPTS_DIR=./prompts` |
-| `EADDRINUSE` `:3020` | Остановите контейнер `orchestrator` или не запускайте локально параллельно с compose |
+| `EADDRINUSE` на порту оркестратора | Остановите контейнер `orchestrator` или не запускайте локально параллельно с compose |
 | `Cursor is not available in your region` | Cloud Agents недоступны; оркестратор тут ни при чём |
 | GitHub/Cursor `ECONNREFUSED` / timeout за прокси | `HTTP_PROXY`/`HTTPS_PROXY` в `.env.local`; `npm start` уже передаёт `--use-env-proxy` |
 
-Кратко про логи и stop: [pipeline/README.md](../pipeline/README.md). UI: `http://127.0.0.1:3010/`.
+Кратко про логи и stop: [pipeline/README.md](../pipeline/README.md). UI: порт `PIPELINE_UI_PORT` в [`pipeline/ports.env`](../pipeline/ports.env).
 
 Промпты ролей: `pipeline/prompts/`.
 
@@ -237,23 +237,23 @@ docker compose up -d
 
 ## 10. Локальный запуск оркестратора и deployer (без Docker)
 
-Нужен **Node ≥ 22**. Docker-compose при этом можно не поднимать (или остановить `orchestrator` / `deployer`, чтобы не занять `:3020` / `:3021`).
+Нужен **Node ≥ 22**. Docker-compose при этом можно не поднимать (или остановить `orchestrator` / `deployer`, чтобы не занять те же порты).
 
 ```powershell
 cd pipeline
 copy .env.local.example .env.local
 # Заполните GITHUB_TOKEN, GITHUB_REPO, CURSOR_API_KEY (как в §5).
 # DATA_DIR=./data и PROMPTS_DIR=./prompts уже в шаблоне.
-# PORT=3020 в .env.local — для оркестратора; deployer всегда слушает 3021.
+# Порты — ../ports.env; не задавайте PORT в .env.local.
 npm ci
 npm run build
-npm start              # :3020
-npm run start:deployer # :3021 (второй терминал)
+npm start              # ORCHESTRATOR_PORT
+npm run start:deployer # DEPLOYER_PORT (второй терминал)
 ```
 
-Отладка в VSCode: **Orchestrator**, **Deployer** или compound **Orchestrator + Deployer** (`.vscode/launch.json`) — `tsx` + `pipeline/.env.local`, без предварительного `npm run build`.
+Отладка в VSCode: **Orchestrator**, **Deployer** или compound **Orchestrator + Deployer** (`.vscode/launch.json`) — `tsx` + `pipeline/.env.local`, без предварительного `npm run build`. Deployer идёт через `scripts/run-deployer.mjs`.
 
-UI локально: `cd pipeline-ui && npm run dev` — Vite на `:3010`, прокси `/api/jobs` → `:3020`, `/api/deploys` → `:3021`.
+UI локально: `cd pipeline-ui && npm run dev` — Vite на `PIPELINE_UI_PORT`, прокси `/api/jobs` → оркестратор, `/api/deploys` → deployer.
 
 `npm run dev` / `npm run dev:deployer` (`tsx watch`) читают `.env.local` через `--env-file`.
 

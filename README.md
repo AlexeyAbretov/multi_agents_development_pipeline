@@ -17,7 +17,7 @@ docker compose up --build -d
 curl -s http://127.0.0.1:3020/health
 ```
 
-UI очереди: http://127.0.0.1:3010/
+Порты по умолчанию — [`pipeline/ports.env`](pipeline/ports.env). UI очереди: http://127.0.0.1:3010/
 
 ## Документация
 

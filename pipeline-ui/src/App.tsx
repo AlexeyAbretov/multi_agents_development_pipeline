@@ -120,8 +120,7 @@ export function App() {
 
       {jobsError ? (
         <p className="mb-6 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
-          Не удалось загрузить джобы: {jobsError}. Проверьте оркестратор
-          (:3020).
+          Не удалось загрузить джобы: {jobsError}. Проверьте оркестратор.
         </p>
       ) : null}
 
@@ -134,8 +133,7 @@ export function App() {
         <h2 className="mb-4 text-lg font-semibold text-ink-900">Деплои</h2>
         {deploysError ? (
           <p className="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
-            Не удалось загрузить деплои: {deploysError}. Проверьте deployer
-            (:3021).
+            Не удалось загрузить деплои: {deploysError}. Проверьте deployer.
           </p>
         ) : null}
         <DeploysPanel data={deploys} error={deploysError} />

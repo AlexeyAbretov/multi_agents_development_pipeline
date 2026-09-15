@@ -478,7 +478,7 @@ Issue → план → PR → issue-QA → merge человеком в `main` �
 
 ### Шаги
 
-1. Сервис `pipeline-ui` (React + Vite + TS + Tailwind), порт `127.0.0.1:3010`.
+1. Сервис `pipeline-ui` (React + Vite + TS + Tailwind), bind `127.0.0.1`, порт `PIPELINE_UI_PORT` в `pipeline/ports.env`.
 2. API: `GET /api/jobs` (orchestrator), `GET /api/deploys` (deployer); данные из volume, не docker logs.
 3. Таблица: issue, роль, UI-статус (`queued` / `running` / `failed` / `finished` / `clarification`), ссылки GitHub и Cursor.
 4. Полный транскрипт — ссылка на Cursor (`agentId`); Publish релиза — RM по milestone, не кнопка в UI.
@@ -487,7 +487,7 @@ Issue → план → PR → issue-QA → merge человеком в `main` �
 ### Проверка
 
 - [ ] Джоб из `jobs.json` виден в таблице со ссылками
-- [ ] UI слушает только `127.0.0.1:3010`
+- [ ] UI слушает только `127.0.0.1` (`PIPELINE_UI_PORT` в `pipeline/ports.env`)
 
 ---
 

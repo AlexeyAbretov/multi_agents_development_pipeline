@@ -13,9 +13,6 @@
             ],
             "program": "${workspaceFolder}/pipeline/src/services/OrchestratorService/index.ts",
             "envFile": "${workspaceFolder}/pipeline/.env.local",
-            "env": {
-                "PORT": "3020"
-            },
             "skipFiles": [
                 "<node_internals>/**"
             ]
@@ -30,11 +27,11 @@
                 "--import",
                 "tsx"
             ],
-            "program": "${workspaceFolder}/pipeline/src/services/DeployerService/index.ts",
+            "program": "${workspaceFolder}/pipeline/scripts/run-deployer.mjs",
+            "args": [
+                "src/services/DeployerService/index.ts"
+            ],
             "envFile": "${workspaceFolder}/pipeline/.env.local",
-            "env": {
-                "PORT": "3021"
-            },
             "skipFiles": [
                 "<node_internals>/**"
             ]

@@ -143,7 +143,7 @@ Git — **только GitHub** (`origin`). Локальная Gitea не исп
 - Идемпотентность: одно активное облачное задание на пару `(issue, role)`. Регресс и RM — на служебной regression-issue, не на feature/bug. При старте оркестратора джобы `running`/`queued` из прошлого процесса помечаются `error` (агент после recreate контейнера уже мёртв), записи журнала не удаляются. Полл **не** ждёт завершения Cursor `run.wait()`: тик только находит работу и стартует агентов. Несколько пар могут быть `running` одновременно. Все eligible роли (analyst, developer, tester, tester-regression, RM) стартуют в одном тике **параллельно** и не гейтят друг друга. Повторный тик ту же пару не дублирует (`jobs.json` + in-flight). Гейты самой issue (PR, fix-round, дети, календарь RM) остаются.
 - В записи джоба обязательно: `cursorAgentId`, `cursorRunId`, URL issue/PR, статус, timestamps.
 
-Контейнер оркестратора **не** монтирует docker.sock. Сокет только у `deployer` (`docker-compose.yml` в репозитории пайплайна, health `http://127.0.0.1:3021/health`).
+Контейнер оркестратора **не** монтирует docker.sock. Сокет только у `deployer` (`docker-compose.yml` в репозитории пайплайна, health `/health` на `DEPLOYER_PORT` из [`pipeline/ports.env`](../pipeline/ports.env)).
 
 Деплой: поллинг published GitHub Releases (draft пропускаются). Режим `DEPLOY_MODE=stub` (заглушка) или `compose` (`docker compose -f docker-compose.yml up -d` в checkout продукта, смонтированном через `PRODUCT_WORKSPACE_HOST`). Статус дописывается в тело Release; на open issues отгруженного milestone — `deployed` или `deploy-failed`.
 
@@ -168,7 +168,7 @@ Ollama: `host.docker.internal:11434` для приложения каталог�
 | GitHub Actions / Release | CI, review, deploy job |
 | Deployer | `compose up`, health |
 
-UI (отдельный порт **`127.0.0.1:3010`**, сервис `pipeline-ui`):
+UI (сервис `pipeline-ui`, bind `127.0.0.1`, порт `PIPELINE_UI_PORT` в [`pipeline/ports.env`](../pipeline/ports.env)):
 
 1. Таблица очереди из `GET /api/jobs` (volume `jobs.json`): issue, роль, статус, ссылки GitHub / Cursor.
 2. Статусы `tester`, `tester-regression` и `release-manager` на regression-issue — без кнопки Publish в UI.
