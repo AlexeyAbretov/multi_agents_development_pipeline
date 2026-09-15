@@ -909,10 +909,18 @@ async function handleIssue(
     }
   }
 
-  if (role === 'developer' || isQaRole(role)) {
+  if (role === 'developer' || isQaRole(role) || role === 'analyst') {
     try {
       const existing = await store.find(issue.number, role);
-      const triggerLabel = role === 'developer' ? 'ready-for-dev' : 'in-qa';
+      let triggerLabel = 'in-qa';
+
+      if (role === 'developer') {
+        triggerLabel = 'ready-for-dev';
+      }
+
+      if (role === 'analyst') {
+        triggerLabel = 'needs-plan';
+      }
 
       if (
         shouldResetFailedRoleJob({

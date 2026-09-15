@@ -129,7 +129,7 @@ queued → running → finished | error | startup_error
                     └── decision: ready-for-dev | to-approve | done | in-qa | qa-passed | released | needs-human
 ```
 
-Пара `(issue, role)` — один **активный** замок (`JobStore.create`). Чтобы роль стартовала снова (re-QA, новый круг плана, повтор developer/tester после сбоя), замок снимается (`remove` / `removeRoles`, поле `cleared`), запись журнала **остаётся**. `shouldResetFailedRoleJob`: на issue снова `ready-for-dev` (developer) или `in-qa` (tester), джоб `error` / `startup_error` или `finished` + `needs-human`. После recreate контейнера `dropUnfinishedJobs` помечает `running`/`queued` как `error` + `cleared` (агент уже мёртв), не стирая историю. Залипший `in-dev` после drop + открытый Fixes PR: `shouldPromoteStaleInDev` → `in-qa` без нового агента.
+Пара `(issue, role)` — один **активный** замок (`JobStore.create`). Чтобы роль стартовала снова (re-QA, новый круг плана, повтор analyst/developer/tester после сбоя), замок снимается (`remove` / `removeRoles`, поле `cleared`), запись журнала **остаётся**. `shouldResetFailedRoleJob`: на issue снова `needs-plan` (analyst), `ready-for-dev` (developer) или `in-qa` (tester), джоб `error` / `startup_error` или `finished` + `needs-human`. После recreate контейнера `dropUnfinishedJobs` помечает `running`/`queued` как `error` + `cleared` (агент уже мёртв), не стирая историю. Залипший `in-dev` после drop + открытый Fixes PR: `shouldPromoteStaleInDev` → `in-qa` без нового агента.
 
 `needs-human` на issue блокирует роли. `finished` + `decision === "needs-human"` в UI — `clarification` (уточнение). Ошибка Cursor / старта — `failed`.
 
