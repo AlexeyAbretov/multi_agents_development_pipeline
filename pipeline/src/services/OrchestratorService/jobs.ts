@@ -66,7 +66,11 @@ export class JobStore {
     });
   }
 
-  create(issue: number, role: Role): Promise<Job | null> {
+  create(
+    issue: number,
+    role: Role,
+    parentIssue?: number | null,
+  ): Promise<Job | null> {
     return this.synchronized(() => {
       const data = this.loadSync();
 
@@ -86,6 +90,7 @@ export class JobStore {
         decision: null,
         createdAt: now,
         updatedAt: now,
+        parentIssue: parentIssue ?? null,
       };
 
       data.jobs.push(job);

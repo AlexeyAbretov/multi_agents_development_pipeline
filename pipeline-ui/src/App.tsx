@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import {
   fetchDeploys,
   fetchJobs,
@@ -7,6 +7,7 @@ import {
   type PipelineJob,
   type UiJobStatus,
 } from "./api";
+import { groupJobsByIssue, rewriteIssueUrl, type JobGroup } from "./jobGroups";
 
 const STATUS_LABEL: Record<UiJobStatus, string> = {
   queued: "в очереди",
@@ -142,11 +143,139 @@ export function App() {
   );
 }
 
+function IssueLink({
+  issue,
+  url,
+}: {
+  issue: number;
+  url: string | null;
+}) {
+  if (!url) {
+    return <>#{issue}</>;
+  }
+
+  return (
+    <a
+      className="text-ink-900 underline decoration-ink-200 underline-offset-2 hover:decoration-accent"
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      onClick={(event) => event.stopPropagation()}
+    >
+      #{issue}
+    </a>
+  );
+}
+
+function StatusBadge({ status }: { status: UiJobStatus }) {
+  return (
+    <span
+      className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${statusClass(status)}`}
+    >
+      {STATUS_LABEL[status]}
+    </span>
+  );
+}
+
+function JobLinks({ job }: { job: PipelineJob }) {
+  return (
+    <div className="flex flex-col gap-1">
+      {job.agentUrl ? (
+        <a
+          className="text-accent underline-offset-2 hover:underline"
+          href={job.agentUrl}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(event) => event.stopPropagation()}
+        >
+          Cursor {job.agentId?.slice(0, 10)}…
+        </a>
+      ) : (
+        <span className="text-ink-200">Cursor —</span>
+      )}
+      {job.runId ? (
+        <span className="font-mono text-xs text-ink-700" title={job.runId}>
+          run {job.runId.slice(0, 12)}…
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function JobRow({ job, groupIssue }: { job: PipelineJob; groupIssue: number }) {
+  return (
+    <tr className="border-b border-ink-100 last:border-0 bg-white">
+      <td className="px-4 py-3 pl-9 font-medium">
+        {job.issue === groupIssue ? null : (
+          <IssueLink issue={job.issue} url={job.issueUrl} />
+        )}
+      </td>
+      <td className="px-4 py-3">{job.role}</td>
+      <td className="px-4 py-3">
+        <StatusBadge status={job.uiStatus} />
+        {job.error ? (
+          <p className="mt-1 max-w-xs truncate text-xs text-red-700" title={job.error}>
+            {job.error}
+          </p>
+        ) : null}
+      </td>
+      <td className="px-4 py-3 text-ink-700">{job.decision ?? "—"}</td>
+      <td className="px-4 py-3">
+        <JobLinks job={job} />
+      </td>
+      <td className="px-4 py-3 whitespace-nowrap text-ink-700">
+        {formatTime(job.updatedAt)}
+      </td>
+    </tr>
+  );
+}
+
+function GroupIssueCell({ group }: { group: JobGroup }) {
+  const sampleUrl = group.jobs[0]?.issueUrl ?? null;
+  const groupUrl = rewriteIssueUrl(sampleUrl, group.issue);
+
+  return (
+    <div>
+      <span className="font-medium">
+        <IssueLink issue={group.issue} url={groupUrl} />
+      </span>
+      {group.relatedIssues.length > 0 ? (
+        <p className="mt-1 text-xs text-ink-700">
+          связанные{" "}
+          {group.relatedIssues.map((issue, index) => (
+            <span key={issue}>
+              {index > 0 ? ", " : null}
+              <IssueLink issue={issue} url={rewriteIssueUrl(sampleUrl, issue)} />
+            </span>
+          ))}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function JobsTable({ jobs }: { jobs: PipelineJob[] }) {
+  const [collapsed, setCollapsed] = useState<Set<number>>(() => new Set());
+  const groups = groupJobsByIssue(jobs);
+
   if (jobs.length === 0) {
     return (
       <p className="text-sm text-ink-700">Пока нет записей в jobs.json — дождитесь полла.</p>
     );
+  }
+
+  function toggleGroup(issue: number) {
+    setCollapsed((current) => {
+      const next = new Set(current);
+
+      if (next.has(issue)) {
+        next.delete(issue);
+      } else {
+        next.add(issue);
+      }
+
+      return next;
+    });
   }
 
   return (
@@ -163,62 +292,60 @@ function JobsTable({ jobs }: { jobs: PipelineJob[] }) {
           </tr>
         </thead>
         <tbody>
-          {jobs.map((job) => (
-            <tr key={job.id} className="border-b border-ink-100 last:border-0">
-              <td className="px-4 py-3 font-medium">
-                {job.issueUrl ? (
-                  <a
-                    className="text-ink-900 underline decoration-ink-200 underline-offset-2 hover:decoration-accent"
-                    href={job.issueUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    #{job.issue}
-                  </a>
-                ) : (
-                  `#${job.issue}`
-                )}
-              </td>
-              <td className="px-4 py-3">{job.role}</td>
-              <td className="px-4 py-3">
-                <span
-                  className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${statusClass(job.uiStatus)}`}
+          {groups.map((group) => {
+            const expanded = !collapsed.has(group.issue);
+            const active = group.activeJobs;
+
+            return (
+              <Fragment key={group.issue}>
+                <tr
+                  className="cursor-pointer border-b border-ink-100 bg-ink-50/70 hover:bg-ink-100/80"
+                  onClick={() => toggleGroup(group.issue)}
                 >
-                  {STATUS_LABEL[job.uiStatus]}
-                </span>
-                {job.error ? (
-                  <p className="mt-1 max-w-xs truncate text-xs text-red-700" title={job.error}>
-                    {job.error}
-                  </p>
-                ) : null}
-              </td>
-              <td className="px-4 py-3 text-ink-700">{job.decision ?? "—"}</td>
-              <td className="px-4 py-3">
-                <div className="flex flex-col gap-1">
-                  {job.agentUrl ? (
-                    <a
-                      className="text-accent underline-offset-2 hover:underline"
-                      href={job.agentUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Cursor {job.agentId?.slice(0, 10)}…
-                    </a>
-                  ) : (
-                    <span className="text-ink-200">Cursor —</span>
-                  )}
-                  {job.runId ? (
-                    <span className="font-mono text-xs text-ink-700" title={job.runId}>
-                      run {job.runId.slice(0, 12)}…
-                    </span>
-                  ) : null}
-                </div>
-              </td>
-              <td className="px-4 py-3 whitespace-nowrap text-ink-700">
-                {formatTime(job.updatedAt)}
-              </td>
-            </tr>
-          ))}
+                  <td className="px-4 py-3">
+                    <div className="flex items-start gap-2">
+                      <span className="mt-0.5 inline-block w-3 text-xs text-ink-700">
+                        {expanded ? "▾" : "▸"}
+                      </span>
+                      <GroupIssueCell group={group} />
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    {active.length > 0 ? (
+                      <div className="flex flex-col gap-1">
+                        {active.map((job) => (
+                          <span key={job.id}>{job.role}</span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-ink-200">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    {active.length > 0 ? (
+                      <div className="flex flex-col gap-1">
+                        {active.map((job) => (
+                          <StatusBadge key={job.id} status={job.uiStatus} />
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-ink-200">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-ink-200">—</td>
+                  <td className="px-4 py-3 text-ink-200">—</td>
+                  <td className="px-4 py-3 whitespace-nowrap text-ink-700">
+                    {formatTime(group.updatedAt)}
+                  </td>
+                </tr>
+                {expanded
+                  ? group.jobs.map((job) => (
+                      <JobRow key={job.id} job={job} groupIssue={group.issue} />
+                    ))
+                  : null}
+              </Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>

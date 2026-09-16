@@ -80,3 +80,19 @@ test("dropUnfinishedJobs marks running jobs error without deleting", async () =>
   assert.ok(next);
   assert.equal((await store.snapshot()).jobs.length, 2);
 });
+
+test("create stores parentIssue for Related to # child bugs", async () => {
+  const store = new JobStore(storeDir());
+  const child = await store.create(18, "analyst", 12);
+  const root = await store.create(12, "tester");
+
+  assert.ok(child);
+  assert.ok(root);
+  assert.equal(child.parentIssue, 12);
+  assert.equal(root.parentIssue, null);
+
+  const snap = await store.snapshot();
+
+  assert.equal(snap.jobs[0].parentIssue, 12);
+  assert.equal(snap.jobs[1].parentIssue, null);
+});

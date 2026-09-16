@@ -955,7 +955,11 @@ async function handleIssue(
     return;
   }
 
-  const job = await store.create(issue.number, role);
+  const job = await store.create(
+    issue.number,
+    role,
+    parseRelatedParentIssue(issue.body),
+  );
 
   if (!job) {
     logger.job(fields, 'skip existing job');

@@ -18,6 +18,8 @@ export type Job = {
   updatedAt: string;
   /** Замок (issue, role) снят; запись журнала остаётся. */
   cleared?: boolean;
+  /** Родитель дочернего бага (`Related to #N`); иначе null. */
+  parentIssue?: number | null;
 };
 
 /** UI-статус очереди (контракт AGENT_PIPELINE_PLAN UI). */

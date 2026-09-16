@@ -19,6 +19,8 @@ export type PipelineJob = {
   updatedAt: string;
   issueUrl: string | null;
   agentUrl: string | null;
+  cleared?: boolean;
+  parentIssue?: number | null;
 };
 
 export type JobsResponse = {
