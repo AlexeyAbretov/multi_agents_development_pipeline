@@ -1395,6 +1395,8 @@ async function handleIssue(
         status: result.status,
         error: result.error,
         decision,
+        model: result.model,
+        usage: result.usage,
       }),
     );
   } catch (err) {

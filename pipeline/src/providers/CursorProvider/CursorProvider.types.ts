@@ -26,12 +26,27 @@ export type CursorPull = {
   headRef: string;
 };
 
+export type CursorTokenUsage = {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  totalTokens: number;
+};
+
+export type CursorModelSelection = {
+  id: string;
+  params?: Array<{ id: string; value: string }>;
+};
+
 export type CursorRunResult = {
   agentId: string | null;
   runId: string | null;
   status: 'finished' | 'error' | 'startup_error';
   error: string | null;
   text: string | null;
+  model: string | null;
+  usage: CursorTokenUsage | null;
 };
 
 export type CursorRunStarted = {

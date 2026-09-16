@@ -165,6 +165,7 @@ Ollama: `host.docker.internal:11434` для приложения каталог�
 |----------|------------|
 | Оркестратор | Поллинг, вызовы SDK, ошибки старта |
 | Cursor Cloud | Промпт, тулы, ответ агента — по ссылке на `agentId` (`bc-…`) |
+| GitHub issue | Служебный комментарий `<!-- pipeline:job:… -->`: роль, статус, модель, токены |
 | GitHub Actions / Release | CI, review, deploy job |
 | Deployer | `compose up`, health |
 

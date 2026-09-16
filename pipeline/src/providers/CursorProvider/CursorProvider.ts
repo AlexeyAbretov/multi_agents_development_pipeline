@@ -8,8 +8,14 @@ import type {
   CursorPull,
   CursorRunResult,
   CursorRunStarted,
+  CursorTokenUsage,
 } from './CursorProvider.types';
-import { buildMessage, loadPrompt } from './CursorProvider.utils';
+import {
+  buildMessage,
+  formatCursorModel,
+  loadPrompt,
+  readCursorUsage,
+} from './CursorProvider.utils';
 
 export class CursorClient {
   constructor(private readonly config: Config) {}
@@ -57,6 +63,14 @@ export class CursorClient {
       await onStarted({ agentId, runId });
 
       const result = await run.wait();
+      const model = formatCursorModel(
+        result.model ?? agent.model,
+        this.config.CURSOR_MODEL,
+      );
+      const usage = await readCursorUsage({
+        fetchBilled: () => agent.getUsage({ runId: run.id }),
+        live: result.usage,
+      });
 
       if (result.status === 'error') {
         return {
@@ -65,6 +79,8 @@ export class CursorClient {
           status: 'error',
           error: result.error?.message ?? 'run.status=error',
           text: result.result ?? null,
+          model,
+          usage,
         };
       }
 
@@ -75,6 +91,8 @@ export class CursorClient {
           status: 'error',
           error: 'run cancelled',
           text: result.result ?? null,
+          model,
+          usage,
         };
       }
 
@@ -84,6 +102,8 @@ export class CursorClient {
         status: 'finished',
         error: null,
         text: result.result ?? null,
+        model,
+        usage,
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -92,6 +112,7 @@ export class CursorClient {
           ? ` retryable=${String(err.isRetryable)}`
           : '';
       const status = runId ? 'error' : 'startup_error';
+      const usage = await this.usageAfterThrow(agentId, runId);
 
       return {
         agentId,
@@ -99,7 +120,26 @@ export class CursorClient {
         status,
         error: `${message}${retryable}`,
         text: null,
+        model: formatCursorModel(undefined, this.config.CURSOR_MODEL),
+        usage,
       };
     }
+  }
+
+  private async usageAfterThrow(
+    agentId: string | null,
+    runId: string | null,
+  ): Promise<CursorTokenUsage | null> {
+    if (!agentId || !runId) {
+      return null;
+    }
+
+    return readCursorUsage({
+      fetchBilled: () =>
+        Agent.getUsage(agentId, {
+          apiKey: this.config.CURSOR_API_KEY,
+          runId,
+        }),
+    });
   }
 }

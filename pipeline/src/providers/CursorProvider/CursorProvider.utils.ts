@@ -1,9 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { Role } from '@types';
+import type { Role } from '@types';
 
-import { CursorIssue, CursorPull } from './CursorProvider.types';
+import type {
+  CursorIssue,
+  CursorModelSelection,
+  CursorPull,
+  CursorTokenUsage,
+} from './CursorProvider.types';
 
 export const loadPrompt = (promptsDir: string, role: Role): string =>
   readFileSync(join(promptsDir, `${role}.md`), 'utf8');
@@ -90,3 +95,64 @@ export const buildMessage = (
 
   return lines.join('\n');
 };
+
+export function formatCursorModel(
+  selection: CursorModelSelection | undefined,
+  fallbackId: string,
+): string {
+  const id = selection?.id || fallbackId;
+  const params = selection?.params ?? [];
+
+  if (params.length === 0) {
+    return id;
+  }
+
+  const extra = params.map((param) => `${param.id}=${param.value}`).join(', ');
+
+  return `${id} ${extra}`;
+}
+
+function hasRecordedUsage(usage: CursorTokenUsage): boolean {
+  return Boolean(
+    usage.totalTokens ||
+    usage.inputTokens ||
+    usage.outputTokens ||
+    usage.cacheReadTokens ||
+    usage.cacheWriteTokens,
+  );
+}
+
+function toCursorTokenUsage(usage: CursorTokenUsage): CursorTokenUsage {
+  return {
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    cacheReadTokens: usage.cacheReadTokens,
+    cacheWriteTokens: usage.cacheWriteTokens,
+    totalTokens: usage.totalTokens,
+  };
+}
+
+export async function readCursorUsage(params: {
+  fetchBilled: () => Promise<{ usage?: CursorTokenUsage }>;
+  live?: CursorTokenUsage;
+}): Promise<CursorTokenUsage | null> {
+  try {
+    const billed = (await params.fetchBilled()).usage;
+
+    if (billed) {
+      if (hasRecordedUsage(billed)) {
+        return toCursorTokenUsage(billed);
+      }
+    }
+  } catch {
+    // billed usage can lag or 404; live counts still useful
+  }
+
+  const live = params.live;
+
+  if (!live || !hasRecordedUsage(live)) {
+    return null;
+  }
+
+  return toCursorTokenUsage(live);
+}

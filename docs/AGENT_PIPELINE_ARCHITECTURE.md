@@ -226,7 +226,7 @@ services/OrchestratorService/     services/DeployerService/
 | `pipeline/src/types/` | Общий тип `Role`. Алиас `@types`. |
 | `pipeline/src/providers/index.ts` | Баррель внешних клиентов; алиас `@providers`. |
 | `pipeline/src/providers/GithubProvider/` | REST GitHub: issues, labels, PR `Fixes #`, releases, milestones, каталог labels. Класс `GitHubClient`. |
-| `pipeline/src/providers/CursorProvider/` | Промпт + issue/PR, `Agent.create` cloud, `run.wait()`. Класс `CursorClient`. Промпт: `pipeline/prompts/<role>.md`. |
+| `pipeline/src/providers/CursorProvider/` | Промпт + issue/PR, `Agent.create` cloud, `run.wait()`, `getUsage()`. Класс `CursorClient`. Промпт: `pipeline/prompts/<role>.md`. |
 | `pipeline/src/providers/LogProvider/` | Структурный лог `issue` / `role` / `agentId` / `runId`. Класс `LogClient`. Fastify logger внутри провайдера. |
 | `pipeline/src/cli/ensure-labels.ts` | `npm run ensure-labels`: создать недостающие labels контракта §3 в репо продукта. |
 | `pipeline/src/services/OrchestratorService/` | Точка входа оркестратора (`index.ts`). |
@@ -246,7 +246,7 @@ services/OrchestratorService/     services/DeployerService/
 | `…/DeployerService/deploy-run.ts` | `DEPLOY_MODE=stub` или `docker compose up -d` в `/product`. |
 | `…/DeployerService/deploy-store.ts` | `deploys.json` (deployer пишет; UI читает через HTTP). |
 | `pipeline/prompts/*.md` | Контракт с агентом: что писать в маркерах. |
-| `pipeline/test/rules.test.js`, `dispatch.test.js`, `labels.test.js`, `jobs.test.js` | Правила, dispatch, labels, журнал `jobs.json` без GitHub/Cursor. |
+| `pipeline/test/rules.test.js`, `dispatch.test.js`, `labels.test.js`, `jobs.test.js`, `comments.test.js` | Правила, dispatch, labels, журнал `jobs.json`, комментарий `pipeline:job` (модель / токены). |
 | `.vscode/launch.json` | Отладка: **Orchestrator**, **Deployer** (через `run-deployer.mjs`), compound оба. Порты из `pipeline/ports.env`. |
 
 Поток одного feature-тика:

@@ -13,6 +13,22 @@ export const isOrchestratorJobComment = (body: string | null): boolean => {
   return /<!--\s*pipeline:job:/i.test(body ?? '');
 };
 
+type JobCommentUsage = {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  totalTokens: number;
+};
+
+function formatJobTokens(usage: JobCommentUsage): string {
+  return (
+    `tokens: in=${usage.inputTokens} out=${usage.outputTokens} ` +
+    `cacheR=${usage.cacheReadTokens} cacheW=${usage.cacheWriteTokens} ` +
+    `total=${usage.totalTokens}`
+  );
+}
+
 export const generateJobComment = (params: {
   jobId: string;
   role: string;
@@ -21,6 +37,8 @@ export const generateJobComment = (params: {
   status: string;
   error?: string | null;
   decision?: string | null;
+  model?: string | null;
+  usage?: JobCommentUsage | null;
 }): string => {
   const lines = [
     `<!-- pipeline:job:${params.jobId} -->`,
@@ -28,6 +46,14 @@ export const generateJobComment = (params: {
     params.agentId ? `agentId: \`${params.agentId}\`` : 'agentId: —',
     params.runId ? `runId: \`${params.runId}\`` : 'runId: —',
   ];
+
+  if (params.model) {
+    lines.push(`model: \`${params.model}\``);
+  }
+
+  if (params.usage) {
+    lines.push(formatJobTokens(params.usage));
+  }
 
   if (params.decision) {
     lines.push(`Решение: \`${params.decision}\`.`);
