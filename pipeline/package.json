@@ -11,7 +11,7 @@
     "prepare": "cd .. && husky || exit 0",
     "start": "node --use-env-proxy --env-file=.env.local dist/services/OrchestratorService/index.js",
     "start:deployer": "node --use-env-proxy --env-file=.env.local scripts/run-deployer.mjs dist/services/DeployerService/index.js",
-    "dev": "tsx watch --env-file=.env.local src/services/OrchestratorService/index.ts",
+    "dev": "tsx watch --use-env-proxy --env-file=.env.local src/services/OrchestratorService/index.ts",
     "dev:deployer": "tsx watch --env-file=.env.local scripts/run-deployer.mjs src/services/DeployerService/index.ts",
     "ensure-labels": "node --use-env-proxy --import tsx src/cli/ensure-labels.ts"
   },

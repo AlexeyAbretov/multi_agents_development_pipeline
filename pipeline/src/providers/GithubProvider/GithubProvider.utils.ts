@@ -9,6 +9,10 @@ import {
   PipelineLabel,
 } from './GithubProvider.types';
 
+export const isOrchestratorJobComment = (body: string | null): boolean => {
+  return /<!--\s*pipeline:job:/i.test(body ?? '');
+};
+
 export const generateJobComment = (params: {
   jobId: string;
   role: string;

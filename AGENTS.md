@@ -13,7 +13,7 @@
 | [docs/AGENT_PIPELINE_ARCHITECTURE.md](docs/AGENT_PIPELINE_ARCHITECTURE.md) | Статусная модель, код, точки расширения |
 | [docs/AGENT_PIPELINE_PLAN.md](docs/AGENT_PIPELINE_PLAN.md) | Этапы `pipeline/N-…` |
 | [docs/AGENT_PIPELINE_SETUP.md](docs/AGENT_PIPELINE_SETUP.md) | Запуск оркестратора |
-| [pipeline/README.md](pipeline/README.md) | Логи, UI :3010, локальный npm |
+| [pipeline/README.md](pipeline/README.md) | Логи, UI, локальный npm |
 | [.cursor/rules/](.cursor/rules/) | Правила для Cursor |
 
 ## Git-workflow
@@ -27,13 +27,14 @@
 ```bash
 cp .env.example .env
 cp pipeline/.env.example pipeline/.env
-docker compose up --build -d          # orchestrator :3020, deployer :3021, UI :3010
+npm i                                # pipeline + pipeline-ui
+docker compose up --build -d          # порты: pipeline/ports.env
 cd pipeline && npm ci && npm run build && npm test
 cd pipeline-ui && npm ci && npm run build
 docker compose logs -f orchestrator
 docker compose down
 ```
 
-Локально без Docker: `copy pipeline\.env.local.example pipeline\.env.local` → заполнить секреты → `cd pipeline && npm ci && npm start` (`:3020`) и `npm run start:deployer` (`:3021`). Отладка: VSCode **Orchestrator**, **Deployer** или **Orchestrator + Deployer**. Подробнее: [docs/AGENT_PIPELINE_SETUP.md](docs/AGENT_PIPELINE_SETUP.md) §10.
+Локально без Docker: `copy pipeline\.env.local.example pipeline\.env.local` → заполнить секреты → `cd pipeline && npm ci && npm start` и `npm run start:deployer` (порты в `pipeline/ports.env`). Отладка: VSCode **Orchestrator**, **Deployer** или **Orchestrator + Deployer**. Подробнее: [docs/AGENT_PIPELINE_SETUP.md](docs/AGENT_PIPELINE_SETUP.md) §10.
 
 Целевой продукт настраивается в `pipeline/.env` или `pipeline/.env.local` (`GITHUB_REPO`, `CURSOR_REPO_URL`). Для деплоя — `PRODUCT_WORKSPACE_HOST` в корневом `.env`.

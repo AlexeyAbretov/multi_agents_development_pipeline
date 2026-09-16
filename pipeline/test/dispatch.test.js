@@ -104,3 +104,217 @@ test("selectJobsToLaunch de-duplicates the same (issue, role) pair", () => {
   assert.equal(launched.length, 1);
   assert.equal(launched[0]?.issue.number, 7);
 });
+
+test("mvp-queue developers start one at a time in list order", () => {
+  const queue = "<!-- pipeline:mvp-queue:12,13 -->";
+  const launched = selectJobsToLaunch(
+    [
+      {
+        issue: {
+          number: 13,
+          body: queue,
+          labels: ["feature", "ready-for-dev"],
+        },
+        role: "developer",
+      },
+      {
+        issue: {
+          number: 12,
+          body: queue,
+          labels: ["feature", "ready-for-dev"],
+        },
+        role: "developer",
+      },
+    ],
+    new Set(),
+  );
+
+  assert.deepEqual(
+    launched.map((item) => item.issue.number),
+    [12],
+  );
+});
+
+test("mvp-queue next developer starts after previous left in-dev", () => {
+  const queue = "<!-- pipeline:mvp-queue:12,13 -->";
+  const catalog = [
+    { number: 12, body: queue, labels: ["feature", "in-qa"] },
+    { number: 13, body: queue, labels: ["feature", "ready-for-dev"] },
+  ];
+  const launched = selectJobsToLaunch(
+    [{ issue: catalog[1], role: "developer" }],
+    new Set(),
+    catalog,
+  );
+
+  assert.deepEqual(
+    launched.map((item) => item.issue.number),
+    [13],
+  );
+});
+
+test("mvp-queue next developer waits while previous is in-dev", () => {
+  const queue = "<!-- pipeline:mvp-queue:12,13 -->";
+  const catalog = [
+    { number: 12, body: queue, labels: ["feature", "in-dev"] },
+    { number: 13, body: queue, labels: ["feature", "ready-for-dev"] },
+  ];
+  const launched = selectJobsToLaunch(
+    [{ issue: catalog[1], role: "developer" }],
+    new Set(),
+    catalog,
+  );
+
+  assert.equal(launched.length, 0);
+});
+
+test("mvp-queue next developer waits on in-flight previous", () => {
+  const queue = "<!-- pipeline:mvp-queue:12,13 -->";
+  const launched = selectJobsToLaunch(
+    [
+      {
+        issue: {
+          number: 13,
+          body: queue,
+          labels: ["feature", "ready-for-dev"],
+        },
+        role: "developer",
+      },
+    ],
+    new Set([inFlightKey(12, "developer")]),
+  );
+
+  assert.equal(launched.length, 0);
+});
+
+test("developers without mvp-queue still start in parallel", () => {
+  const launched = selectJobsToLaunch(
+    [
+      {
+        issue: { number: 20, labels: ["feature", "ready-for-dev"] },
+        role: "developer",
+      },
+      {
+        issue: { number: 21, labels: ["bug", "ready-for-dev"] },
+        role: "developer",
+      },
+    ],
+    new Set(),
+  );
+
+  assert.deepEqual(
+    launched.map((item) => item.issue.number),
+    [20, 21],
+  );
+});
+
+test("mvp-queue does not serialize analysts or testers", () => {
+  const queue = "<!-- pipeline:mvp-queue:12,13 -->";
+  const launched = selectJobsToLaunch(
+    [
+      {
+        issue: { number: 12, body: queue, labels: ["feature", "needs-plan"] },
+        role: "analyst",
+      },
+      {
+        issue: { number: 13, body: queue, labels: ["feature", "needs-plan"] },
+        role: "analyst",
+      },
+      {
+        issue: { number: 12, body: queue, labels: ["feature", "in-qa"] },
+        role: "tester",
+      },
+    ],
+    new Set(),
+  );
+
+  assert.deepEqual(
+    launched.map((item) => `${item.role}:${item.issue.number}`),
+    ["analyst:12", "analyst:13", "tester:12"],
+  );
+});
+
+test("mvp-queue on a sibling still serializes developer", () => {
+  const queue = "<!-- pipeline:mvp-queue:12,13 -->";
+  const launched = selectJobsToLaunch(
+    [
+      {
+        issue: { number: 13, labels: ["feature", "ready-for-dev"] },
+        role: "developer",
+      },
+    ],
+    new Set(),
+    [
+      { number: 12, body: queue, labels: ["feature", "in-dev"] },
+      { number: 13, labels: ["feature", "ready-for-dev"] },
+    ],
+  );
+
+  assert.equal(launched.length, 0);
+});
+
+test("mvp-queue plus group starts developers in the same stage", () => {
+  const queue = "<!-- pipeline:mvp-queue:12+14,16 -->";
+  const launched = selectJobsToLaunch(
+    [
+      {
+        issue: {
+          number: 14,
+          body: queue,
+          labels: ["feature", "ready-for-dev"],
+        },
+        role: "developer",
+      },
+      {
+        issue: {
+          number: 12,
+          body: queue,
+          labels: ["feature", "ready-for-dev"],
+        },
+        role: "developer",
+      },
+      {
+        issue: {
+          number: 16,
+          body: queue,
+          labels: ["feature", "ready-for-dev"],
+        },
+        role: "developer",
+      },
+    ],
+    new Set(),
+  );
+
+  assert.deepEqual(
+    launched.map((item) => item.issue.number),
+    [14, 12],
+  );
+});
+
+test("mvp-queue next stage waits until the whole previous stage left in-dev", () => {
+  const queue = "<!-- pipeline:mvp-queue:12+14,16 -->";
+  const catalog = [
+    { number: 12, body: queue, labels: ["feature", "in-qa"] },
+    { number: 14, body: queue, labels: ["feature", "in-dev"] },
+    { number: 16, body: queue, labels: ["feature", "ready-for-dev"] },
+  ];
+  const blocked = selectJobsToLaunch(
+    [{ issue: catalog[2], role: "developer" }],
+    new Set(),
+    catalog,
+  );
+
+  assert.equal(blocked.length, 0);
+
+  catalog[1] = { ...catalog[1], labels: ["feature", "in-qa"] };
+  const launched = selectJobsToLaunch(
+    [{ issue: catalog[2], role: "developer" }],
+    new Set(),
+    catalog,
+  );
+
+  assert.deepEqual(
+    launched.map((item) => item.issue.number),
+    [16],
+  );
+});

@@ -41,6 +41,8 @@ Merge в `main` — только после явного подтвержден�
 | P14 | `pipeline/14-calendar-releases` |
 | P15 | `pipeline/15-empty-release-skip` |
 | P16 | `pipeline/16-in-dev-drops-ready-for-dev` |
+| P17 | `pipeline/17-mvp-analyst` |
+| P18 | `pipeline/18-analyst-retry` |
 
 ## Обзор
 
@@ -62,9 +64,11 @@ P13 Параллельный разработчик и QA        ~2ч
 P14 Календарный релиз (milestone, published) ~4ч
 P15 Пустой релиз: закрыть milestone          ~1ч
 P16 `in-dev` снимает `ready-for-dev`         ~1ч
+P17 тип `mvp`: план аналитика → апрув → задачи ~3ч
+P18 повтор analyst после сбоя (`needs-plan`) ~1ч
 UI  Таблица джоб и логи орка              ~3ч  (после P2)
                                         ────
-                                        ~44ч
+                                        ~48ч
 ```
 
 Оценка без отладки биллинга Cursor и без полноценного E2E Ollama.
@@ -250,7 +254,7 @@ Issue → план → PR → issue-QA → merge человеком в `main` �
 1. Баг тестировщика → `bug` + `needs-plan` (аналитик → разработчик → QA); джобы `(issue, role)` сбрасываются для нового круга.
 2. `fix-round: N` в теле issue: +1 при каждом старте разработчика; при `N >= 3` следующий старт → `needs-human` (4-й круг не кодит).
 3. Разработчик после бага только через новый план (`needs-plan`), без «висящего» `ready-for-dev`.
-4. Родитель с `in-qa` ждёт дочерние bugs (`<!-- pipeline:child-bugs:… -->`); когда все закрыты/`qa-passed`/`needs-human` — сброс джоба tester и повторное QA.
+4. Родитель с `in-qa` ждёт дочерние bugs (`<!-- pipeline:child-bugs:… -->`); когда все закрыты/`qa-passed` и нет открытого Fixes PR — сброс джоба tester и повторное QA. Открытый ребёнок с `needs-human` re-QA не разблокирует.
 5. Несколько дочерних bugs с `needs-plan` и одним `Related to #parent` — analyst стартует **параллельно** в одном poll-tick (идемпотентность `(issue, role)` сохраняется).
 
 ### Проверка
@@ -360,6 +364,7 @@ Issue → план → PR → issue-QA → merge человеком в `main` �
 - [x] Unit: `selectJobsToLaunch` — все eligible роли в одном тике, skip только in-flight `(issue, role)`
 - [x] Unit: занятый developer не мешает другому `ready-for-dev`
 - [x] Unit: tester при in-flight analyst/developer всё равно в запуске
+- [x] Unit: developer из `mvp-queue` — по этапам (`+` параллельно); без маркера параллельно
 - [x] Unit: занятый tester не мешает другому `in-qa`
 - [x] `npm test` в `pipeline/` зелёный
 
@@ -432,6 +437,50 @@ Issue → план → PR → issue-QA → merge человеком в `main` �
 
 ---
 
+## P17: Тип MVP — план проекта аналитиком
+
+**Ветка:** `pipeline/17-mvp-analyst`
+
+**Цель:** стартовая issue `mvp`: аналитик составляет план, человек подтверждает, аналитик создаёт `feature`/`bug`, MVP закрывается.
+
+### Шаги
+
+1. Тип `mvp`, состояния `to-approve` / `approved`. Каталог labels + `ensure-labels`.
+2. `roleForLabels`: `mvp` + `needs-plan` или `approved` → analyst; не developer/tester/RM.
+3. Цикл Q&A: `needs-human` → человек → `needs-plan` (сброс джоба analyst). План: `to-approve`. Апрув человека: `approved`.
+4. На `approved` аналитик создаёт задачи, маркер `PIPELINE_MVP_TASKS` в порядке разработки (`12+14,16`) + `done`. Оркестратор: `needs-plan` на детях, `mvp-queue` на телах, закрыть MVP.
+5. Промпт `analyst.md`; контракт §3; полл `approved`.
+
+### Проверка
+
+- [x] Unit: `mvp` + `needs-plan` / `approved` → analyst; `to-approve` → null
+- [x] Unit: `decideAnalystOutcome` mvp-plan / mvp-spawn
+- [x] Unit: каталог labels содержит `mvp`, `to-approve`, `approved`
+- [x] `npm test` в `pipeline/` зелёный
+- [ ] `npm run ensure-labels` создаёт новые labels в репо продукта
+
+---
+
+## P18: Повтор analyst после сбоя
+
+**Ветка:** `pipeline/18-analyst-retry`
+
+**Цель:** work-issue (`bug`/`feature`) после ошибки Cursor или `needs-human` снова стартует analyst, когда человек вернул `needs-plan`.
+
+### Шаги
+
+1. `shouldResetFailedRoleJob` для analyst: trigger `needs-plan` (как developer/`ready-for-dev`, tester/`in-qa`).
+2. Поллер: сброс замка `(issue, analyst)` при `error` / `startup_error` или `finished` + `needs-human`. MVP-сброс без изменений.
+3. Контракт §3: человек снимает `needs-human`, ставит `needs-plan`.
+
+### Проверка
+
+- [x] Unit: `bug` + `needs-plan` + `startup_error` → reset; `finished` + `ready-for-dev` → нет
+- [x] Unit: `needs-human` вместе с `needs-plan` → нет reset
+- [x] `npm test` в `pipeline/` зелёный
+
+---
+
 ## Локальная отладка оркестратора
 
 Не отдельный этап плана. После P16 в репозитории:
@@ -451,16 +500,16 @@ Issue → план → PR → issue-QA → merge человеком в `main` �
 
 ### Шаги
 
-1. Сервис `pipeline-ui` (React + Vite + TS + Tailwind), порт `127.0.0.1:3010`.
+1. Сервис `pipeline-ui` (React + Vite + TS + Tailwind), bind `127.0.0.1`, порт `PIPELINE_UI_PORT` в `pipeline/ports.env`.
 2. API: `GET /api/jobs` (orchestrator), `GET /api/deploys` (deployer); данные из volume, не docker logs.
-3. Таблица: issue, роль, UI-статус (`queued` / `running` / `failed` / `finished`), ссылки GitHub и Cursor.
+3. Таблица: issue, роль, UI-статус (`queued` / `running` / `failed` / `finished` / `clarification`), ссылки GitHub и Cursor.
 4. Полный транскрипт — ссылка на Cursor (`agentId`); Publish релиза — RM по milestone, не кнопка в UI.
 5. Compose: `pipeline-ui` + nginx: `/api/jobs` → orchestrator, `/api/deploys` → deployer.
 
 ### Проверка
 
 - [ ] Джоб из `jobs.json` виден в таблице со ссылками
-- [ ] UI слушает только `127.0.0.1:3010`
+- [ ] UI слушает только `127.0.0.1` (`PIPELINE_UI_PORT` в `pipeline/ports.env`)
 
 ---
 

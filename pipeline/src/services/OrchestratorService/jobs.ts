@@ -6,18 +6,26 @@ import type { Role } from '@types';
 
 import type { Job } from './OrchestratorService.types';
 
+const DROPPED_AFTER_RESTART = 'dropped after restart';
+
 type StoreFile = {
   lastPollAt: string | null;
   jobs: Job[];
 };
 
+function isPairLock(job: Job, issue: number, role: Role): boolean {
+  return job.issue === issue && job.role === role && !job.cleared;
+}
+
 export class JobStore {
+  private readonly dataDir: string;
   private readonly filePath: string;
   private chain: Promise<unknown> = Promise.resolve();
 
   constructor(dataDir: string) {
-    mkdirSync(dataDir, { recursive: true });
+    this.dataDir = dataDir;
     this.filePath = join(dataDir, 'jobs.json');
+    mkdirSync(this.dataDir, { recursive: true });
   }
 
   private synchronized<T>(fn: () => T): Promise<T> {
@@ -40,6 +48,8 @@ export class JobStore {
   }
 
   private saveSync(data: StoreFile): void {
+    mkdirSync(this.dataDir, { recursive: true });
+
     const tmp = `${this.filePath}.tmp`;
 
     writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8');
@@ -47,18 +57,20 @@ export class JobStore {
   }
 
   find(issue: number, role: Role): Promise<Job | undefined> {
-    return this.synchronized(() =>
-      this.loadSync().jobs.find(
-        (job) => job.issue === issue && job.role === role,
-      ),
-    );
+    return this.synchronized(() => {
+      const held = this.loadSync().jobs.filter((job) =>
+        isPairLock(job, issue, role),
+      );
+
+      return held.at(-1);
+    });
   }
 
   create(issue: number, role: Role): Promise<Job | null> {
     return this.synchronized(() => {
       const data = this.loadSync();
 
-      if (data.jobs.some((job) => job.issue === issue && job.role === role)) {
+      if (data.jobs.some((job) => isPairLock(job, issue, role))) {
         return null;
       }
 
@@ -83,19 +95,25 @@ export class JobStore {
     });
   }
 
-  /** Drop (issue, role) so a later cycle can run again (QA loop / re-plan). */
+  /** Release (issue, role) lock; keep journal rows (QA loop / re-plan). */
   async remove(issue: number, role: Role): Promise<boolean> {
     return this.synchronized(() => {
       const data = this.loadSync();
-      const next = data.jobs.filter(
-        (job) => !(job.issue === issue && job.role === role),
-      );
+      let changed = false;
 
-      if (next.length === data.jobs.length) {
+      for (const job of data.jobs) {
+        if (!isPairLock(job, issue, role)) {
+          continue;
+        }
+
+        job.cleared = true;
+        changed = true;
+      }
+
+      if (!changed) {
         return false;
       }
 
-      data.jobs = next;
       this.saveSync(data);
 
       return true;
@@ -161,16 +179,25 @@ export class JobStore {
   async dropUnfinishedJobs(): Promise<number> {
     return this.synchronized(() => {
       const data = this.loadSync();
-      const next = data.jobs.filter(
-        (job) => job.status !== 'running' && job.status !== 'queued',
-      );
-      const dropped = data.jobs.length - next.length;
+      const now = new Date().toISOString();
+      let dropped = 0;
+
+      for (const job of data.jobs) {
+        if (job.status !== 'running' && job.status !== 'queued') {
+          continue;
+        }
+
+        job.status = 'error';
+        job.error = DROPPED_AFTER_RESTART;
+        job.cleared = true;
+        job.updatedAt = now;
+        dropped += 1;
+      }
 
       if (dropped === 0) {
         return 0;
       }
 
-      data.jobs = next;
       this.saveSync(data);
 
       return dropped;

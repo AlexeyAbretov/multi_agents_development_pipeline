@@ -60,7 +60,7 @@
 
 ### P6. docker.sock только у deployer
 
-Контейнер `orchestrator` сокет не монтирует. `pipeline-ui` — таблица очереди, без кнопки апрува релиза и без docker.sock. UI слушает `127.0.0.1:3010`, в интернет без защиты не публиковать.
+Контейнер `orchestrator` сокет не монтирует. `pipeline-ui` — таблица очереди, без кнопки апрува релиза и без docker.sock. UI слушает только `127.0.0.1` (порт в `pipeline/ports.env`), в интернет без защиты не публиковать.
 
 ### P7. Идемпотентность
 
@@ -105,8 +105,8 @@
 | Часть | Технологии |
 |-------|------------|
 | Оркестратор / deployer | Node ≥ 22, TypeScript, Fastify, Zod, `@cursor/sdk` (явно `cloud`) |
-| UI | React, Vite, TypeScript, Tailwind; порт `127.0.0.1:3010` |
-| Прогон | Docker Compose из корня; `orchestrator` `:3020`, `deployer` `:3021`. Локально: `pipeline/.env.local`, VSCode **Orchestrator** |
+| UI | React, Vite, TypeScript, Tailwind; bind `127.0.0.1`, порты в `pipeline/ports.env` |
+| Прогон | Docker Compose из корня; порты в `pipeline/ports.env`. Локально: `pipeline/.env.local`, VSCode **Orchestrator** |
 | Язык | Промпты, комментарии GitHub, коммиты — **русский**. Код — TypeScript |
 
 Порты оркестратора и UI не смешивать с портами продукта. Ollama не входит в compose пайплайна.

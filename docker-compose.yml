@@ -1,60 +1,6 @@
-services:
-  orchestrator:
-    build:
-      context: ./pipeline
-    command: ["node", "dist/services/OrchestratorService/index.js"]
+# Порты — pipeline/ports.env (единственный источник номеров).
+include:
+  - path: docker-compose.services.yml
     env_file:
-      - path: pipeline/.env
-        required: true
-    environment:
-      PORT: "3020"
-      DATA_DIR: /data
-      PROMPTS_DIR: /app/prompts
-    ports:
-      - "127.0.0.1:3020:3020"
-    volumes:
-      - pipeline_data:/data
-    user: "0"
-    dns:
-      - 8.8.8.8
-      - 1.1.1.1
-    restart: unless-stopped
-
-  deployer:
-    build:
-      context: ./pipeline
-    command: ["node", "dist/services/DeployerService/index.js"]
-    env_file:
-      - path: .env
-        required: true
-      - path: pipeline/.env
-        required: true
-    environment:
-      PORT: "3021"
-      DATA_DIR: /data
-      DEPLOY_COMPOSE_FILE: docker-compose.yml
-      WORKSPACE_DIR: /product
-    ports:
-      - "127.0.0.1:3021:3021"
-    volumes:
-      - pipeline_data:/data
-      - ${PRODUCT_WORKSPACE_HOST:?set PRODUCT_WORKSPACE_HOST in .env}:/product:ro
-      - /var/run/docker.sock:/var/run/docker.sock
-    user: "0"
-    dns:
-      - 8.8.8.8
-      - 1.1.1.1
-    restart: unless-stopped
-
-  pipeline-ui:
-    build:
-      context: ./pipeline-ui
-    ports:
-      - "127.0.0.1:3010:80"
-    depends_on:
-      - orchestrator
-      - deployer
-    restart: unless-stopped
-
-volumes:
-  pipeline_data:
+      - pipeline/ports.env
+      - .env

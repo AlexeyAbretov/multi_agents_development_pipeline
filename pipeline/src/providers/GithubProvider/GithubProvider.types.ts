@@ -10,6 +10,20 @@ export type GitHubMilestoneWithState = GitHubMilestoneRef & {
   state: string;
 };
 
+export type GitHubIssueComment = {
+  id: number;
+  user: string;
+  body: string;
+  createdAt: string;
+};
+
+export type GitHubIssueCommentRaw = {
+  id: number;
+  body: string | null;
+  created_at: string;
+  user: { login: string } | null;
+};
+
 export type GitHubIssue = {
   number: number;
   title: string;

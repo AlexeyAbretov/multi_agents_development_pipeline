@@ -1,0 +1,64 @@
+services:
+  orchestrator:
+    build:
+      context: ./pipeline
+    command: ["node", "dist/services/OrchestratorService/index.js"]
+    env_file:
+      - path: pipeline/.env
+        required: true
+    environment:
+      PORT: ${ORCHESTRATOR_PORT}
+      DATA_DIR: /data
+      PROMPTS_DIR: /app/prompts
+    ports:
+      - "127.0.0.1:${ORCHESTRATOR_PORT}:${ORCHESTRATOR_PORT}"
+    volumes:
+      - pipeline_data:/data
+    user: "0"
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    restart: unless-stopped
+
+  deployer:
+    build:
+      context: ./pipeline
+    command: ["node", "dist/services/DeployerService/index.js"]
+    env_file:
+      - path: .env
+        required: true
+      - path: pipeline/.env
+        required: true
+    environment:
+      PORT: ${DEPLOYER_PORT}
+      DATA_DIR: /data
+      DEPLOY_COMPOSE_FILE: docker-compose.yml
+      WORKSPACE_DIR: /product
+    ports:
+      - "127.0.0.1:${DEPLOYER_PORT}:${DEPLOYER_PORT}"
+    volumes:
+      - pipeline_data:/data
+      - ${PRODUCT_WORKSPACE_HOST:?set PRODUCT_WORKSPACE_HOST in .env}:/product:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    user: "0"
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    restart: unless-stopped
+
+  pipeline-ui:
+    build:
+      context: ./pipeline-ui
+    environment:
+      ORCHESTRATOR_PORT: ${ORCHESTRATOR_PORT}
+      DEPLOYER_PORT: ${DEPLOYER_PORT}
+      NGINX_ENVSUBST_FILTER: "^(ORCHESTRATOR_PORT|DEPLOYER_PORT)$$"
+    ports:
+      - "127.0.0.1:${PIPELINE_UI_PORT}:80"
+    depends_on:
+      - orchestrator
+      - deployer
+    restart: unless-stopped
+
+volumes:
+  pipeline_data:

@@ -13,6 +13,7 @@ const STATUS_LABEL: Record<UiJobStatus, string> = {
   running: "выполняется",
   failed: "ошибка",
   finished: "готово",
+  clarification: "уточнение",
 };
 
 function statusClass(status: UiJobStatus): string {
@@ -21,6 +22,8 @@ function statusClass(status: UiJobStatus): string {
       return "text-amber-800 bg-amber-100";
     case "failed":
       return "text-red-800 bg-red-100";
+    case "clarification":
+      return "text-sky-900 bg-sky-100";
     case "queued":
       return "text-ink-700 bg-ink-100";
     default:
@@ -39,29 +42,54 @@ function formatTime(iso: string | null): string {
   }
 }
 
+function errorText(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 export function App() {
   const [data, setData] = useState<JobsResponse | null>(null);
   const [deploys, setDeploys] = useState<DeploysResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [jobsError, setJobsError] = useState<string | null>(null);
+  const [deploysError, setDeploysError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    const load = async () => {
+
+    const loadJobs = async () => {
       try {
-        const [jobs, deployData] = await Promise.all([fetchJobs(), fetchDeploys()]);
+        const jobs = await fetchJobs();
         if (!cancelled) {
           setData(jobs);
-          setDeploys(deployData);
-          setError(null);
+          setJobsError(null);
         }
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : String(err));
+          setJobsError(errorText(err));
         }
       }
     };
-    void load();
-    const timer = setInterval(() => void load(), 5_000);
+
+    const loadDeploys = async () => {
+      try {
+        const deployData = await fetchDeploys();
+        if (!cancelled) {
+          setDeploys(deployData);
+          setDeploysError(null);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setDeploysError(errorText(err));
+        }
+      }
+    };
+
+    const load = () => {
+      void loadJobs();
+      void loadDeploys();
+    };
+
+    load();
+    const timer = setInterval(load, 5_000);
     return () => {
       cancelled = true;
       clearInterval(timer);
@@ -90,10 +118,9 @@ export function App() {
         </dl>
       </header>
 
-      {error ? (
+      {jobsError ? (
         <p className="mb-6 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
-          Не удалось загрузить данные: {error}. Проверьте оркестратор
-          (:3020) и deployer (:3021).
+          Не удалось загрузить джобы: {jobsError}. Проверьте оркестратор.
         </p>
       ) : null}
 
@@ -104,7 +131,12 @@ export function App() {
 
       <section>
         <h2 className="mb-4 text-lg font-semibold text-ink-900">Деплои</h2>
-        <DeploysPanel data={deploys} />
+        {deploysError ? (
+          <p className="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+            Не удалось загрузить деплои: {deploysError}. Проверьте deployer.
+          </p>
+        ) : null}
+        <DeploysPanel data={deploys} error={deploysError} />
       </section>
     </div>
   );
@@ -193,8 +225,17 @@ function JobsTable({ jobs }: { jobs: PipelineJob[] }) {
   );
 }
 
-function DeploysPanel({ data }: { data: DeploysResponse | null }) {
+function DeploysPanel({
+  data,
+  error,
+}: {
+  data: DeploysResponse | null;
+  error: string | null;
+}) {
   if (!data) {
+    if (error) {
+      return null;
+    }
     return <p className="text-sm text-ink-700">Загрузка…</p>;
   }
   if (data.deploys.length === 0) {

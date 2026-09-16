@@ -1,4 +1,9 @@
-export type UiJobStatus = "queued" | "running" | "failed" | "finished";
+export type UiJobStatus =
+  | "queued"
+  | "running"
+  | "failed"
+  | "finished"
+  | "clarification";
 
 export type PipelineJob = {
   id: string;

@@ -29,7 +29,7 @@ Git — **только GitHub** (`origin`). Локальная Gitea не исп
 
 | Роль | Где | Делает | Не делает |
 |------|-----|--------|-----------|
-| Аналитик | Cursor Cloud | План в комментарии issue по конституции и MVP | Код, merge, деплой |
+| Аналитик | Cursor Cloud | План в комментарии issue по конституции и MVP; для `mvp` — план проекта и после апрува создание `feature`/`bug` | Код, merge, деплой |
 | Разработчик | Cursor Cloud | Ветка `issue/<n>-…`, PR | Merge в `main`, деплой |
 | Тестировщик | Cloud + GitHub Actions | Issue-QA по PR (`tester`) | Merge, tag, Publish, E2E vision без локального прогона |
 | Тестировщик регресса | Cloud + GitHub Actions | Регресс `main` по milestone (`tester-regression`) | Merge, tag, Publish, E2E vision без локального прогона |
@@ -44,6 +44,7 @@ Git — **только GitHub** (`origin`). Локальная Gitea не исп
 
 - `bug`
 - `feature`
+- `mvp` (стартовая задача проекта: аналитик планирует и после апрува создаёт `feature`/`bug`)
 - `regression` (служебная issue регресса `main`, не продукт)
 
 ### Приоритет (взаимоисключающие)
@@ -64,6 +65,8 @@ Git — **только GitHub** (`origin`). Локальная Gitea не исп
 | `deployed` | Локальный деплой успешен |
 | `deploy-failed` | Локальный деплой упал |
 | `needs-human` | Автоматика остановилась |
+| `to-approve` | План MVP ждёт подтверждения человека |
+| `approved` | План MVP подтверждён, очередь создания задач |
 
 ### Milestone = релиз
 
@@ -79,11 +82,13 @@ Git — **только GitHub** (`origin`). Локальная Gitea не исп
 
 Два open milestone с due сегодня и валидным title → `needs-human`, RM не стартует.
 
-Старт аналитика: labels `bug` или `feature` **и** `needs-plan`. Перед запуском: `needs-plan` → `in-analysis`. Несколько таких issue стартуют **параллельно** и не ждут окончания других ролей. После прогона оркестратор снимает `in-analysis` и ставит `ready-for-dev` или `needs-human` (по маркеру `PIPELINE_LABELS:` в ответе агента или при ошибке Cursor).
+Старт аналитика: labels `bug` или `feature` **и** `needs-plan`. Перед запуском: `needs-plan` → `in-analysis`. Несколько таких issue стартуют **параллельно** и не ждут окончания других ролей. После прогона оркестратор снимает `in-analysis` и ставит `ready-for-dev` или `needs-human` (по маркеру `PIPELINE_LABELS:` в ответе агента или при ошибке Cursor). После ошибки Cursor (`error` / `startup_error`) или `finished` + `needs-human` человек снимает `needs-human` и снова ставит `needs-plan` — замок analyst сбрасывается (`cleared`), агент стартует снова.
 
-Старт разработчика: `bug` или `feature` **и** `ready-for-dev`, нет открытого PR `Fixes #N` (или ветки `issue/<n>-…`). При старте оркестратор снимает `ready-for-dev` и ставит `in-dev`. Несколько таких issue стартуют **параллельно** и не ждут окончания других ролей. Дочерний баг (`Related to #N`): `startingRef` = head открытого PR родителя; после PR оркестратор сменяет base на эту ветку, если Cursor открыл PR в `main`. После PR: снимает `in-dev`, ставит `in-qa`. Если агент упал или PR нет — `needs-human` (снимает `in-dev`). Если PR уже открыт, агент не стартует: снимает `ready-for-dev`, ставит `in-qa` (base всё равно поправляется).
+**MVP (стартовая задача проекта):** человек создаёт issue с `mvp` **и** `needs-plan`. Аналитик: `needs-plan` → `in-analysis`. Итог плана: `to-approve` (план готов) или `needs-human` (вопросы). Человек отвечает в комментарии, снимает `needs-human`, снова ставит `needs-plan` — цикл, джоб analyst сбрасывается. Когда план устраивает: снимает `to-approve`, ставит `approved`. Оркестратор снова запускает аналитика (`approved` → `in-analysis`): агент создаёт корневые `feature`/`bug` (без `Related to #` на MVP), возвращает `PIPELINE_MVP_TASKS:` **в порядке разработки** (`12+14,16` — плюс = один этап параллельно, запятая = следующий этап) и `PIPELINE_LABELS: done`. Оркестратор вешает на них `needs-plan` (тип `feature`/`bug` как у агента, иначе `feature`), копирует milestone, пишет `<!-- pipeline:mvp-tasks:… -->` на MVP и `<!-- pipeline:mvp-queue:12+14,16,… -->` на детях и **закрывает** MVP. Ошибка создания задач → `needs-human`. На `mvp` не стартуют developer, tester и RM. Открытый `mvp` в milestone для RM — как открытый `bug`/`feature` (блок релиза).
 
-Старт тестировщика (issue-QA): `bug` или `feature` **и** `in-qa`, есть открытый PR `Fixes #N`. Перед запуском: `in-qa` → `qa-in-progress`. Несколько таких issue стартуют **параллельно** и не ждут окончания разработчика, аналитика, RM или другого тестировщика на другой issue. Агент возвращает номера дефектов в `PIPELINE_BUG_ISSUES` (только блокеры критерия, максимум **2**; nit — комментарий в PR). Если дефектов нет: `qa-in-progress` → `qa-passed`. Если дефекты есть: оркестратор ставит им `bug` + `needs-plan` (сброс джобов ролей на дочерних), пишет в родителя `<!-- pipeline:child-bugs:… -->`, родителя возвращает в `in-qa`. Пока дочерние открыты в пайплайне **или у них открыт PR `Fixes #`** — повторный tester на родителе не стартует; когда все закрыты / `qa-passed` / `needs-human` **и нет открытого Fixes PR** — джоб tester сбрасывается, re-QA. Дочерний `qa-passed` без открытого PR и со смерженным `Fixes` PR — оркестратор закрывает issue (GitHub сам не закрывает merge не в `main`). **Нет открытого PR `Fixes #N` при `in-qa`** → `needs-human` (не вечный skip). На дочернем issue (`Related to #`) новые bugs запрещены (глубина 1); оркестратор не вешает `needs-plan` на внуков и ставит родителю-ребёнку `needs-human`. Больше 2 bug-issues за прогон → `needs-human`, дети не создаются. Ошибка Cursor, протокола или маркировки → `needs-human`. `qa-passed` на `bug`/`feature` **не** стартует RM. CI на PR: GitHub Actions job `ci`; required check на `main` включается ruleset вручную. Merge PR в `main` после issue-`qa-passed` делает **человек**.
+Старт разработчика: `bug` или `feature` **и** `ready-for-dev`, нет открытого PR `Fixes #N` (или ветки `issue/<n>-…`). При старте оркестратор снимает `ready-for-dev` и ставит `in-dev`. Несколько таких issue стартуют **параллельно**, кроме корневых задач из `<!-- pipeline:mvp-queue:… -->`: developer идёт **по этапам** (запятая); внутри этапа (`+`) параллельно. Следующий этап — когда все задачи предыдущего уже `in-qa` / `qa-passed` / закрыты (не `needs-plan` / `in-analysis` / `ready-for-dev` / `in-dev` / `needs-human`). Дочерние QA-баги (`Related to #`) и любые issue без `mvp-queue` — как раньше, параллельно. Дочерний баг (`Related to #N`): `startingRef` = head открытого PR родителя; после PR оркестратор сменяет base на эту ветку, если Cursor открыл PR в `main`. После PR: снимает `in-dev`, ставит `in-qa`. Если агент упал или PR нет — `needs-human` (снимает `in-dev`). Если PR уже открыт, агент не стартует: снимает `ready-for-dev`, ставит `in-qa` (base всё равно поправляется). Залипший `in-dev` без живого джоба (drop после рестарта) и открытый Fixes-PR: оркестратор сам ставит `in-qa` без нового агента. После ошибки Cursor (`error` / `startup_error`) или `finished` + `needs-human` человек снимает `needs-human` и снова ставит `ready-for-dev` — замок developer сбрасывается (`cleared`), агент стартует снова.
+
+Старт тестировщика (issue-QA): `bug` или `feature` **и** `in-qa`, есть открытый PR `Fixes #N`. После ошибки Cursor или `finished` + `needs-human` человек возвращает `in-qa` — замок tester сбрасывается. Перед запуском: `in-qa` → `qa-in-progress`. Несколько таких issue стартуют **параллельно** и не ждут окончания разработчика, аналитика, RM или другого тестировщика на другой issue. Агент возвращает номера дефектов в `PIPELINE_BUG_ISSUES` (только блокеры критерия, максимум **2**; nit — комментарий в PR). Если дефектов нет: `qa-in-progress` → `qa-passed`. Если дефекты есть: оркестратор ставит им `bug` + `needs-plan` (сброс джобов ролей на дочерних), пишет в родителя `<!-- pipeline:child-bugs:… -->`, родителя возвращает в `in-qa`. Пока дочерние открыты в пайплайне **или у них открыт PR `Fixes #`** — повторный tester на родителе не стартует; когда все закрыты / `qa-passed` **и нет открытого Fixes PR** — джоб tester сбрасывается, re-QA. Открытый ребёнок с `needs-human` родителя **держит** (квота / уточнение ≠ баг закрыт). Дочерний `qa-passed` без открытого PR и со смерженным `Fixes` PR — оркестратор закрывает issue (GitHub сам не закрывает merge не в `main`). **Нет открытого PR `Fixes #N` при `in-qa`** → `needs-human` (не вечный skip). На дочернем issue (`Related to #`) новые bugs запрещены (глубина 1); оркестратор не вешает `needs-plan` на внуков и ставит родителю-ребёнку `needs-human`. Больше 2 bug-issues за прогон → `needs-human`, дети не создаются. Ошибка Cursor, протокола или маркировки → `needs-human`. `qa-passed` на `bug`/`feature` **не** стартует RM. CI на PR: GitHub Actions job `ci`; required check на `main` включается ruleset вручную. Merge PR в `main` после issue-`qa-passed` делает **человек**.
 
 **Цикл QA (fix-round):** при каждом старте разработчика в теле issue пишется / увеличивается `fix-round: N` (макс. **3**). Попытка 4-го старта → `needs-human`, облачный разработчик не вызывается. После бага нельзя оставить `ready-for-dev` без нового `needs-plan`.
 
@@ -102,7 +107,7 @@ Git — **только GitHub** (`origin`). Локальная Gitea не исп
 **T** (due сегодня):
 
 - регресс ещё не стартовал → тот же протокол **в тот же день** (hotfix);
-- регресс `qa-passed`, published Release с этим tag нет, в milestone нет открытых `bug`/`feature` → старт RM на регресс-issue;
+- регресс `qa-passed`, published Release с этим tag нет, в milestone нет открытых `bug`/`feature`/`mvp` → старт RM на регресс-issue;
 - регресс красный / `needs-human` / ещё `qa-in-progress` → RM не стартует; при `needs-human` или открытых work-items после `qa-passed` — комментарий `blocked: no release`, compose не трогать.
 
 Старт RM: labels `regression` **и** `qa-passed`; milestone due сегодня; нет published Release с tag = title. Агент возвращает tag (= title) и changelog. Оркестратор создаёт **published** GitHub Release (`draft: false`, tag создаётся вместе с Release) и закрывает milestone. Ошибка → `needs-human` на регресс-issue.
@@ -124,7 +129,7 @@ Git — **только GitHub** (`origin`). Локальная Gitea не исп
 1. Не создаёт draft. Не мержит PR.
 2. Tag = title milestone, без «следующего patch по догадке».
 3. Тело Release — `PIPELINE_CHANGELOG_*` (merged в `main` с прошлого tag / issues milestone).
-4. Стоп (`needs-human` / skip): title ≠ `vN.N.N`; два due сегодня; регресс не `qa-passed`; открытые `bug`/`feature` в milestone; tag/Release уже есть; CI `main` красный.
+4. Стоп (`needs-human` / skip): title ≠ `vN.N.N`; два due сегодня; регресс не `qa-passed`; открытые `bug`/`feature`/`mvp` в milestone; tag/Release уже есть; CI `main` красный.
 5. С прошлого published Release в `main` нет новых коммитов (`ahead_by = 0`): GitHub Release **не** создаётся. Оркестратор пишет пометку `<!-- pipeline:nothing-to-release:… -->` (описание milestone + комментарий), закрывает milestone и служебную regression-issue. Первый релиз (нет предыдущего tag) не пропускается.
 
 Деплой по-прежнему только от **published** Release (локальный deployer).
@@ -135,10 +140,10 @@ Git — **только GitHub** (`origin`). Локальная Gitea не исп
 - Связь с GitHub: **поллинг** (без входящего webhook и без туннеля).
 - Опционально позже: self-hosted GitHub Actions runner только для деплоя.
 - Секреты оркестратора в `pipeline/.env` (Docker) или `pipeline/.env.local` (локальный npm / VSCode), не в git: `GITHUB_TOKEN` (лучше раздельные read vs release), `CURSOR_API_KEY`. Каталог — корневой `.env` (Mongo, Ollama). Локальный запуск: [AGENT_PIPELINE_SETUP.md](./AGENT_PIPELINE_SETUP.md) §10.
-- Идемпотентность: одно активное облачное задание на пару `(issue, role)`. Регресс и RM — на служебной regression-issue, не на feature/bug. При старте оркестратора джобы `running`/`queued` из прошлого процесса удаляются (агент после recreate контейнера уже мёртв). Полл **не** ждёт завершения Cursor `run.wait()`: тик только находит работу и стартует агентов. Несколько пар могут быть `running` одновременно. Все eligible роли (analyst, developer, tester, tester-regression, RM) стартуют в одном тике **параллельно** и не гейтят друг друга. Повторный тик ту же пару не дублирует (`jobs.json` + in-flight). Гейты самой issue (PR, fix-round, дети, календарь RM) остаются.
+- Идемпотентность: одно активное облачное задание на пару `(issue, role)`. Регресс и RM — на служебной regression-issue, не на feature/bug. При старте оркестратора джобы `running`/`queued` из прошлого процесса помечаются `error` (агент после recreate контейнера уже мёртв), записи журнала не удаляются. Полл **не** ждёт завершения Cursor `run.wait()`: тик только находит работу и стартует агентов. Несколько пар могут быть `running` одновременно. Все eligible роли (analyst, developer, tester, tester-regression, RM) стартуют в одном тике **параллельно** и не гейтят друг друга. Повторный тик ту же пару не дублирует (`jobs.json` + in-flight). Гейты самой issue (PR, fix-round, дети, календарь RM) остаются.
 - В записи джоба обязательно: `cursorAgentId`, `cursorRunId`, URL issue/PR, статус, timestamps.
 
-Контейнер оркестратора **не** монтирует docker.sock. Сокет только у `deployer` (`docker-compose.yml` в репозитории пайплайна, health `http://127.0.0.1:3021/health`).
+Контейнер оркестратора **не** монтирует docker.sock. Сокет только у `deployer` (`docker-compose.yml` в репозитории пайплайна, health `/health` на `DEPLOYER_PORT` из [`pipeline/ports.env`](../pipeline/ports.env)).
 
 Деплой: поллинг published GitHub Releases (draft пропускаются). Режим `DEPLOY_MODE=stub` (заглушка) или `compose` (`docker compose -f docker-compose.yml up -d` в checkout продукта, смонтированном через `PRODUCT_WORKSPACE_HOST`). Статус дописывается в тело Release; на open issues отгруженного milestone — `deployed` или `deploy-failed`.
 
@@ -163,7 +168,7 @@ Ollama: `host.docker.internal:11434` для приложения каталог�
 | GitHub Actions / Release | CI, review, deploy job |
 | Deployer | `compose up`, health |
 
-UI (отдельный порт **`127.0.0.1:3010`**, сервис `pipeline-ui`):
+UI (сервис `pipeline-ui`, bind `127.0.0.1`, порт `PIPELINE_UI_PORT` в [`pipeline/ports.env`](../pipeline/ports.env)):
 
 1. Таблица очереди из `GET /api/jobs` (volume `jobs.json`): issue, роль, статус, ссылки GitHub / Cursor.
 2. Статусы `tester`, `tester-regression` и `release-manager` на regression-issue — без кнопки Publish в UI.

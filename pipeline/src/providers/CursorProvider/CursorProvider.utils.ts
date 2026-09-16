@@ -21,9 +21,41 @@ export const buildMessage = (
     `Номер: #${issue.number}`,
     `URL: ${issue.html_url}`,
     `Заголовок: ${issue.title}`,
-    '',
-    issue.body?.trim() || '(пустое описание)',
   ];
+
+  if (issue.labels?.length) {
+    lines.push(`Labels: ${issue.labels.join(', ')}`);
+  }
+
+  const labels = issue.labels ?? [];
+
+  if (role === 'analyst' && labels.includes('mvp')) {
+    const phase = labels.includes('needs-plan')
+      ? 'план: вопросы → needs-human, готовый план → to-approve. ' +
+        'GitHub issues не создавать.'
+      : labels.includes('approved')
+        ? 'создание задач: по утверждённому плану создать feature/bug ' +
+          'issues. PIPELINE_MVP_TASKS — порядок разработки ' +
+          '(запятая = этап, плюс = параллель), затем ' +
+          'PIPELINE_LABELS: done.'
+        : 'mvp';
+
+    lines.push('', '## Фаза MVP', phase);
+  }
+
+  lines.push('', issue.body?.trim() || '(пустое описание)');
+
+  if (issue.comments?.length) {
+    lines.push('', '## Комментарии issue');
+
+    for (const comment of issue.comments) {
+      lines.push(
+        '',
+        `### ${comment.user} (${comment.createdAt})`,
+        comment.body.trim() || '(пусто)',
+      );
+    }
+  }
 
   if (issue.milestone) {
     lines.push(

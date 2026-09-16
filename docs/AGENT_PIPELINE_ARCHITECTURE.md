@@ -14,7 +14,7 @@
 Источник правды процесса — **labels на GitHub Issue**, не `jobs.json`. Оркестратор читает labels, запускает роль и **переписывает** labels. Джоб — журнал «уже запускали пару `(issue, роль)`».
 
 ```
-GitHub labels          Job.status / Job.decision          UI (таблица :3010)
+GitHub labels          Job.status / Job.decision          UI (таблица)
 (процесс продукта)     (идемпотентность оркестратора)     (проекция джоба)
 ```
 
@@ -30,9 +30,9 @@ GitHub labels          Job.status / Job.decision          UI (таблица :30
 
 | Ось | Labels | Влияет на автомат |
 |-----|--------|-------------------|
-| Тип | `bug`, `feature`, `regression` | Да: без типа или regression роль не выбирается |
+| Тип | `bug`, `feature`, `mvp`, `regression` | Да: без типа или regression роль не выбирается |
 | Приоритет | `p0` … `p3` | Нет |
-| Состояние | `needs-plan`, `in-analysis`, `ready-for-dev`, `in-dev`, `in-qa`, `qa-in-progress`, `qa-passed`, `deployed`, `deploy-failed`, `needs-human` | Да |
+| Состояние | `needs-plan`, `in-analysis`, `ready-for-dev`, `in-dev`, `in-qa`, `qa-in-progress`, `qa-passed`, `deployed`, `deploy-failed`, `needs-human`, `to-approve`, `approved` | Да |
 
 `needs-human` — стоп-кран: `roleForLabels` возвращает `null`, никакая роль не стартует.
 
@@ -67,6 +67,24 @@ stateDiagram-v2
 
 После `qa-passed` на `bug`/`feature` автоматика **останавливается**. Merge в `main` делает человек. Релиз-менеджер от этой issue **не** вызывается.
 
+### 1.2b. Автомат mvp (план проекта)
+
+```mermaid
+stateDiagram-v2
+  [*] --> needs_plan: человек: mvp + needs-plan
+  needs_plan --> in_analysis: старт analyst
+  in_analysis --> needs_human: PIPELINE_LABELS: needs-human
+  in_analysis --> to_approve: PIPELINE_LABELS: to-approve
+  needs_human --> needs_plan: человек ответил, снова needs-plan
+  to_approve --> needs_plan: человек хочет правки плана
+  to_approve --> approved: человек: -to-approve +approved
+  approved --> in_analysis: старт analyst (создание задач)
+  in_analysis --> needs_human: нет задач / ошибка
+  in_analysis --> closed: PIPELINE_MVP_TASKS + done
+```
+
+`to-approve` — ожидание человека, роль не стартует. Повторный analyst на `needs-plan` / `approved` сбрасывает джоб `(issue, analyst)`. Созданные задачи — корневые `feature`/`bug` + `needs-plan`, не дети QA (`Related to #` запрещён). На детях — `<!-- pipeline:mvp-queue:12+14,16,… -->`: developer по этапам (запятая), внутри этапа (`+`) параллельно; analyst и tester параллельно. MVP после `done` закрывается.
+
 ### 1.3. Цикл QA (дочерние bugs)
 
 ```mermaid
@@ -74,7 +92,7 @@ flowchart TD
   T[tester на родителе] -->|PIPELINE_BUG_ISSUES: 17,18| Kids["дети: bug + needs-plan\nRelated to #parent"]
   Kids --> A[analyst → developer → tester на детях]
   A --> Wait["родитель остаётся in-qa\nповторный tester skip"]
-  Wait -->|дети closed / qa-passed / needs-human\nи нет открытого Fixes PR| ReQA[сброс джоба tester → re-QA родителя]
+  Wait -->|дети closed / qa-passed\nи нет открытого Fixes PR| ReQA[сброс джоба tester → re-QA родителя]
   T -->|PIPELINE_BUG_ISSUES: none| Pass[qa-passed]
 ```
 
@@ -108,12 +126,12 @@ flowchart TD
 
 ```
 queued → running → finished | error | startup_error
-                    └── decision: ready-for-dev | in-qa | qa-passed | released | needs-human
+                    └── decision: ready-for-dev | to-approve | done | in-qa | qa-passed | released | needs-human
 ```
 
-Пара `(issue, role)` создаётся один раз (`JobStore.create`). Чтобы роль стартовала снова (re-QA, новый круг плана), запись **удаляется** (`remove` / `removeRoles`). После recreate контейнера `dropUnfinishedJobs` вычищает `running`/`queued` — облачный агент к тому моменту уже мёртв.
+Пара `(issue, role)` — один **активный** замок (`JobStore.create`). Чтобы роль стартовала снова (re-QA, новый круг плана, повтор analyst/developer/tester после сбоя), замок снимается (`remove` / `removeRoles`, поле `cleared`), запись журнала **остаётся**. `shouldResetFailedRoleJob`: на issue снова `needs-plan` (analyst), `ready-for-dev` (developer) или `in-qa` (tester), джоб `error` / `startup_error` или `finished` + `needs-human`. После recreate контейнера `dropUnfinishedJobs` помечает `running`/`queued` как `error` + `cleared` (агент уже мёртв), не стирая историю. Залипший `in-dev` после drop + открытый Fixes PR: `shouldPromoteStaleInDev` → `in-qa` без нового агента.
 
-`needs-human` на issue блокирует роли. `decision === "needs-human"` на джобе в UI — `failed`.
+`needs-human` на issue блокирует роли. `finished` + `decision === "needs-human"` в UI — `clarification` (уточнение). Ошибка Cursor / старта — `failed`.
 
 Проекция UI (`OrchestratorService/rules.ts` → `mapJobToUiStatus`):
 
@@ -122,7 +140,7 @@ queued → running → finished | error | startup_error
 | `queued` | `queued` |
 | `running` | `running` |
 | `error` / `startup_error` | `failed` |
-| `finished` + `decision === needs-human` | `failed` |
+| `finished` + `decision === needs-human` | `clarification` |
 | иначе `finished` | `finished` |
 
 ---
@@ -131,8 +149,8 @@ queued → running → finished | error | startup_error
 
 Два процесса из одного пакета `pipeline/`:
 
-- `node dist/services/OrchestratorService/index.js` — оркестратор (`src/services/OrchestratorService/`), порт `:3020`
-- `node dist/services/DeployerService/index.js` — deployer (`src/services/DeployerService/`), порт `:3021`
+- `node dist/services/OrchestratorService/index.js` — оркестратор (`src/services/OrchestratorService/`), `ORCHESTRATOR_PORT`
+- `node dist/services/DeployerService/index.js` — deployer (`src/services/DeployerService/`), `DEPLOYER_PORT`
 
 Оба — Fastify + `setInterval`. Нет очереди, нет БД, нет Octokit. Состояние — JSON на volume `pipeline_data`.
 
@@ -161,7 +179,7 @@ queued → running → finished | error | startup_error
 
 ### 2.2. Пакеты `pipeline-ui/`
 
-React + Vite + Tailwind. UI только читает `GET /api/jobs` и `/api/deploys` раз в 5 с. Бизнес-логики нет. Nginx: `/api/jobs` → orchestrator, `/api/deploys` → deployer.
+React + Vite + Tailwind. UI только читает `GET /api/jobs` и `/api/deploys` раз в 5 с. Бизнес-логики нет. Nginx: `/api/jobs` → orchestrator, `/api/deploys` → deployer (порты из `pipeline/ports.env`, envsubst при старте контейнера).
 
 ### 2.3. Протокол с агентом
 
@@ -171,6 +189,8 @@ React + Vite + Tailwind. UI только читает `GET /api/jobs` и `/api/d
 |--------|-----------|------------|
 | `PIPELINE_LABELS:` | все роли | `decide*Outcome` в `OrchestratorService/rules.ts` |
 | `PIPELINE_BUG_ISSUES:` | tester, tester-regression | `extractTesterBugIssues` |
+| `PIPELINE_MVP_TASKS:` | analyst на `mvp` + `approved` | `extractMvpTaskStages` (порядок разработки, `+` = этап) |
+| `<!-- pipeline:mvp-queue:… -->` | оркестратор на детях MVP | `selectJobsToLaunch` (developer по этапам) |
 | `PIPELINE_RELEASE_TAG:` | RM | `extractReleaseTag` |
 | `PIPELINE_CHANGELOG_BEGIN` … `END` | RM | `extractReleaseChangelog` |
 
@@ -200,7 +220,9 @@ services/OrchestratorService/     services/DeployerService/
 
 | Файл | Назначение |
 |------|------------|
-| `pipeline/src/config/` | Env → класс `Config` (`GITHUB_REPO`, `CURSOR_*`, `ownerRepo`, интервалы, `DEPLOY_MODE`). Алиас `@config`. |
+| `pipeline/ports.env` | Номера портов (`ORCHESTRATOR_PORT`, `DEPLOYER_PORT`, `PIPELINE_UI_PORT`). Единственный источник; compose / Config / Vite / nginx / npm читают этот файл. |
+| `docker-compose.yml` | Include `docker-compose.services.yml` с `env_file: pipeline/ports.env`. |
+| `pipeline/src/config/` | Env → класс `Config` (`GITHUB_REPO`, `CURSOR_*`, `ownerRepo`, интервалы, `DEPLOY_MODE`). Алиас `@config`. Порт процесса — `PORT`, default из `ports.env`. |
 | `pipeline/src/types/` | Общий тип `Role`. Алиас `@types`. |
 | `pipeline/src/providers/index.ts` | Баррель внешних клиентов; алиас `@providers`. |
 | `pipeline/src/providers/GithubProvider/` | REST GitHub: issues, labels, PR `Fixes #`, releases, milestones, каталог labels. Класс `GitHubClient`. |
@@ -212,9 +234,9 @@ services/OrchestratorService/     services/DeployerService/
 | `…/OrchestratorService/OrchestratorService.routes.ts` | HTTP `GET /api/jobs` для UI. |
 | `…/OrchestratorService/rules.ts` | Статусная модель issue: роль по labels, исход прогона, fix-round, дерево QA, маркеры ответа, проекция джоба в UI-статус. |
 | `…/OrchestratorService/schedule-rules.ts` | Календарь milestone, tag `vN.N.N`, gate RM, маркеры в комментариях. |
-| `…/OrchestratorService/dispatch.ts` | Eligible пары `(issue, role)` в тике; роли не гейтят друг друга; skip только in-flight. |
+| `…/OrchestratorService/dispatch.ts` | Eligible пары `(issue, role)` в тике; роли не гейтят друг друга; skip in-flight и developer из `mvp-queue`. |
 | `…/OrchestratorService/poller.ts` | Тик `POLL_INTERVAL_MS`: список issues → роль → гейты → Cursor → смена labels. |
-| `…/OrchestratorService/jobs.ts` | `jobs.json`, идемпотентность, сброс ролей, drop после рестарта. |
+| `…/OrchestratorService/jobs.ts` | `jobs.json`, журнал прогонов, замок `(issue, role)`, сброс без удаления, drop после рестарта. |
 | `…/OrchestratorService/schedule.ts` | Тик `SCHEDULE_INTERVAL_MS`: T−1/T, regression-issue, `blocked: no release`. |
 | `…/OrchestratorService/schedule-state.ts` | Не спамить одинаковыми комментариями каждый час. |
 | `pipeline/src/services/DeployerService/` | Точка входа deployer (`index.ts`). |
@@ -224,18 +246,18 @@ services/OrchestratorService/     services/DeployerService/
 | `…/DeployerService/deploy-run.ts` | `DEPLOY_MODE=stub` или `docker compose up -d` в `/product`. |
 | `…/DeployerService/deploy-store.ts` | `deploys.json` (deployer пишет; UI читает через HTTP). |
 | `pipeline/prompts/*.md` | Контракт с агентом: что писать в маркерах. |
-| `pipeline/test/rules.test.js`, `dispatch.test.js`, `labels.test.js` | Правила, dispatch и каталог labels без GitHub/Cursor. |
-| `.vscode/launch.json` | Отладка: **Orchestrator** (`:3020`), **Deployer** (`:3021`), compound оба. |
+| `pipeline/test/rules.test.js`, `dispatch.test.js`, `labels.test.js`, `jobs.test.js` | Правила, dispatch, labels, журнал `jobs.json` без GitHub/Cursor. |
+| `.vscode/launch.json` | Отладка: **Orchestrator**, **Deployer** (через `run-deployer.mjs`), compound оба. Порты из `pipeline/ports.env`. |
 
 Поток одного feature-тика:
 
-1. `poller` тянет open issues с `needs-plan` \| `ready-for-dev` \| `in-qa` \| `qa-passed`.
-2. `roleForLabels` → роль или skip.
-3. `selectJobsToLaunch` отфильтровывает in-flight.
+1. `poller` тянет open issues с trigger-labels и замками (`in-analysis`, `in-dev`, `qa-in-progress`, `needs-human`) — каталог для очереди MVP.
+2. `roleForLabels` → роль или skip. Залипший `in-dev` + открытый Fixes PR без живого джоба → `in-qa` (дальше tester в том же тике).
+3. `selectJobsToLaunch` отфильтровывает in-flight и лишних developer из `mvp-queue`.
 4. `handleIssue`: гейты (PR, fix-round, дети, RM gate) → `JobStore.create` → промежуточный label → `CursorClient.runCloudAgent` → `decide*Outcome` → `apply*Labels`.
 5. UI читает джоб; GitHub показывает labels.
 
-Листинг полла **не** включает все labels контракта. Trigger-label, которого нет в `getOpenIssuesByLabel`, тик не увидит.
+Листинг полла: trigger-labels плюс замки (`in-analysis`, `in-dev`, `qa-in-progress`, `needs-human`) для каталога `mvp-queue`. Другого trigger-label в `getOpenIssuesByLabel` тик не увидит.
 
 ### 3.1. Сборка и локальный запуск
 
@@ -245,13 +267,13 @@ services/OrchestratorService/     services/DeployerService/
 
 | Способ | Что делает |
 |--------|------------|
-| VSCode **Orchestrator** | `tsx` + `.env.local`, `PORT=3020` |
-| VSCode **Deployer** / compound | `tsx` + `.env.local`, `PORT=3021` |
-| `npm start` | оркестратор `:3020` (нужен `npm run build`) |
-| `npm run start:deployer` | deployer `:3021` (форсит порт поверх `.env.local`) |
+| VSCode **Orchestrator** | `tsx` + `.env.local`, порт из `ORCHESTRATOR_PORT` |
+| VSCode **Deployer** / compound | `tsx` + `.env.local` + `run-deployer.mjs` (`DEPLOYER_PORT`) |
+| `npm start` | оркестратор (нужен `npm run build`) |
+| `npm run start:deployer` | deployer (форсит `DEPLOYER_PORT` поверх `.env.local`) |
 | `npm run dev` / `dev:deployer` | `tsx watch` + `--env-file=.env.local` |
 
-`--use-env-proxy` читает `HTTP_PROXY` / `HTTPS_PROXY` (корпоративный прокси). Не поднимайте локально `:3020` / `:3021`, пока те же порты заняты контейнерами.
+`--use-env-proxy` читает `HTTP_PROXY` / `HTTPS_PROXY` (корпоративный прокси). Не поднимайте локально те же порты, пока они заняты контейнерами.
 
 `.env.local`: `DATA_DIR=./data`, `PROMPTS_DIR=./prompts` (docker-пути `/data` и `/app/prompts` на хосте не существуют). Файл в git не коммитить; шаблон — `pipeline/.env.local.example`.
 
@@ -277,7 +299,7 @@ services/OrchestratorService/     services/DeployerService/
 8. Тесты: `rules.test.js` на `roleForLabels` и `decide*`; `labels.test.js` — имя в `GITHUB_PIPELINE_LABELS`.
 9. UI — только если нужен отдельный столбец; labels UI не показывает.
 
-Не смешивать type-labels (`bug`) и state-labels. `roleForLabels` сначала требует тип **или** regression.
+Не смешивать type-labels (`bug`, `mvp`) и state-labels. `roleForLabels` сначала требует тип **или** regression.
 
 Чеклист одного изменения статуса: контракт → `GITHUB_PIPELINE_LABELS` + `ensure-labels` → `roleForLabels` + listing → apply/decide + промпт → сброс в QA-цикле → `npm test` в `pipeline/`.
 
@@ -288,12 +310,12 @@ services/OrchestratorService/     services/DeployerService/
 Пример: отдельный ревьюер.
 
 1. Тип `Role` в `pipeline/src/types/types.ts` (алиас `@types`).
-2. `selectJobsToLaunch` в `dispatch.ts` — новая роль стартует в том же тике, что и остальные (роли не гейтят друг друга).
+2. `selectJobsToLaunch` в `dispatch.ts` — новая роль стартует в том же тике, что и остальные (роли не гейтят друг друга), кроме developer на `mvp-queue`.
 3. Ветка в `roleForLabels` — уникальный набор labels.
 4. Промпт `pipeline/prompts/<role>.md` — `CursorClient` грузит `${role}.md`.
 5. В `handleIssue`: pre-labels, гейты, `decide*Outcome`, `apply*Labels`, комментарии.
-6. Если роль должна повторяться — `store.remove` по событию (как tester после детей).
-7. Тесты dispatch: новая роль стартует вместе с остальными; skip только in-flight `(issue, role)`.
+6. Если роль должна повторяться — `store.remove` снимает замок по событию (как tester после детей); история в `jobs.json` сохраняется.
+7. Тесты dispatch: новая роль стартует вместе с остальными; skip in-flight `(issue, role)`; developer из `mvp-queue` — по этапам, `+` параллельно.
 
 Роль без нового trigger-label не заведётся: полл выбирает работу **только** через labels.
 

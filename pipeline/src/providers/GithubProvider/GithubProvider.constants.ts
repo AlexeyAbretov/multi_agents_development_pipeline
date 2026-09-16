@@ -20,6 +20,11 @@ export const GITHUB_PIPELINE_LABELS: PipelineLabel[] = [
     description: 'Служебная issue регресса main',
   },
   {
+    name: 'mvp',
+    color: '6f42c1',
+    description: 'Тип: стартовая задача проекта',
+  },
+  {
     name: 'p0',
     color: 'b60205',
     description: 'Приоритет: критический',
@@ -88,5 +93,15 @@ export const GITHUB_PIPELINE_LABELS: PipelineLabel[] = [
     name: 'needs-human',
     color: 'e11d21',
     description: 'Стоп автоматики',
+  },
+  {
+    name: 'to-approve',
+    color: 'd4c5f9',
+    description: 'План MVP ждёт подтверждения человека',
+  },
+  {
+    name: 'approved',
+    color: 'c2e0c6',
+    description: 'План MVP подтверждён, очередь создания задач',
   },
 ];

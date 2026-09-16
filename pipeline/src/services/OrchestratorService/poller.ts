@@ -7,6 +7,7 @@ import {
   generateJobComment,
   GitHubClient,
   type GitHubIssue,
+  type GitHubIssueComment,
   type GitHubPull,
   LogClient,
 } from '@providers';
@@ -15,27 +16,37 @@ import type { Role } from '@types';
 import { inFlightKey, selectJobsToLaunch } from './dispatch';
 import { JobStore } from './jobs';
 import {
+  analystKind,
   childBlocksParentReQa,
   classifyTesterBugHandoff,
   decideAnalystOutcome,
   decideDeveloperOutcome,
   decideReleaseManagerOutcome,
   decideTesterOutcome,
+  extractMvpTaskStages,
   extractReleaseChangelog,
   extractReleaseTag,
   extractTesterBugIssues,
   fixRoundBlocksDeveloper,
+  flattenMvpQueue,
   groupAnalystIssuesByParent,
   isQaRole,
+  isStaleInDevHandoffCandidate,
   MAX_FIX_ROUNDS,
   MAX_TESTER_CHILD_BUGS,
   parseChildBugIssues,
   parseFixRound,
+  parseMvpTaskIssues,
   parseRelatedParentIssue,
   roleForLabels,
   shouldCloseMergedChildIssue,
+  shouldPromoteStaleInDev,
+  shouldResetFailedRoleJob,
+  shouldResetMvpAnalystJob,
   upsertChildBugIssuesInBody,
   upsertFixRoundInBody,
+  upsertMvpQueueIssuesInBody,
+  upsertMvpTaskIssuesInBody,
 } from './rules';
 import { closeEmptyRelease } from './schedule';
 import {
@@ -119,6 +130,11 @@ async function pollOnce(
         github.getOpenIssuesByLabel('ready-for-dev'),
         github.getOpenIssuesByLabel('in-qa'),
         github.getOpenIssuesByLabel('qa-passed'),
+        github.getOpenIssuesByLabel('approved'),
+        github.getOpenIssuesByLabel('in-analysis'),
+        github.getOpenIssuesByLabel('in-dev'),
+        github.getOpenIssuesByLabel('qa-in-progress'),
+        github.getOpenIssuesByLabel('needs-human'),
       ]),
     );
   } catch (err) {
@@ -133,6 +149,31 @@ async function pollOnce(
     const role = roleForLabels(issue.labels, issue.body);
 
     if (!role) {
+      try {
+        if (await recoverStaleInDev(logger, store, github, issue, inFlight)) {
+          issue.labels = [
+            ...new Set([
+              ...issue.labels.filter(
+                (name) => name !== 'in-dev' && name !== 'ready-for-dev',
+              ),
+              'in-qa',
+            ]),
+          ];
+          const nextRole = roleForLabels(issue.labels, issue.body);
+
+          if (nextRole) {
+            work.push({ issue, role: nextRole });
+          }
+
+          continue;
+        }
+      } catch (err) {
+        logger.error(
+          { err, issue: issue.number },
+          'stale in-dev recovery failed',
+        );
+      }
+
       const parent = parseRelatedParentIssue(issue.body);
 
       logger.job(
@@ -178,7 +219,24 @@ async function pollOnce(
     }
   }
 
-  const toLaunch = selectJobsToLaunch(work, inFlight);
+  const toLaunch = selectJobsToLaunch(work, inFlight, issues);
+  const launchedKeys = new Set(
+    toLaunch.map((item) => inFlightKey(item.issue.number, item.role)),
+  );
+
+  for (const { issue, role } of work) {
+    const key = inFlightKey(issue.number, role);
+
+    if (role !== 'developer' || inFlight.has(key) || launchedKeys.has(key)) {
+      continue;
+    }
+
+    logger.job(
+      { issue: issue.number, role, agentId: null, runId: null },
+      'skip developer: mvp queue waiting',
+    );
+  }
+
   const launchedByRole = new Map<Role, number[]>();
 
   for (const { issue, role } of toLaunch) {
@@ -222,10 +280,17 @@ async function pollOnce(
 async function applyAnalystLabels(
   github: GitHubClient,
   issue: number,
-  decision: 'ready-for-dev' | 'needs-human',
+  decision: 'ready-for-dev' | 'needs-human' | 'to-approve' | 'done',
 ): Promise<void> {
   await github.removeIssueLabel(issue, 'in-analysis');
   await github.removeIssueLabel(issue, 'needs-plan');
+  await github.removeIssueLabel(issue, 'to-approve');
+  await github.removeIssueLabel(issue, 'approved');
+
+  if (decision === 'done') {
+    return;
+  }
+
   await github.addIssueLabels(issue, [decision]);
 }
 
@@ -237,6 +302,58 @@ async function applyDeveloperLabels(
   await github.removeIssueLabel(issue, 'in-dev');
   await github.removeIssueLabel(issue, 'ready-for-dev');
   await github.addIssueLabels(issue, [decision]);
+}
+
+async function recoverStaleInDev(
+  logger: LogClient,
+  store: JobStore,
+  github: GitHubClient,
+  issue: GitHubIssue,
+  inFlight: ReadonlySet<string>,
+): Promise<boolean> {
+  if (inFlight.has(inFlightKey(issue.number, 'developer'))) {
+    return false;
+  }
+
+  const existing = await store.find(issue.number, 'developer');
+
+  if (
+    !isStaleInDevHandoffCandidate({
+      labels: issue.labels,
+      jobStatus: existing?.status,
+    })
+  ) {
+    return false;
+  }
+
+  let hasOpenFixPr = false;
+
+  try {
+    hasOpenFixPr = await github.hasOpenFixPr(issue.number);
+  } catch (err) {
+    logger.error({ err, issue: issue.number }, 'github pulls failed');
+
+    return false;
+  }
+
+  if (
+    !shouldPromoteStaleInDev({
+      labels: issue.labels,
+      jobStatus: existing?.status,
+      hasOpenFixPr,
+    })
+  ) {
+    return false;
+  }
+
+  await applyDeveloperLabels(github, issue.number, 'in-qa');
+  logger.job(
+    { issue: issue.number, role: 'developer', agentId: null, runId: null },
+    'labels: stale in-dev + open PR → in-qa',
+  );
+  await retargetChildPullIfNeeded(github, logger, issue);
+
+  return true;
 }
 
 async function applyTesterLabels(
@@ -276,6 +393,8 @@ async function labelTesterBugs(
     await github.removeIssueLabel(issue, 'in-qa');
     await github.removeIssueLabel(issue, 'qa-in-progress');
     await github.removeIssueLabel(issue, 'qa-passed');
+    await github.removeIssueLabel(issue, 'to-approve');
+    await github.removeIssueLabel(issue, 'approved');
     await github.addIssueLabels(issue, ['bug', 'needs-plan']);
 
     if (parent.milestone) {
@@ -294,6 +413,81 @@ async function labelTesterBugs(
   await github.updateIssueBody(
     parent.number,
     upsertChildBugIssuesInBody(parent.body, merged),
+  );
+
+  return children;
+}
+
+async function labelMvpTasks(
+  github: GitHubClient,
+  store: JobStore,
+  parent: GitHubIssue,
+  stages: number[][],
+): Promise<number[]> {
+  const incoming = flattenMvpQueue(stages);
+  const children = incoming.filter((number) => number !== parent.number);
+
+  if (children.length !== incoming.length) {
+    throw new Error('analyst marked the mvp issue as a spawned task');
+  }
+
+  if (children.length === 0) {
+    throw new Error('mvp spawn reported no tasks');
+  }
+
+  const extra = parseMvpTaskIssues(parent.body).filter(
+    (n) => !incoming.includes(n),
+  );
+  const mergedStages = [...extra.map((n) => [n]), ...stages];
+  const merged = flattenMvpQueue(mergedStages);
+
+  for (const number of children) {
+    const child = await github.getIssue(number);
+
+    if (child.state === 'closed') {
+      throw new Error(`mvp spawned task #${number} is closed`);
+    }
+
+    await store.removeRoles(number, [
+      'analyst',
+      'developer',
+      'tester',
+      'tester-regression',
+      'release-manager',
+    ]);
+    await github.removeIssueLabel(number, 'in-analysis');
+    await github.removeIssueLabel(number, 'ready-for-dev');
+    await github.removeIssueLabel(number, 'in-dev');
+    await github.removeIssueLabel(number, 'in-qa');
+    await github.removeIssueLabel(number, 'qa-in-progress');
+    await github.removeIssueLabel(number, 'qa-passed');
+    await github.removeIssueLabel(number, 'to-approve');
+    await github.removeIssueLabel(number, 'approved');
+    await github.removeIssueLabel(number, 'needs-human');
+    await github.removeIssueLabel(number, 'mvp');
+    await github.removeIssueLabel(number, 'regression');
+
+    const typeLabel = child.labels.includes('bug') ? 'bug' : 'feature';
+
+    await github.addIssueLabels(number, [typeLabel, 'needs-plan']);
+
+    if (parent.milestone) {
+      try {
+        await github.setIssueMilestone(number, parent.milestone.number);
+      } catch {
+        // Milestone on spawned task is best-effort; labels still stand.
+      }
+    }
+
+    await github.updateIssueBody(
+      number,
+      upsertMvpQueueIssuesInBody(child.body, mergedStages),
+    );
+  }
+
+  await github.updateIssueBody(
+    parent.number,
+    upsertMvpTaskIssuesInBody(parent.body, merged),
   );
 
   return children;
@@ -692,6 +886,63 @@ async function handleIssue(
     }
   }
 
+  if (role === 'analyst') {
+    try {
+      const existing = await store.find(issue.number, 'analyst');
+
+      if (
+        shouldResetMvpAnalystJob({
+          labels: issue.labels,
+          jobStatus: existing?.status,
+        })
+      ) {
+        await store.remove(issue.number, 'analyst');
+        logger.job(fields, 'cleared analyst job for mvp re-plan or spawn');
+      }
+    } catch (err) {
+      logger.error(
+        { err, issue: issue.number },
+        'mvp analyst job reset failed',
+      );
+
+      return;
+    }
+  }
+
+  if (role === 'developer' || isQaRole(role) || role === 'analyst') {
+    try {
+      const existing = await store.find(issue.number, role);
+      let triggerLabel = 'in-qa';
+
+      if (role === 'developer') {
+        triggerLabel = 'ready-for-dev';
+      }
+
+      if (role === 'analyst') {
+        triggerLabel = 'needs-plan';
+      }
+
+      if (
+        shouldResetFailedRoleJob({
+          triggerLabel,
+          labels: issue.labels,
+          jobStatus: existing?.status,
+          decision: existing?.decision,
+        })
+      ) {
+        await store.remove(issue.number, role);
+        logger.job(fields, `cleared ${role} job for retry after failure`);
+      }
+    } catch (err) {
+      logger.error(
+        { err, issue: issue.number, role },
+        'role job reset after failure failed',
+      );
+
+      return;
+    }
+  }
+
   if (await store.find(issue.number, role)) {
     logger.job(fields, 'skip existing job');
 
@@ -717,8 +968,13 @@ async function handleIssue(
   if (role === 'analyst') {
     try {
       await github.removeIssueLabel(issue.number, 'needs-plan');
+      await github.removeIssueLabel(issue.number, 'approved');
+      await github.removeIssueLabel(issue.number, 'to-approve');
       await github.addIssueLabels(issue.number, ['in-analysis']);
-      logger.job(fields, 'labels: -needs-plan +in-analysis');
+      logger.job(
+        fields,
+        'labels: -needs-plan -approved -to-approve +in-analysis',
+      );
     } catch (err) {
       await store.update(job.id, {
         status: 'startup_error',
@@ -820,9 +1076,22 @@ async function handleIssue(
 
   logger.job({ ...fields }, 'cursor agent starting');
 
+  let analystComments: GitHubIssueComment[] | undefined;
+
+  if (role === 'analyst') {
+    try {
+      analystComments = await github.listIssueComments(issue.number);
+    } catch (err) {
+      logger.error(
+        { err, issue: issue.number },
+        'github analyst comments failed',
+      );
+    }
+  }
+
   const result = await cursor.runCloudAgent(
     role,
-    issue,
+    analystComments ? { ...issue, comments: analystComments } : issue,
     async ({ agentId, runId }) => {
       await store.update(job.id, { agentId, runId });
       logger.job(
@@ -868,23 +1137,69 @@ async function handleIssue(
   let decision: string | null = null;
 
   if (role === 'analyst') {
-    const analystDecision = decideAnalystOutcome(result.status, result.text);
+    const kind = analystKind(issue.labels) ?? 'work';
+    let analystDecision = decideAnalystOutcome(
+      result.status,
+      result.text,
+      kind,
+    );
+
+    if (kind === 'mvp-spawn' && analystDecision === 'done') {
+      try {
+        const tasks = await labelMvpTasks(
+          github,
+          store,
+          issue,
+          extractMvpTaskStages(result.text) ?? [],
+        );
+
+        logger.job(
+          {
+            issue: issue.number,
+            role,
+            agentId: result.agentId,
+            runId: result.runId,
+          },
+          `labeled mvp tasks: ${tasks.map((n) => `#${n}`).join(', ')}`,
+        );
+        await github.commentOnIssue(
+          issue.number,
+          'Пайплайн: MVP закрыт, созданы задачи: ' +
+            tasks.map((n) => `#${n}`).join(', ') +
+            '.',
+        );
+        await applyAnalystLabels(github, issue.number, 'done');
+        await github.closeIssue(issue.number);
+      } catch (err) {
+        analystDecision = 'needs-human';
+        logger.error({ err, issue: issue.number }, 'mvp spawn handoff failed');
+        try {
+          await applyAnalystLabels(github, issue.number, 'needs-human');
+        } catch (labelErr) {
+          logger.error(
+            { err: labelErr, issue: issue.number },
+            'github labels failed',
+          );
+        }
+      }
+    } else {
+      try {
+        await applyAnalystLabels(github, issue.number, analystDecision);
+        logger.job(
+          {
+            issue: issue.number,
+            role,
+            agentId: result.agentId,
+            runId: result.runId,
+          },
+          `labels: -in-analysis +${analystDecision}`,
+        );
+      } catch (err) {
+        logger.error({ err, issue: issue.number }, 'github labels failed');
+      }
+    }
 
     decision = analystDecision;
-    try {
-      await applyAnalystLabels(github, issue.number, analystDecision);
-      logger.job(
-        {
-          issue: issue.number,
-          role,
-          agentId: result.agentId,
-          runId: result.runId,
-        },
-        `labels: -in-analysis +${decision}`,
-      );
-    } catch (err) {
-      logger.error({ err, issue: issue.number }, 'github labels failed');
-    }
   }
 
   if (role === 'developer') {

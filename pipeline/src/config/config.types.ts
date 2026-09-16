@@ -1,7 +1,9 @@
 import { z } from 'zod';
 
+import { ports } from './ports';
+
 export const envSchema = z.object({
-  PORT: z.coerce.number().int().positive().default(3020),
+  PORT: z.coerce.number().int().positive().default(ports.ORCHESTRATOR_PORT),
   POLL_INTERVAL_MS: z.coerce.number().int().positive().default(30_000),
   /** Hourly milestone due check on orchestrator (P9). */
   SCHEDULE_INTERVAL_MS: z.coerce.number().int().positive().default(3_600_000),

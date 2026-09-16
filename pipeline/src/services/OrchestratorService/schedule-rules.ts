@@ -139,7 +139,11 @@ export function isRegressionIssue(
 }
 
 export function isReleaseWorkIssue(labels: string[]): boolean {
-  return labels.includes('bug') || labels.includes('feature');
+  return (
+    labels.includes('bug') ||
+    labels.includes('feature') ||
+    labels.includes('mvp')
+  );
 }
 
 export function blockedNoReleaseMarker(milestoneId: number): string {
