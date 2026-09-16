@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { generateJobComment } from "../dist/providers/GithubProvider/GithubProvider.utils.js";
 import {
   formatCursorModel,
   readCursorUsage,
 } from "../dist/providers/CursorProvider/CursorProvider.utils.js";
+
+const promptsDir = join(dirname(fileURLToPath(import.meta.url)), "../prompts");
 
 const usage = {
   inputTokens: 12480,
@@ -95,4 +100,18 @@ test("readCursorUsage falls back when billed fetch throws", async () => {
   });
 
   assert.equal(live?.inputTokens, 12480);
+});
+
+test("tester prompt names tester and does not name tester-regression", () => {
+  const prompt = readFileSync(join(promptsDir, "tester.md"), "utf8");
+
+  assert.match(prompt, /роль `tester`/);
+  assert.equal(prompt.includes("tester-regression"), false);
+});
+
+test("tester-regression prompt names that role, not issue-QA", () => {
+  const prompt = readFileSync(join(promptsDir, "tester-regression.md"), "utf8");
+
+  assert.match(prompt, /роль `tester-regression`/);
+  assert.match(prompt, /не issue-QA/i);
 });
