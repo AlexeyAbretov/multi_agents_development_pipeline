@@ -28,10 +28,10 @@ import { ScheduleStateStore } from './schedule-state';
 export function startSchedulePoller(
   config: Config,
   appLogger: FastifyBaseLogger,
+  state: ScheduleStateStore,
 ): { stop: () => void } {
   const github = new GitHubClient(config);
   const logger = new LogClient(appLogger);
-  const state = new ScheduleStateStore(config.DATA_DIR);
   let busy = false;
 
   const tick = (): void => {
@@ -219,7 +219,7 @@ async function notifyDuplicateDue(
 ): Promise<void> {
   const day = calendarDateInTimeZone(new Date(), config.SCHEDULE_TZ);
 
-  if (state.wasDuplicateDueNotified(day)) {
+  if (await state.wasDuplicateDueNotified(day)) {
     logger.job({}, `schedule: duplicate due already notified for ${day}`);
 
     return;
@@ -240,7 +240,7 @@ async function notifyDuplicateDue(
       }
     }
 
-    state.markDuplicateDueNotified(day);
+    await state.markDuplicateDueNotified(day);
     logger.job(
       {},
       'blocked: duplicate due today (' +
@@ -382,7 +382,7 @@ async function handleDueToday(
     return;
   }
 
-  if (state.wasBlockedNotified(milestone.id)) {
+  if (await state.wasBlockedNotified(milestone.id)) {
     logger.job(
       fields,
       `blocked: no release for ${milestone.title} (already notified)`,
@@ -398,13 +398,13 @@ async function handleDueToday(
       fields,
       `blocked: no release for ${milestone.title} ` + '(no issues to comment)',
     );
-    state.markBlockedNotified(milestone.id);
+    await state.markBlockedNotified(milestone.id);
 
     return;
   }
 
   if (bodyHasBlockedNoReleaseMarker(target.body, milestone.id)) {
-    state.markBlockedNotified(milestone.id);
+    await state.markBlockedNotified(milestone.id);
 
     return;
   }
@@ -414,7 +414,7 @@ async function handleDueToday(
       target.number,
       blockedNoReleaseComment(milestone.title, milestone.id),
     );
-    state.markBlockedNotified(milestone.id);
+    await state.markBlockedNotified(milestone.id);
     logger.job(
       fields,
       `blocked: no release for milestone ${milestone.title}; ` +

@@ -140,7 +140,7 @@ Git — **только GitHub** (`origin`). Локальная Gitea не исп
 - Связь с GitHub: **поллинг** (без входящего webhook и без туннеля).
 - Опционально позже: self-hosted GitHub Actions runner только для деплоя.
 - Секреты оркестратора в `pipeline/.env` (Docker) или `pipeline/.env.local` (локальный npm / VSCode), не в git: `GITHUB_TOKEN` (лучше раздельные read vs release), `CURSOR_API_KEY`. Каталог — корневой `.env` (Mongo, Ollama). Локальный запуск: [AGENT_PIPELINE_SETUP.md](./AGENT_PIPELINE_SETUP.md) §10.
-- Идемпотентность: одно активное облачное задание на пару `(issue, role)`. Регресс и RM — на служебной regression-issue, не на feature/bug. При старте оркестратора джобы `running`/`queued` из прошлого процесса помечаются `error` (агент после recreate контейнера уже мёртв), записи журнала не удаляются. Полл **не** ждёт завершения Cursor `run.wait()`: тик только находит работу и стартует агентов. Несколько пар могут быть `running` одновременно. Все eligible роли (analyst, developer, tester, tester-regression, RM) стартуют в одном тике **параллельно** и не гейтят друг друга. Повторный тик ту же пару не дублирует (`jobs.json` + in-flight). Гейты самой issue (PR, fix-round, дети, календарь RM) остаются.
+- Идемпотентность: одно активное облачное задание на пару `(issue, role)`. Регресс и RM — на служебной regression-issue, не на feature/bug. При старте оркестратора джобы `running`/`queued` из прошлого процесса помечаются `error` (агент после recreate контейнера уже мёртв), записи журнала не удаляются. Полл **не** ждёт завершения Cursor `run.wait()`: тик только находит работу и стартует агентов. Несколько пар могут быть `running` одновременно. Все eligible роли (analyst, developer, tester, tester-regression, RM) стартуют в одном тике **параллельно** и не гейтят друг друга. Повторный тик ту же пару не дублирует (MongoDB jobs + in-flight). Гейты самой issue (PR, fix-round, дети, календарь RM) остаются.
 - В записи джоба обязательно: `cursorAgentId`, `cursorRunId`, URL issue/PR, статус, timestamps.
 
 Контейнер оркестратора **не** монтирует docker.sock. Сокет только у `deployer` (`docker-compose.yml` в репозитории пайплайна, health `/health` на `DEPLOYER_PORT` из [`pipeline/ports.env`](../pipeline/ports.env)).
@@ -153,7 +153,7 @@ Git — **только GitHub** (`origin`). Локальная Gitea не исп
 - due сегодня → hotfix-регресс или ожидание RM;
 - due сегодня, нет published Release и RM не может стартовать (`needs-human` / открытые work-items после регресса) → комментарий `blocked: no release` (без compose).
 
-Deployer независимо поллит published GitHub Releases и деплоит один раз на tag (`deploys.json` + маркер в теле Release). Очереди от оркестратора нет.
+Deployer независимо поллит published GitHub Releases и деплоит один раз на tag (MongoDB `deploys` + маркер в теле Release). Очереди от оркестратора нет.
 
 Ollama: `host.docker.internal:11434` для приложения каталога, не для оркестратора.
 
@@ -171,7 +171,7 @@ Ollama: `host.docker.internal:11434` для приложения каталог�
 
 UI (сервис `pipeline-ui`, bind `127.0.0.1`, порт `PIPELINE_UI_PORT` в [`pipeline/ports.env`](../pipeline/ports.env)):
 
-1. Таблица очереди из `GET /api/jobs` (volume `jobs.json`): issue, роль, статус, ссылки GitHub / Cursor.
+1. Таблица очереди из `GET /api/jobs` (MongoDB): issue, роль, статус, ссылки GitHub / Cursor.
 2. Статусы `tester`, `tester-regression` и `release-manager` на regression-issue — без кнопки Publish в UI.
 3. Деплои: `GET /api/deploys`. Полный транскрипт агента — в Cursor по `agentId`.
 

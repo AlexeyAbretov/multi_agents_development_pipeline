@@ -67,11 +67,20 @@ async function pollOnce(
     return;
   }
 
-  const pending = releasesToDeploy(releases, store.deployedIds()).filter(
-    (release) =>
-      !releaseBodyHasDeployMarker(release.body, release.id) &&
-      !store.hasTag(release.tag_name),
-  );
+  const candidates = releasesToDeploy(releases, await store.deployedIds());
+  const pending: typeof candidates = [];
+
+  for (const release of candidates) {
+    if (releaseBodyHasDeployMarker(release.body, release.id)) {
+      continue;
+    }
+
+    if (await store.hasTag(release.tag_name)) {
+      continue;
+    }
+
+    pending.push(release);
+  }
 
   if (pending.length === 0) {
     logger.job({}, 'deploy: no new published releases');
@@ -133,7 +142,7 @@ async function handleRelease(
     runId: null,
   };
 
-  if (store.hasTag(release.tag_name) || store.has(release.id)) {
+  if ((await store.hasTag(release.tag_name)) || (await store.has(release.id))) {
     logger.job(fields, `deploy skip idempotent: ${release.tag_name}`);
 
     return;
@@ -144,7 +153,7 @@ async function handleRelease(
   const result = await runProductDeploy(config, release.tag_name);
   const status = result.ok ? 'deployed' : 'deploy-failed';
 
-  store.record({
+  await store.record({
     releaseId: release.id,
     tag: release.tag_name,
     status,

@@ -15,6 +15,7 @@ docker compose up --build -d
 
 | Сервис | Порт | Назначение |
 |--------|------|------------|
+| `pipeline-mongo` | внутренний 27017 | MongoDB джобов (db `pipeline`), порт на хост не публикуется |
 | `orchestrator` | `ORCHESTRATOR_PORT` | Поллинг issues → Cursor Cloud; schedule; API `/api/jobs` |
 | `deployer` | `DEPLOYER_PORT` | Поллинг published Release; API `/api/deploys`; docker.sock |
 | `pipeline-ui` | `PIPELINE_UI_PORT` | Таблица джоб и деплоев |
@@ -38,7 +39,7 @@ docker compose stop orchestrator deployer pipeline-ui
 docker compose down
 ```
 
-Volume `pipeline_data` хранит `jobs.json`, `deploys.json`, `schedule-state.json` — `down` его не удаляет.
+Volume `pipeline_mongo` хранит MongoDB (джобы, деплои, schedule-state) — `down` его не удаляет. Volume `pipeline_data` — только разовый импорт старых JSON.
 
 ## Schedule (P14)
 
@@ -50,11 +51,11 @@ Volume `pipeline_data` хранит `jobs.json`, `deploys.json`, `schedule-state
 
 ## Локальный запуск (без Docker)
 
-Нужен Node ≥ 22. Не держите одновременно контейнеры и локальные процессы на тех же портах.
+Нужен Node ≥ 22 и MongoDB на хосте (`mongod` на 127.0.0.1:27017). Не держите одновременно контейнеры и локальные процессы на тех же портах.
 
 ```powershell
 cd pipeline
-copy .env.local.example .env.local   # DATA_DIR=./data, PROMPTS_DIR=./prompts
+copy .env.local.example .env.local   # DATA_DIR=./data, хостовый mongod
 npm ci
 npm run build
 npm start                 # ORCHESTRATOR_PORT

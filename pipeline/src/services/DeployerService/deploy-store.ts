@@ -1,5 +1,9 @@
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { readFileSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
+
+import type { Document } from 'mongodb';
+
+import type { MongodbClient } from '@providers';
 
 export type DeployRecord = {
   /** GitHub release id. */
@@ -11,74 +15,120 @@ export type DeployRecord = {
   at: string;
 };
 
-type StoreFile = {
-  deploys: DeployRecord[];
+type DeployDocument = DeployRecord & Document;
+
+type LegacyStoreFile = {
+  deploys?: DeployRecord[];
 };
 
+const DEPLOYS_COLLECTION = 'deploys';
+
 export class DeployStore {
-  private readonly filePath: string;
+  constructor(private readonly mongo: MongodbClient) {}
 
-  constructor(dataDir: string) {
-    mkdirSync(dataDir, { recursive: true });
-    this.filePath = join(dataDir, 'deploys.json');
+  private col() {
+    return this.mongo.collection<DeployDocument>(DEPLOYS_COLLECTION);
   }
 
-  load(): StoreFile {
-    try {
-      return JSON.parse(readFileSync(this.filePath, 'utf8')) as StoreFile;
-    } catch {
-      return { deploys: [] };
-    }
+  private toRecord(doc: DeployDocument): DeployRecord {
+    return {
+      releaseId: doc.releaseId,
+      tag: doc.tag,
+      status: doc.status,
+      mode: doc.mode,
+      detail: doc.detail,
+      at: doc.at,
+    };
   }
 
-  private save(data: StoreFile): void {
-    const tmp = `${this.filePath}.tmp`;
-
-    writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8');
-    renameSync(tmp, this.filePath);
+  async ensureIndexes(): Promise<void> {
+    await this.col().createIndex({ tag: 1 }, { unique: true });
+    await this.col().createIndex(
+      { releaseId: 1 },
+      {
+        unique: true,
+        name: 'release_id',
+        partialFilterExpression: { releaseId: { $gt: 0 } },
+      },
+    );
   }
 
-  has(releaseId: number): boolean {
+  async list(): Promise<DeployRecord[]> {
+    const docs = await this.col().find().sort({ at: 1 }).toArray();
+
+    return docs.map((doc) => this.toRecord(doc));
+  }
+
+  async has(releaseId: number): Promise<boolean> {
     if (releaseId === 0) {
       return false;
     }
 
-    return this.load().deploys.some((item) => item.releaseId === releaseId);
+    const doc = await this.col().findOne({ releaseId });
+
+    return doc !== null;
   }
 
-  hasTag(tag: string): boolean {
-    return this.load().deploys.some((item) => item.tag === tag);
+  async hasTag(tag: string): Promise<boolean> {
+    const doc = await this.col().findOne({ tag });
+
+    return doc !== null;
   }
 
-  hasSuccessfulTag(tag: string): boolean {
-    return this.load().deploys.some(
-      (item) => item.tag === tag && item.status === 'deployed',
-    );
+  async hasSuccessfulTag(tag: string): Promise<boolean> {
+    const doc = await this.col().findOne({ tag, status: 'deployed' });
+
+    return doc !== null;
   }
 
-  deployedIds(): Set<number> {
-    return new Set(
-      this.load()
-        .deploys.filter((item) => item.releaseId !== 0)
-        .map((item) => item.releaseId),
-    );
+  async deployedIds(): Promise<Set<number>> {
+    const docs = await this.col()
+      .find({ releaseId: { $ne: 0 } })
+      .toArray();
+
+    return new Set(docs.map((doc) => doc.releaseId));
   }
 
-  record(entry: DeployRecord): void {
-    const data = this.load();
+  async record(entry: DeployRecord): Promise<void> {
+    if (entry.releaseId !== 0) {
+      await this.col().deleteMany({ releaseId: entry.releaseId });
+    }
 
-    data.deploys = data.deploys.filter((item) => {
-      if (entry.releaseId !== 0 && item.releaseId === entry.releaseId) {
-        return false;
-      }
+    await this.col().deleteMany({ tag: entry.tag });
+    await this.col().insertOne(entry);
+  }
 
-      if (item.tag === entry.tag) {
-        return false;
-      }
+  async importLegacyJson(dataDir: string): Promise<number> {
+    const existing = await this.col().estimatedDocumentCount();
 
-      return true;
-    });
-    data.deploys.push(entry);
-    this.save(data);
+    if (existing > 0) {
+      return 0;
+    }
+
+    const filePath = join(dataDir, 'deploys.json');
+    let raw: string;
+
+    try {
+      raw = readFileSync(filePath, 'utf8');
+    } catch {
+      return 0;
+    }
+
+    const data = JSON.parse(raw) as LegacyStoreFile;
+    const deploys = (data.deploys ?? []).map((item) => this.toRecord(item));
+
+    if (deploys.length === 0) {
+      return 0;
+    }
+
+    await this.col().insertMany(deploys);
+
+    try {
+      renameSync(filePath, `${filePath}.migrated`);
+    } catch {
+      // Deploys are already in MongoDB; leftover file is harmless.
+    }
+
+    return deploys.length;
   }
 }

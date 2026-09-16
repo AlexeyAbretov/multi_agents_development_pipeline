@@ -35,6 +35,6 @@ docker compose logs -f orchestrator
 docker compose down
 ```
 
-Локально без Docker: `copy pipeline\.env.local.example pipeline\.env.local` → заполнить секреты → `cd pipeline && npm ci && npm start` и `npm run start:deployer` (порты в `pipeline/ports.env`). Отладка: VSCode **Orchestrator**, **Deployer** или **Orchestrator + Deployer**. Подробнее: [docs/AGENT_PIPELINE_SETUP.md](docs/AGENT_PIPELINE_SETUP.md) §10.
+Локально без Docker: `copy pipeline\.env.local.example pipeline\.env.local` → заполнить секреты, поставить MongoDB Community (`mongod` на 127.0.0.1:27017) → `cd pipeline && npm ci && npm start` и `npm run start:deployer` (порты в `pipeline/ports.env`). Отладка: VSCode **Orchestrator**, **Deployer** или **Orchestrator + Deployer**. Подробнее: [docs/AGENT_PIPELINE_SETUP.md](docs/AGENT_PIPELINE_SETUP.md) §10.
 
 Целевой продукт настраивается в `pipeline/.env` или `pipeline/.env.local` (`GITHUB_REPO`, `CURSOR_REPO_URL`). Для деплоя — `PRODUCT_WORKSPACE_HOST` в корневом `.env`.

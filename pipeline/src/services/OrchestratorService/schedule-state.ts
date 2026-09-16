@@ -1,7 +1,14 @@
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { readFileSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 
-type StoreFile = {
+import type { Document } from 'mongodb';
+
+import type { MongodbClient } from '@providers';
+
+const META_COLLECTION = 'meta';
+const SCHEDULE_META_ID = 'schedule';
+
+type ScheduleState = {
   /** Milestone ids that already received blocked: no release comments. */
   blockedNotified: number[];
   /**
@@ -11,59 +18,115 @@ type StoreFile = {
   duplicateDueNotified: string[];
 };
 
+type ScheduleMeta = Document &
+  ScheduleState & {
+    _id: string;
+  };
+
+type LegacyStoreFile = Partial<ScheduleState>;
+
 export class ScheduleStateStore {
-  private readonly filePath: string;
+  constructor(private readonly mongo: MongodbClient) {}
 
-  constructor(dataDir: string) {
-    mkdirSync(dataDir, { recursive: true });
-    this.filePath = join(dataDir, 'schedule-state.json');
+  private metaCol() {
+    return this.mongo.collection<ScheduleMeta>(META_COLLECTION);
   }
 
-  load(): StoreFile {
+  private async load(): Promise<ScheduleState> {
+    const parsed = await this.metaCol().findOne({ _id: SCHEDULE_META_ID });
+
+    return {
+      blockedNotified: parsed?.blockedNotified ?? [],
+      duplicateDueNotified: parsed?.duplicateDueNotified ?? [],
+    };
+  }
+
+  private async save(data: ScheduleState): Promise<void> {
+    await this.metaCol().updateOne(
+      { _id: SCHEDULE_META_ID },
+      {
+        $set: {
+          blockedNotified: data.blockedNotified,
+          duplicateDueNotified: data.duplicateDueNotified,
+        },
+      },
+      { upsert: true },
+    );
+  }
+
+  async wasBlockedNotified(milestoneId: number): Promise<boolean> {
+    const data = await this.load();
+
+    return data.blockedNotified.includes(milestoneId);
+  }
+
+  async markBlockedNotified(milestoneId: number): Promise<void> {
+    const data = await this.load();
+
+    if (data.blockedNotified.includes(milestoneId)) {
+      return;
+    }
+
+    data.blockedNotified.push(milestoneId);
+    await this.save(data);
+  }
+
+  async wasDuplicateDueNotified(day: string): Promise<boolean> {
+    const data = await this.load();
+
+    return data.duplicateDueNotified.includes(day);
+  }
+
+  async markDuplicateDueNotified(day: string): Promise<void> {
+    const data = await this.load();
+
+    if (data.duplicateDueNotified.includes(day)) {
+      return;
+    }
+
+    data.duplicateDueNotified.push(day);
+    await this.save(data);
+  }
+
+  async importLegacyJson(dataDir: string): Promise<number> {
+    const data = await this.load();
+
+    if (
+      data.blockedNotified.length > 0 ||
+      data.duplicateDueNotified.length > 0
+    ) {
+      return 0;
+    }
+
+    const filePath = join(dataDir, 'schedule-state.json');
+    let raw: string;
+
     try {
-      const parsed = JSON.parse(
-        readFileSync(this.filePath, 'utf8'),
-      ) as Partial<StoreFile>;
-
-      return {
-        blockedNotified: parsed.blockedNotified ?? [],
-        duplicateDueNotified: parsed.duplicateDueNotified ?? [],
-      };
+      raw = readFileSync(filePath, 'utf8');
     } catch {
-      return { blockedNotified: [], duplicateDueNotified: [] };
+      return 0;
     }
-  }
 
-  private save(data: StoreFile): void {
-    const tmp = `${this.filePath}.tmp`;
+    const parsed = JSON.parse(raw) as LegacyStoreFile;
+    const next: ScheduleState = {
+      blockedNotified: parsed.blockedNotified ?? [],
+      duplicateDueNotified: parsed.duplicateDueNotified ?? [],
+    };
+    const imported =
+      next.blockedNotified.length + next.duplicateDueNotified.length;
 
-    writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8');
-    renameSync(tmp, this.filePath);
-  }
-
-  wasBlockedNotified(milestoneId: number): boolean {
-    return this.load().blockedNotified.includes(milestoneId);
-  }
-
-  markBlockedNotified(milestoneId: number): void {
-    const data = this.load();
-
-    if (!data.blockedNotified.includes(milestoneId)) {
-      data.blockedNotified.push(milestoneId);
-      this.save(data);
+    if (imported === 0) {
+      return 0;
     }
-  }
 
-  wasDuplicateDueNotified(day: string): boolean {
-    return this.load().duplicateDueNotified.includes(day);
-  }
+    await this.save(next);
 
-  markDuplicateDueNotified(day: string): void {
-    const data = this.load();
-
-    if (!data.duplicateDueNotified.includes(day)) {
-      data.duplicateDueNotified.push(day);
-      this.save(data);
+    try {
+      renameSync(filePath, `${filePath}.migrated`);
+    } catch {
+      // State is already in MongoDB; leftover file is harmless.
     }
+
+    return imported;
   }
 }

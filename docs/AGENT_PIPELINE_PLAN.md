@@ -43,6 +43,7 @@ Merge в `main` — только после явного подтвержден�
 | P16 | `pipeline/16-in-dev-drops-ready-for-dev` |
 | P17 | `pipeline/17-mvp-analyst` |
 | P18 | `pipeline/18-analyst-retry` |
+| P19 | `pipeline/19-jobs-mongodb` |
 
 ## Обзор
 
@@ -66,9 +67,10 @@ P15 Пустой релиз: закрыть milestone          ~1ч
 P16 `in-dev` снимает `ready-for-dev`         ~1ч
 P17 тип `mvp`: план аналитика → апрув → задачи ~3ч
 P18 повтор analyst после сбоя (`needs-plan`) ~1ч
+P19 джобы в MongoDB (local mongod / Docker)  ~2ч
 UI  Таблица джоб и логи орка              ~3ч  (после P2)
                                         ────
-                                        ~48ч
+                                        ~50ч
 ```
 
 Оценка без отладки биллинга Cursor и без полноценного E2E Ollama.
@@ -236,7 +238,7 @@ Issue → план → PR → issue-QA → merge человеком в `main` �
 3. `DEPLOY_MODE=stub` (по умолчанию) или `compose` → `docker compose` каталога (сейчас mongo). Ollama не в compose.
 4. Только `deployer` с docker.sock (Docker Desktop: `/var/run/docker.sock`).
 5. Результат: запись в тело Release + labels `deployed` / `deploy-failed` на open issues с `ready-for-release` / `release-approved`.
-6. Идемпотентность: `deploys.json` + маркер `<!-- pipeline:deploy:ID -->` в теле Release.
+6. Идемпотентность: MongoDB `deploys` + маркер `<!-- pipeline:deploy:ID -->` в теле Release.
 
 ### Проверка
 
@@ -481,6 +483,27 @@ Issue → план → PR → issue-QA → merge человеком в `main` �
 
 ---
 
+## P19: Джобы в MongoDB
+
+**Ветка:** `pipeline/19-jobs-mongodb`
+
+**Цель:** журнал `(issue, role)`, деплои и schedule-state в MongoDB. Локальный `npm start` ходит в хостовый `mongod` (db `pipeline_local`). Docker поднимает свой образ `pipeline/mongo` (db `pipeline`).
+
+### Шаги
+
+1. `MongodbProvider` (`MongodbClient`) + сторы на коллекциях `jobs` / `deploys` / `meta`.
+2. Уникальный частичный индекс на активную пару `(issue, role)`.
+3. Compose: сервис `pipeline-mongo`, том `pipeline_mongo`, `MONGODB_URI` у orchestrator и deployer.
+4. `.env.local`: `mongodb://127.0.0.1:27017/pipeline_local`. Разовый импорт `DATA_DIR/*.json`.
+
+### Проверка
+
+- [ ] `npm test` в `pipeline/` зелёный
+- [ ] Локальный оркестратор пишет в `pipeline_local`, не в Docker-mongo
+- [ ] `docker compose up` поднимает `pipeline-mongo` и оркестратор отвечает `/health`
+
+---
+
 ## Локальная отладка оркестратора
 
 Не отдельный этап плана. После P16 в репозитории:
@@ -501,7 +524,7 @@ Issue → план → PR → issue-QA → merge человеком в `main` �
 ### Шаги
 
 1. Сервис `pipeline-ui` (React + Vite + TS + Tailwind), bind `127.0.0.1`, порт `PIPELINE_UI_PORT` в `pipeline/ports.env`.
-2. API: `GET /api/jobs` (orchestrator), `GET /api/deploys` (deployer); данные из volume, не docker logs.
+2. API: `GET /api/jobs` (orchestrator), `GET /api/deploys` (deployer); данные из MongoDB, не docker logs.
 3. Таблица: issue, роль, UI-статус (`queued` / `running` / `failed` / `finished` / `clarification`), ссылки GitHub и Cursor.
 4. Полный транскрипт — ссылка на Cursor (`agentId`); Publish релиза — RM по milestone, не кнопка в UI.
 5. Compose: `pipeline-ui` + nginx: `/api/jobs` → orchestrator, `/api/deploys` → deployer.

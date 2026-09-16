@@ -16,6 +16,11 @@ export const envSchema = z.object({
   CURSOR_STARTING_REF: z.string().default('main'),
   CURSOR_MODEL: z.string().default('composer-2.5'),
   DATA_DIR: z.string().default('/data'),
+  /** Local npm: host mongod + db pipeline_local. Docker overrides. */
+  MONGODB_URI: z
+    .string()
+    .min(1)
+    .default('mongodb://127.0.0.1:27017/pipeline_local'),
   PROMPTS_DIR: z.string().default('/app/prompts'),
   /** stub = echo only; compose = docker compose checkout продукта. */
   DEPLOY_MODE: z.enum(['stub', 'compose']).default('stub'),
