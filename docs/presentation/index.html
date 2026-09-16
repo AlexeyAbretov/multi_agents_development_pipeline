@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Агентный пайплайн</title>
+  <style>
+    :root {
+      --ink: #121a17;
+      --ink-700: #2f3d38;
+      --muted: #5c6b65;
+      --line: #c5d0ca;
+      --paper: #f4f6f5;
+      --white: #fff;
+      --accent: #c45c26;
+      --accent-soft: #f3e0d4;
+      --green: #1f6b4a;
+      --green-soft: #d7efe4;
+      --amber: #8a5a12;
+      --amber-soft: #f8e7c4;
+      --sky: #1e4e72;
+      --sky-soft: #d7e8f6;
+      --red: #8b2e2e;
+      --red-soft: #f6d7d7;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #0e1412;
+      color: var(--ink);
+      font-family: "Segoe UI", "IBM Plex Sans", sans-serif;
+    }
+
+    @page {
+      size: 1920px 1080px;
+      margin: 0;
+    }
+
+    .slide {
+      width: 1920px;
+      height: 1080px;
+      position: relative;
+      overflow: hidden;
+      background: var(--paper);
+      page-break-after: always;
+      break-after: page;
+    }
+
+    .slide:last-child {
+      page-break-after: auto;
+      break-after: auto;
+    }
+
+    .bar {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 10px;
+      background: var(--accent);
+    }
+
+    .num {
+      position: absolute;
+      right: 56px;
+      bottom: 36px;
+      font-size: 18px;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 64px;
+      line-height: 1.08;
+      letter-spacing: -0.03em;
+    }
+
+    h2 {
+      margin: 0 0 28px;
+      font-size: 48px;
+      letter-spacing: -0.03em;
+    }
+
+    p, li { line-height: 1.35; }
+
+    .kicker {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 16px;
+    }
+
+    .pad { padding: 72px 88px 80px 98px; }
+
+    .cover {
+      background: #101714;
+      color: #f4f6f5;
+    }
+
+    .cover .bg {
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(90deg, rgba(16,23,20,0.92) 0%, rgba(16,23,20,0.55) 46%, rgba(16,23,20,0.18) 100%),
+        url("assets/cover-pipeline.png") center / cover no-repeat;
+    }
+
+    .cover .content {
+      position: relative;
+      z-index: 1;
+      padding: 120px 100px;
+      max-width: 980px;
+    }
+
+    .cover h1 { font-size: 86px; color: #fff; }
+    .cover .lead { font-size: 32px; color: #d7ddd9; margin-top: 24px; max-width: 820px; }
+    .cover .meta { margin-top: 56px; font-size: 20px; color: #c5d0ca; }
+
+    .cols { display: grid; gap: 36px; }
+    .cols-2 { grid-template-columns: 1fr 1fr; }
+    .cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+    .cols-12 { grid-template-columns: 1.15fr 0.85fr; }
+
+    .card {
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 28px 32px;
+      box-shadow: 0 8px 24px rgba(18, 26, 23, 0.04);
+    }
+
+    .card h3 {
+      margin: 0 0 12px;
+      font-size: 26px;
+    }
+
+    .card p, .card li { font-size: 22px; color: var(--ink-700); }
+
+    ul.clean { margin: 0; padding: 0 0 0 22px; }
+    ul.clean li { margin: 8px 0; }
+
+    .photo {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 18px;
+      display: block;
+    }
+
+    .photo-frame {
+      border-radius: 18px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      box-shadow: 0 16px 40px rgba(18, 26, 23, 0.12);
+      height: 780px;
+    }
+
+    .photo-frame.faces { height: 320px; }
+    .photo-frame.faces .photo { object-position: center 12%; }
+    .photo-frame.short { height: 620px; }
+
+    table.roles {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 22px;
+    }
+
+    table.roles th {
+      text-align: left;
+      font-size: 16px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 0 16px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    table.roles td {
+      padding: 16px;
+      border-bottom: 1px solid #e4e9e6;
+      vertical-align: top;
+    }
+
+    table.roles tr:last-child td { border-bottom: 0; }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-family: Consolas, "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 16px;
+      font-weight: 500;
+      background: #e4e9e6;
+      color: var(--ink);
+      white-space: nowrap;
+    }
+
+    .chip.accent { background: var(--accent-soft); color: var(--accent); }
+    .chip.green { background: var(--green-soft); color: var(--green); }
+    .chip.amber { background: var(--amber-soft); color: var(--amber); }
+    .chip.sky { background: var(--sky-soft); color: var(--sky); }
+    .chip.red { background: var(--red-soft); color: var(--red); }
+
+    .arch {
+      display: grid;
+      grid-template-columns: 1fr 72px 1.15fr 72px 1fr;
+      align-items: stretch;
+      gap: 0;
+      margin-top: 12px;
+    }
+
+    .arch-col { display: flex; flex-direction: column; gap: 16px; }
+    .arch-box {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 22px 24px;
+      min-height: 140px;
+    }
+    .arch-box h3 { margin: 0 0 8px; font-size: 24px; }
+    .arch-box p { margin: 0; font-size: 18px; color: var(--ink-700); }
+    .arch-box.cloud { background: #1b2420; color: #f4f6f5; border-color: #2c3a34; }
+    .arch-box.cloud p { color: #c5d0ca; }
+    .arch-box.home { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent-soft); }
+    .arrow-col {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 42px;
+      color: var(--accent);
+      font-weight: 600;
+    }
+    .arrow-note {
+      font-size: 14px;
+      color: var(--muted);
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      letter-spacing: 0.08em;
+    }
+
+    .flow {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px 8px;
+    }
+
+    .arrow { color: var(--accent); font-size: 28px; font-weight: 700; }
+
+    .note {
+      margin-top: 22px;
+      font-size: 22px;
+      color: var(--ink-700);
+    }
+
+    .big-quote {
+      font-size: 36px;
+      line-height: 1.25;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      max-width: 1400px;
+    }
+
+    .ui-shot {
+      width: 100%;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      display: block;
+      overflow: hidden;
+    }
+    .ui-crop {
+      height: 280px;
+      overflow: hidden;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+    .ui-crop img {
+      width: calc(100% + 22px);
+      max-width: none;
+      display: block;
+      border: 0;
+      border-radius: 0;
+    }
+
+    .jobs {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      border-radius: 14px;
+      overflow: hidden;
+      font-size: 20px;
+    }
+
+    .jobs th {
+      background: #eef2f0;
+      text-align: left;
+      font-size: 14px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 12px 16px;
+    }
+
+    .jobs td {
+      padding: 12px 16px;
+      border-top: 1px solid #e4e9e6;
+    }
+
+    .badge {
+      display: inline-block;
+      border-radius: 6px;
+      padding: 3px 10px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .b-run { background: #f8e7c4; color: #8a5a12; }
+    .b-ok { background: #d7efe4; color: #1f6b4a; }
+    .b-fail { background: #f6d7d7; color: #8b2e2e; }
+
+    .pill-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+
+    code, .mono {
+      font-family: Consolas, "IBM Plex Mono", ui-monospace, monospace;
+    }
+
+    .footer-line {
+      position: absolute;
+      left: 98px;
+      bottom: 36px;
+      font-size: 16px;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+
+<section class="slide cover">
+  <div class="bg"></div>
+  <div class="content">
+    <div class="kicker">Оркестратор разработки</div>
+    <h1>Агентный<br />пайплайн</h1>
+    <p class="lead">GitHub Issues → Cursor Cloud → очередь ролей на машине разработчика.</p>
+    <p class="meta">Процесс в облаке. Человек держит merge, дату релиза и стоп-кран.</p>
+  </div>
+  <div class="num">01 / 16</div>
+</section>
+
+<section class="slide">
+  <div class="bar"></div>
+  <div class="pad">
+    <div class="kicker">Содержание</div>
+    <h2>О чём эта презентация</h2>
+    <div class="cols cols-2" style="margin-top: 12px;">
+      <div class="card">
+        <h3>Процесс</h3>
+        <ul class="clean">
+          <li>Зачем оркестратор и чем он не является</li>
+          <li>Роли: аналитик, разработчик, тестировщик, релиз-менеджер</li>
+          <li>Автомат labels на GitHub Issue</li>
+          <li>QA-цикл, MVP и календарный релиз</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Как устроено</h3>
+        <ul class="clean">
+          <li>Поллинг GitHub, без входящего webhook</li>
+          <li>Cursor Cloud только для процесса</li>
+          <li>MongoDB-журнал джоб и локальный UI очереди</li>
+          <li>Гейты человека: merge, milestone, апрув плана</li>
+        </ul>
+      </div>
+    </div>
+    <p class="note">Ветки пайплайна — <span class="mono">pipeline/N-…</span>. Merge в main только после явного подтверждения.</p>
+  </div>
+  <div class="num">02 / 16</div>
+</section>
+
+<section class="slide">
+  <div class="bar"></div>
+  <div class="pad">
+    <div class="kicker">Проблема</div>
+    <h2>Цикл разработки не должен жить в чате</h2>
+    <div class="cols cols-2" style="margin-top: 8px;">
+      <div class="card">
+        <h3>Без оркестратора</h3>
+        <ul class="clean">
+          <li>План, код, QA и релиз размазаны по ручным шагам</li>
+          <li>Агент может «заодно» расширить scope или замержить в main</li>
+          <li>Нет идемпотентности: легко запустить второго агента на ту же задачу</li>
+          <li>Релиз по догадке, а не по дате milestone</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>С пайплайном</h3>
+        <ul class="clean">
+          <li>Источник правды — labels на GitHub Issue</li>
+          <li>Роль выбирается правилами, не настроением модели</li>
+          <li>Одно активное облачное задание на пару (issue, role)</li>
+          <li>Человек решает, что попадает в main и когда выходит версия</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="num">03 / 16</div>
+</section>
+
+<section class="slide">
+  <div class="bar"></div>
+  <div class="pad">
+    <div class="kicker">Граница репозитория</div>
+    <h2>Это оркестратор, не продукт</h2>
+    <div class="cols cols-2">
+      <div class="card">
+        <h3>Этот репозиторий</h3>
+        <ul class="clean">
+          <li>Оркестратор, UI очереди, промпты ролей</li>
+          <li>Конституция, контракт, статусная модель</li>
+          <li>Целевой продукт задаётся конфигом: <span class="mono">GITHUB_REPO</span>, <span class="mono">CURSOR_REPO_URL</span></li>
+          <li>Код каталога сюда не импортируется</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Целевой продукт</h3>
+        <ul class="clean">
+          <li>Отдельный GitHub-репозиторий</li>
+          <li>Свои issues, PR, milestone, Releases</li>
+          <li>Облачный агент читает файлы продукта</li>
+          <li>Runtime продукта остаётся на машине разработчика</li>
+        </ul>
+      </div>
+    </div>
+    <p class="note">Один git remote — GitHub. Локальная Gitea пайплайном не используется.</p>
+  </div>
+  <div class="num">04 / 16</div>
+</section>
+
+<section class="slide">
+  <div class="bar"></div>
+  <div class="pad" style="padding-bottom: 48px;">
+    <div class="kicker">Архитектура</div>
+    <h2>Исходящий полл, без туннеля</h2>
+    <div class="arch">
+      <div class="arch-col">
+        <div class="arch-box">
+          <h3>GitHub</h3>
+          <p>Issues, labels, PR, Actions, tags, Releases, milestone <span class="mono">vN.N.N</span></p>
+        </div>
+        <div class="arch-box">
+          <h3>Канал</h3>
+          <p>Комментарии issue и PR. Полный транскрипт агента в UI не копируется.</p>
+        </div>
+      </div>
+      <div class="arrow-col">
+        <div style="text-align:center;">
+          <div>⇄</div>
+          <div class="arrow-note">HTTPS с ПК</div>
+        </div>
+      </div>
+      <div class="arch-col">
+        <div class="arch-box home">
+          <h3>Orchestrator на ПК</h3>
+          <p>Поллинг issues → выбор роли → Cursor SDK. Fastify, MongoDB jobs, schedule milestone.</p>
+        </div>
+        <div class="arch-box">
+          <h3>pipeline-ui</h3>
+          <p>Таблица очереди, статусы, ссылки на issue и Cursor <span class="mono">agentId</span>. Bind 127.0.0.1.</p>
+        </div>
+      </div>
+      <div class="arrow-col">→</div>
+      <div class="arch-col">
+        <div class="arch-box cloud">
+          <h3>Cursor Cloud</h3>
+          <p>Аналитик → разработчик → тестировщик → релиз-менеджер. Клон продукта на VM, без merge в main.</p>
+        </div>
+        <div class="arch-box cloud">
+          <h3>Промпты</h3>
+          <p>Маркеры в тексте ответа: PIPELINE_LABELS, BUG_ISSUES, MVP_TASKS, RELEASE_TAG.</p>
+        </div>
+      </div>
+    </div>
+    <p class="note">Оркестратор только исходящие HTTPS-запросы. Нет входящего webhook и Cloudflare Tunnel.</p>
+  </div>
+  <div class="num">05 / 16</div>
+</section>
+
+<section class="slide">
+  <div class="bar"></div>
+  <div class="pad">
+    <div class="kicker">Принцип P1</div>
+    <h2>Процесс в облаке, продукт на машине</h2>
+    <div class="cols cols-12">
+      <div class="photo-frame short">
+        <img class="photo" src="assets/cloud-local.png" alt="Облачные агенты и локальная машина" />
+      </div>
+      <div>
+        <div class="card" style="margin-bottom: 20px;">
+          <h3>Разрешено в облаке</h3>
+          <ul class="clean">
+            <li>GitHub API и Cursor Cloud</li>
+            <li>Клонирование репозитория продукта на VM</li>
+            <li>План, код в ветке, PR, changelog</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Только на ПК</h3>
+          <ul class="clean">
+            <li>Данные и runtime продукта</li>
+            <li>Исходящий HTTPS: api.github.com и API Cursor</li>
+            <li>Оркестратор, MongoDB джоб, UI очереди</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="num">06 / 16</div>
+</section>
+
+<section class="slide">
+  <div class="bar"></div>
+  <div class="pad" style="padding-bottom: 40px;">
+    <div class="kicker">Роли</div>
+    <h2>Четыре облачных агента и человек</h2>
+    <div class="photo-frame faces" style="margin-bottom: 28px;">
+      <img class="photo" src="assets/roles-four.png" alt="Аналитик, разработчик, тестировщик, релиз-менеджер" />
+    </div>
+    <table class="roles">
+      <thead>
+        <tr>
+          <th>Роль</th>
+          <th>Делает</th>
+          <th>Не делает</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Аналитик</strong></td>
+          <td>План в issue; для MVP — задачи после апрува</td>
+          <td>Код, merge</td>
+        </tr>
+        <tr>
+          <td><strong>Разработчик</strong></td>
+          <td>Ветка <span class="mono">issue/&lt;n&gt;-…</span>, pull request</td>
+          <td>Merge в <span class="mono">main</span></td>
+        </tr>
+        <tr>
+          <td><strong>Тестировщик</strong></td>
+          <td>Issue-QA по PR или регресс <span class="mono">main</span></td>
+          <td>Tag, Publish, E2E без локального прогона</td>
+        </tr>
+        <tr>
+          <td><strong>Релиз-менеджер</strong></td>
+          <td>Changelog и published GitHub Release по milestone</td>
+          <td>Draft, merge, релиз без зелёного регресса</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="num">07 / 16</div>
+</section>
+
+<section class="slide">
+  <div class="bar"></div>
+  <div class="pad">
+    <div class="kicker">Автомат feature / bug</div>
+    <h2>Labels — источник правды процесса</h2>
+    <div class="card" style="margin-bottom: 24px;">
+      <div class="flow">
+        <span class="chip">bug / feature + needs-plan</span>
+        <span class="arrow">→</span>
+        <span class="chip amber">in-analysis</span>
+        <span class="arrow">→</span>
+        <span class="chip sky">ready-for-dev</span>
+        <span class="arrow">→</span>
+        <span class="chip amber">in-dev</span>
+        <span class="arrow">→</span>
+        <span class="chip">in-qa</span>
+        <span class="arrow">→</span>
+        <span class="chip amber">qa-in-progress</span>
+        <span class="arrow">→</span>
+        <span class="chip green">qa-passed</span>
+        <span class="arrow">→</span>
+        <span class="chip accent">человек мержит PR</span>
+      </div>
+    </div>
+    <div class="cols cols-2">
+      <div class="card">
+        <h3>Параллельный тик</h3>
+        <p>Analyst, developer, tester и RM стартуют в одном полле параллельно. Роли не ждут друг друга. Повтор той же пары (issue, role) блокирует MongoDB-замок.</p>
+      </div>
+      <div class="card">
+        <h3>Стоп-кран</h3>
+        <p><span class="chip red">needs-human</span> режет все роли. После ошибки Cursor человек снимает метку и возвращает trigger-label — замок сбрасывается, агент стартует снова.</p>
+      </div>
+    </div>
+    <p class="note">После <span class="mono">qa-passed</span> на feature/bug автоматика останавливается. Релиз-менеджер от этой issue не вызывается.</p>
+  </div>
+  <div class="num">08 / 16</div>
+</section>
+
+<section class="slide">
+  <div class="bar"></div>
+  <div class="pad">
+    <div class="kicker">QA-цикл</div>
+    <h2>Дети-баги, глубина 1, не больше трёх кругов</h2>
+    <div class="cols cols-12">
+      <div class="photo-frame short">
+        <img class="photo" src="assets/qa-loop.png" alt="Цикл QA с дочерними багами" />
+      </div>
+      <div>
+        <div class="card" style="margin-bottom: 18px;">
+          <h3>Как устроен цикл</h3>
+          <ul class="clean">
+            <li>Tester пишет <span class="mono">PIPELINE_BUG_ISSUES</span></li>
+            <li>Максимум 2 блокера за прогон; nit — комментарий в PR</li>
+            <li>Дети: <span class="mono">bug + needs-plan</span>, Related to родителя</li>
+            <li>Родитель остаётся <span class="mono">in-qa</span>, пока дети открыты</li>
+            <li>Потом сброс джоба tester и re-QA</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Ограничения</h3>
+          <p>Глубина дерева = 1. <span class="mono">fix-round ≤ 3</span>. Четвёртый круг разработчика → <span class="chip red">needs-human</span>.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="num">09 / 16</div>
+</section>
+
+<section class="slide">
+  <div class="bar"></div>
+  <div class="pad">
+    <div class="kicker">Старт проекта</div>
+    <h2>MVP: план → апрув человека → очередь задач</h2>
+    <div class="card" style="margin-bottom: 24px;">
+      <div class="flow">
+        <span class="chip">mvp + needs-plan</span>
+        <span class="arrow">→</span>
+        <span class="chip amber">in-analysis</span>
+        <span class="arrow">→</span>
+        <span class="chip sky">to-approve</span>
+        <span class="arrow">→</span>
+        <span class="chip accent">человек: approved</span>
+        <span class="arrow">→</span>
+        <span class="chip">создание feature/bug</span>
+        <span class="arrow">→</span>
+        <span class="chip green">MVP закрыт</span>
+      </div>
+    </div>
+    <div class="cols cols-2">
+      <div class="card">
+        <h3>Порядок разработки</h3>
+        <p>Маркер <span class="mono">PIPELINE_MVP_TASKS: 12+14,16</span></p>
+        <ul class="clean">
+          <li><span class="mono">+</span> — один этап, задачи параллельно</li>
+          <li>запятая — следующий этап</li>
+          <li>developer идёт по этапам; analyst и tester — параллельно</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Гейт человека</h3>
+        <ul class="clean">
+          <li>План не нравится — снова <span class="mono">needs-plan</span></li>
+          <li>План ок — снять <span class="mono">to-approve</span>, поставить <span class="mono">approved</span></li>
+          <li>На MVP не стартуют developer, tester и RM</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="num">10 / 16</div>
+</section>
+
+<section class="slide">
+  <div class="bar"></div>
+  <div class="pad">
+    <div class="kicker">Календарь</div>
+    <h2>Человек задаёт дату, RM публикует Release</h2>
+    <div class="cols cols-12">
+      <div>
+        <div class="card" style="margin-bottom: 18px;">
+          <h3>Milestone = будущий релиз</h3>
+          <ul class="clean">
+            <li>Title строго <span class="mono">vN.N.N</span></li>
+            <li><span class="mono">due_on</span> — день Publish, календарь <span class="mono">Europe/Moscow</span></li>
+            <li>T−1: служебная issue «Регресс vN.N.N»</li>
+            <li>T: RM, если регресс зелёный и нет открытых work-items</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Стоп до Publish</h3>
+          <p>Нет коммитов с прошлого tag → milestone закрывается, Release не создаётся. Красный регресс, <span class="mono">needs-human</span> или открытые bug/feature/mvp → <span class="mono">blocked: no release</span>.</p>
+        </div>
+      </div>
+      <div class="photo-frame short">
+        <img class="photo" src="assets/release-calendar.png" alt="Календарный релиз по milestone" />
+      </div>
+    </div>
+  </div>
+  <div class="num">11 / 16</div>
+</section>
+
+<section class="slide">
+  <div class="bar"></div>
+  <div class="pad">
+    <div class="kicker">Статусы</div>
+    <h2>Три слоя, три разные правды</h2>
+    <div class="cols cols-3" style="margin-top: 8px;">
+      <div class="card">
+        <h3>1. GitHub labels</h3>
+        <p>Процесс продукта. Оркестратор читает labels, запускает роль и переписывает их. Без нужного label тик issue не увидит.</p>
+        <div class="pill-row">
+          <span class="chip">needs-plan</span>
+          <span class="chip amber">in-dev</span>
+          <span class="chip green">qa-passed</span>
+        </div>
+      </div>
+      <div class="card">
+        <h3>2. Job в MongoDB</h3>
+        <p>Идемпотентность оркестратора: одно активное облачное задание на (issue, role). История не стирается, замок можно сбросить.</p>
+        <div class="pill-row">
+          <span class="chip">queued</span>
+          <span class="chip amber">running</span>
+          <span class="chip green">finished</span>
+        </div>
+      </div>
+      <div class="card">
+        <h3>3. UI-статус</h3>
+        <p>Проекция для человека. <span class="mono">finished + needs-human</span> → «уточнение». Ошибка Cursor → «ошибка».</p>
+        <div class="pill-row">
+          <span class="chip amber">выполняется</span>
+          <span class="chip sky">уточнение</span>
+          <span class="chip red">ошибка</span>
+        </div>
+      </div>
+    </div>
+    <p class="note">После рестарта джобы <span class="mono">running/queued</span> помечаются error + cleared: облачный агент уже мёртв, запись журнала остаётся.</p>
+  </div>
+  <div class="num">12 / 16</div>
+</section>
+
+<section class="slide">
+  <div class="bar"></div>
+  <div class="pad">
+    <div class="kicker">Стек и протокол</div>
+    <h2>Правила чистые, поллер ходит наружу</h2>
+    <div class="cols cols-2">
+      <div class="card">
+        <h3>Код</h3>
+        <ul class="clean">
+          <li>Node ≥ 22, TypeScript, Fastify, Zod</li>
+          <li><span class="mono">@cursor/sdk</span> — только cloud runtime</li>
+          <li>GitHub — ручной REST, без Octokit</li>
+          <li>MongoDB: jobs и schedule-state</li>
+          <li>UI: React, Vite, Tailwind, опрос раз в 5 с</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Маркеры в ответе агента</h3>
+        <ul class="clean">
+          <li><span class="mono">PIPELINE_LABELS:</span> — исход роли</li>
+          <li><span class="mono">PIPELINE_BUG_ISSUES:</span> — блокеры QA</li>
+          <li><span class="mono">PIPELINE_MVP_TASKS:</span> — порядок этапов</li>
+          <li><span class="mono">PIPELINE_RELEASE_TAG</span> + changelog</li>
+        </ul>
+        <p style="margin-top: 16px;">Оркестратор сам меняет labels и создаёт Release. Агенту нельзя доверять GitHub напрямую.</p>
+      </div>
+    </div>
+  </div>
+  <div class="num">13 / 16</div>
+</section>
+
+<section class="slide">
+  <div class="bar"></div>
+  <div class="pad" style="padding-bottom: 48px;">
+    <div class="kicker">pipeline-ui</div>
+    <h2>Очередь ролей, без кнопки Publish</h2>
+    <div class="cols cols-12" style="grid-template-columns: 0.92fr 1.08fr; align-items: start;">
+      <div>
+        <div class="ui-crop">
+          <img src="assets/ui-header.png" alt="Шапка UI пайплайна" />
+        </div>
+      </div>
+      <div>
+        <table class="jobs">
+          <thead>
+            <tr>
+              <th>Issue</th>
+              <th>Роль</th>
+              <th>Статус</th>
+              <th>Решение</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>#49</td>
+              <td>tester</td>
+              <td><span class="badge b-run">выполняется</span></td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <td></td>
+              <td>developer</td>
+              <td><span class="badge b-ok">готово</span></td>
+              <td class="mono">in-qa</td>
+            </tr>
+            <tr>
+              <td></td>
+              <td>analyst</td>
+              <td><span class="badge b-ok">готово</span></td>
+              <td class="mono">ready-for-dev</td>
+            </tr>
+            <tr>
+              <td>#47</td>
+              <td>tester</td>
+              <td><span class="badge b-ok">готово</span></td>
+              <td class="mono">qa-passed</td>
+            </tr>
+            <tr>
+              <td>#45</td>
+              <td>tester</td>
+              <td><span class="badge b-fail">ошибка</span></td>
+              <td>dropped after restart</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="note">Живой UI: ссылки на GitHub issue и Cursor agent. Релиз публикует RM по milestone, в таблице лишь статус.</p>
+      </div>
+    </div>
+  </div>
+  <div class="num">14 / 16</div>
+</section>
+
+<section class="slide">
+  <div class="bar"></div>
+  <div class="pad">
+    <div class="kicker">Контур человека</div>
+    <h2>Автоматика ведёт процесс, человек держит контроль</h2>
+    <div class="cols cols-2">
+      <div class="card">
+        <h3>Всегда человек</h3>
+        <ul class="clean">
+          <li>Merge PR в <span class="mono">main</span> после issue-<span class="mono">qa-passed</span></li>
+          <li>Дата релиза: open milestone <span class="mono">vN.N.N</span> с <span class="mono">due_on</span></li>
+          <li>Апрув плана MVP (<span class="mono">to-approve</span> → <span class="mono">approved</span>)</li>
+          <li>Возврат из <span class="mono">needs-human</span></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Агентам запрещено</h3>
+        <ul class="clean">
+          <li>Merge в <span class="mono">main</span></li>
+          <li>Релиз без зелёного регресса</li>
+          <li>Утверждать E2E продукта без локального прогона</li>
+          <li>Расширять scope «заодно» и коммитить секреты</li>
+        </ul>
+      </div>
+    </div>
+    <p class="big-quote" style="margin-top: 48px;">При сомнении — <span class="chip red">needs-human</span>, не «лучшая догадка».</p>
+  </div>
+  <div class="num">15 / 16</div>
+</section>
+
+<section class="slide cover">
+  <div class="bg" style="background:
+    linear-gradient(90deg, rgba(16,23,20,0.94) 0%, rgba(16,23,20,0.72) 55%, rgba(16,23,20,0.35) 100%),
+    url('assets/cover-pipeline.png') center / cover no-repeat;"></div>
+  <div class="content">
+    <div class="kicker">Итог</div>
+    <h1>Оркестратор ведёт,<br />человек решает</h1>
+    <p class="lead">Поллинг GitHub. Облачные роли по labels. Календарный Release. Продукт остаётся на машине разработчика.</p>
+    <p class="meta">Документы: CONSTITUTION.md · AGENT_PIPELINE.md · AGENT_PIPELINE_ARCHITECTURE.md</p>
+  </div>
+  <div class="num">16 / 16</div>
+</section>
+
+</body>
+</html>
