@@ -667,8 +667,8 @@ export function shouldResetMvpAnalystJob(params: {
 }
 
 /** Повтор роли после сбоя: человек вернул trigger-лейбл
- * (developer: `ready-for-dev`, tester: `in-qa`). Не трогать in-flight
- * и успешный `finished`. */
+ * (analyst: `needs-plan`, developer: `ready-for-dev`, tester:
+ * `in-qa`). Не трогать in-flight и успешный `finished`. */
 export function shouldResetFailedRoleJob(params: {
   triggerLabel: string;
   labels: string[];

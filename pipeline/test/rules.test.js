@@ -391,6 +391,51 @@ test("shouldResetFailedRoleJob retries after error or needs-human", () => {
     }),
     false,
   );
+  assert.equal(
+    shouldResetFailedRoleJob({
+      triggerLabel: "needs-plan",
+      labels: ["bug", "needs-plan"],
+      jobStatus: "startup_error",
+      decision: "needs-human",
+    }),
+    true,
+  );
+  assert.equal(
+    shouldResetFailedRoleJob({
+      triggerLabel: "needs-plan",
+      labels: ["bug", "needs-plan"],
+      jobStatus: "error",
+      decision: null,
+    }),
+    true,
+  );
+  assert.equal(
+    shouldResetFailedRoleJob({
+      triggerLabel: "needs-plan",
+      labels: ["feature", "needs-plan"],
+      jobStatus: "finished",
+      decision: "needs-human",
+    }),
+    true,
+  );
+  assert.equal(
+    shouldResetFailedRoleJob({
+      triggerLabel: "needs-plan",
+      labels: ["bug", "needs-plan"],
+      jobStatus: "finished",
+      decision: "ready-for-dev",
+    }),
+    false,
+  );
+  assert.equal(
+    shouldResetFailedRoleJob({
+      triggerLabel: "needs-plan",
+      labels: ["bug", "needs-plan", "needs-human"],
+      jobStatus: "startup_error",
+      decision: "needs-human",
+    }),
+    false,
+  );
 });
 
 test("shouldPromoteStaleInDev recovers orphaned in-dev after PR", () => {

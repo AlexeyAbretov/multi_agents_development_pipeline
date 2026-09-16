@@ -42,6 +42,7 @@ Merge в `main` — только после явного подтвержден�
 | P15 | `pipeline/15-empty-release-skip` |
 | P16 | `pipeline/16-in-dev-drops-ready-for-dev` |
 | P17 | `pipeline/17-mvp-analyst` |
+| P18 | `pipeline/18-analyst-retry` |
 
 ## Обзор
 
@@ -64,9 +65,10 @@ P14 Календарный релиз (milestone, published) ~4ч
 P15 Пустой релиз: закрыть milestone          ~1ч
 P16 `in-dev` снимает `ready-for-dev`         ~1ч
 P17 тип `mvp`: план аналитика → апрув → задачи ~3ч
+P18 повтор analyst после сбоя (`needs-plan`) ~1ч
 UI  Таблица джоб и логи орка              ~3ч  (после P2)
                                         ────
-                                        ~47ч
+                                        ~48ч
 ```
 
 Оценка без отладки биллинга Cursor и без полноценного E2E Ollama.
@@ -456,6 +458,26 @@ Issue → план → PR → issue-QA → merge человеком в `main` �
 - [x] Unit: каталог labels содержит `mvp`, `to-approve`, `approved`
 - [x] `npm test` в `pipeline/` зелёный
 - [ ] `npm run ensure-labels` создаёт новые labels в репо продукта
+
+---
+
+## P18: Повтор analyst после сбоя
+
+**Ветка:** `pipeline/18-analyst-retry`
+
+**Цель:** work-issue (`bug`/`feature`) после ошибки Cursor или `needs-human` снова стартует analyst, когда человек вернул `needs-plan`.
+
+### Шаги
+
+1. `shouldResetFailedRoleJob` для analyst: trigger `needs-plan` (как developer/`ready-for-dev`, tester/`in-qa`).
+2. Поллер: сброс замка `(issue, analyst)` при `error` / `startup_error` или `finished` + `needs-human`. MVP-сброс без изменений.
+3. Контракт §3: человек снимает `needs-human`, ставит `needs-plan`.
+
+### Проверка
+
+- [x] Unit: `bug` + `needs-plan` + `startup_error` → reset; `finished` + `ready-for-dev` → нет
+- [x] Unit: `needs-human` вместе с `needs-plan` → нет reset
+- [x] `npm test` в `pipeline/` зелёный
 
 ---
 
