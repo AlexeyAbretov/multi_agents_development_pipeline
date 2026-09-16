@@ -1,0 +1,1 @@
+export const MONGODB_DUPLICATE_KEY = 11000;

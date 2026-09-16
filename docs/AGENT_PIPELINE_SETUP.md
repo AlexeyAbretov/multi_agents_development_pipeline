@@ -22,14 +22,14 @@ Checkout **целевого продукта** (каталог, API и т.д.) �
 7. Плановый релиз: milestone `vN.N.N` + due. За день — регресс `main`. В due — RM создаёт **published** GitHub Release (не draft). Hotfix: тот же milestone с due сегодня — регресс и Release в один день.
 8. После **published** Release локальный `deployer` пишет статус в тело Release и labels `deployed` / `deploy-failed` на issues milestone (по умолчанию `DEPLOY_MODE=stub`).
 
-Повторный полл ту же пару `(issue, role)` не запускает — состояние в volume `jobs.json`. Деплои — в `deploys.json` того же volume. В одном poll-тике eligible задачи всех ролей стартуют параллельно и не ждут друг друга.
+Повторный полл ту же пару `(issue, role)` не запускает — состояние в MongoDB (локально db `pipeline_local`, в Docker db `pipeline`). Деплои и schedule-state там же. В одном poll-тике eligible задачи всех ролей стартуют параллельно и не ждут друг друга.
 
 ---
 
 ## 0. Требования
 
 - Docker Desktop (Windows) или Docker Engine + Compose v2.
-- Для локальной отладки оркестратора без Docker — **Node ≥ 22** (§10).
+- Для локальной отладки оркестратора без Docker — **Node ≥ 22** и **MongoDB** на хосте (`mongod` на `127.0.0.1:27017`, §10).
 - Репозиторий **целевого продукта** на **вашем** GitHub (owner), не только collaborator. Cloud Agents видят репо через GitHub App владельца.
 - Аккаунт Cursor, у которого в Cloud Agents в **Default Repository** виден репозиторий продукта.
 - Регион, где Cursor Cloud Agents разрешены (иначе `Cursor is not available in your region`).
@@ -149,7 +149,7 @@ SCHEDULE_TZ=Europe/Moscow
 
 `pipeline/.env`, `pipeline/.env.local` и корневой `.env` в git не коммитить.
 
-Для **локального** запуска (не Docker) скопируйте `pipeline/.env.local.example` → `pipeline/.env.local` и поставьте хостовые пути (`DATA_DIR=./data`, `PROMPTS_DIR=./prompts`). Подробнее — §10.
+Для **локального** запуска (не Docker) скопируйте `pipeline/.env.local.example` → `pipeline/.env.local`, поставьте хостовые пути (`DATA_DIR=./data`, `PROMPTS_DIR=./prompts`) и `MONGODB_URI=mongodb://127.0.0.1:27017/pipeline_local`. Подробнее — §10.
 
 ---
 
@@ -185,7 +185,7 @@ docker compose up -d --force-recreate
 docker compose down
 ```
 
-Volume `multi_agents_development_pipeline_pipeline_data` (или `<project>_pipeline_data`) хранит `jobs.json`. `down` его **не** удаляет.
+Volume `…_pipeline_mongo` хранит MongoDB (джобы, деплои, schedule-state). `down` том **не** удаляет. Volume `pipeline_data` нужен только для разового импорта старых `*.json`.
 
 **Миграция с monorepo:** если раньше volume назывался `llm_app_dev_pipeline_data`, скопируйте данные или переименуйте volume в SETUP вручную после первого `up` из нового репо.
 
@@ -201,17 +201,25 @@ Volume `multi_agents_development_pipeline_pipeline_data` (или `<project>_pipe
 
 ---
 
-## 8. Сброс очереди (`jobs.json`)
+## 8. Сброс очереди (MongoDB)
+
+Локально (db `pipeline_local`, без Docker):
 
 ```powershell
-docker compose exec orchestrator rm -f /data/jobs.json
+mongosh pipeline_local --eval "db.jobs.deleteMany({}); db.deploys.deleteMany({}); db.meta.deleteMany({})"
 ```
 
-Или volume:
+Docker (db `pipeline`, контейнер `pipeline-mongo`):
+
+```powershell
+docker compose exec pipeline-mongo mongosh pipeline --eval "db.jobs.deleteMany({}); db.deploys.deleteMany({}); db.meta.deleteMany({})"
+```
+
+Или том Docker:
 
 ```powershell
 docker compose down
-docker volume rm multi_agents_development_pipeline_pipeline_data
+docker volume rm multi_agents_development_pipeline_pipeline_mongo
 docker compose up -d
 ```
 
@@ -225,6 +233,8 @@ docker compose up -d
 | `set PRODUCT_WORKSPACE_HOST in .env` | Создайте корневой `.env` из `.env.example` |
 | compose failed: no such file | `PRODUCT_WORKSPACE_HOST` указывает на clone продукта с `docker-compose.yml` |
 | `ENOENT` / `DATA_DIR` `/data` при `npm start` | В `.env.local` нужны хостовые пути: `DATA_DIR=./data`, `PROMPTS_DIR=./prompts` |
+| `MongoDB connect failed` при `npm start` | Установите MongoDB Community и запустите `mongod` на `127.0.0.1:27017`; URI в `.env.local` — db `pipeline_local` |
+| `MongoDB connect failed` в контейнере | Сервис `pipeline-mongo` healthy; compose задаёт `MONGODB_URI=mongodb://pipeline-mongo:27017/pipeline` |
 | `EADDRINUSE` на порту оркестратора | Остановите контейнер `orchestrator` или не запускайте локально параллельно с compose |
 | `Cursor is not available in your region` | Cloud Agents недоступны; оркестратор тут ни при чём |
 | GitHub/Cursor `ECONNREFUSED` / timeout за прокси | `HTTP_PROXY`/`HTTPS_PROXY` в `.env.local`; `npm start` уже передаёт `--use-env-proxy` |
@@ -237,13 +247,18 @@ docker compose up -d
 
 ## 10. Локальный запуск оркестратора и deployer (без Docker)
 
-Нужен **Node ≥ 22**. Docker-compose при этом можно не поднимать (или остановить `orchestrator` / `deployer`, чтобы не занять те же порты).
+Нужен **Node ≥ 22** и **MongoDB на хосте** (не контейнер `pipeline-mongo`). Docker-compose при этом можно не поднимать (или остановить `orchestrator` / `deployer`, чтобы не занять те же порты).
+
+Установка MongoDB Community на Windows: [mongodb.com/try/download/community](https://www.mongodb.com/try/download/community) или `winget install MongoDB.Server`. Служба слушает `127.0.0.1:27017`. База `pipeline_local` создаётся при первой записи.
+
+Если в `DATA_DIR` ещё лежат `jobs.json` / `deploys.json` / `schedule-state.json`, сервисы один раз импортируют их в MongoDB и переименуют в `*.migrated`.
 
 ```powershell
 cd pipeline
 copy .env.local.example .env.local
 # Заполните GITHUB_TOKEN, GITHUB_REPO, CURSOR_API_KEY (как в §5).
-# DATA_DIR=./data и PROMPTS_DIR=./prompts уже в шаблоне.
+# DATA_DIR=./data, PROMPTS_DIR=./prompts,
+# MONGODB_URI=mongodb://127.0.0.1:27017/pipeline_local уже в шаблоне.
 # Порты — ../ports.env; не задавайте PORT в .env.local.
 npm ci
 npm run build

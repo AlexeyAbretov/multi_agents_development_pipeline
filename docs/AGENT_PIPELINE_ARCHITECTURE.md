@@ -11,7 +11,7 @@
 
 ## 1. Три слоя статусов
 
-Источник правды процесса — **labels на GitHub Issue**, не `jobs.json`. Оркестратор читает labels, запускает роль и **переписывает** labels. Джоб — журнал «уже запускали пару `(issue, роль)`».
+Источник правды процесса — **labels на GitHub Issue**, не журнал джобов. Оркестратор читает labels, запускает роль и **переписывает** labels. Джоб — журнал «уже запускали пару `(issue, роль)`».
 
 ```
 GitHub labels          Job.status / Job.decision          UI (таблица)
@@ -21,7 +21,7 @@ GitHub labels          Job.status / Job.decision          UI (таблица)
 | Слой | Где живёт | Зачем |
 |------|-----------|--------|
 | Labels issue | GitHub | Триггер роли и переходы процесса |
-| `JobStatus` | volume `jobs.json` | Не запустить второго агента на ту же пару |
+| `JobStatus` | MongoDB `jobs` | Не запустить второго агента на ту же пару |
 | `UiJobStatus` | `GET /api/jobs` | Человеку в таблице |
 
 ### 1.1. Оси labels
@@ -152,7 +152,7 @@ queued → running → finished | error | startup_error
 - `node dist/services/OrchestratorService/index.js` — оркестратор (`src/services/OrchestratorService/`), `ORCHESTRATOR_PORT`
 - `node dist/services/DeployerService/index.js` — deployer (`src/services/DeployerService/`), `DEPLOYER_PORT`
 
-Оба — Fastify + `setInterval`. Нет очереди, нет БД, нет Octokit. Состояние — JSON на volume `pipeline_data`.
+Оба — Fastify + `setInterval`. Нет очереди, нет Octokit. Джобы, деплои и schedule-state — MongoDB (`MongodbClient`). Разовый импорт `DATA_DIR/*.json` при пустой коллекции.
 
 Паттерн: **чистые правила** (`OrchestratorService/rules.ts`, `schedule-rules.ts`, `dispatch.ts`, `DeployerService/deploy-rules.ts`) + **поллеры** (`poller.ts`, `schedule.ts`, `deploy-poller.ts`), которые ходят в GitHub / Cursor / docker.
 
@@ -164,6 +164,7 @@ queued → running → finished | error | startup_error
 |-------|--------|
 | **fastify** | HTTP: `/health`, `/api/jobs`, `/api/deploys`. Логгер тиков. Не фреймворк домена. |
 | **zod** | Парсинг env в `config/config.types.ts` (`envSchema`). Падать на старте, а не на первом тике с `undefined`. |
+| **mongodb** | Драйвер: джобы, деплои, schedule-state. Локально — `mongod` на хосте, db `pipeline_local`. Docker — сервис `pipeline-mongo` (образ `pipeline/mongo`), db `pipeline`. |
 | **@cursor/sdk** | Cloud Agent: `Agent.create({ cloud: { repos } })`. Local runtime запрещён конституцией (P1). |
 | **Node ≥ 22** | Встроенный `fetch` к GitHub API, ESM, `await using` для агента. |
 | **tsx / typescript** | Dev-watch и сборка в `dist/`. Тесты: `node --test` по скомпилированному JS. |
@@ -173,7 +174,7 @@ queued → running → finished | error | startup_error
 
 Чего нет намеренно:
 
-- SQLite / Redis — JSON + атомарный `rename` и очередь промисов в сторе
+- SQLite / Redis — джобы, деплои и schedule-state в MongoDB
 - Octokit — ручной REST в `GitHubClient`, контролируемые retries
 - Webhook-сервер — только исходящий полл (конституция P3)
 
@@ -204,6 +205,7 @@ React + Vite + Tailwind. UI только читает `GET /api/jobs` и `/api/d
 services/OrchestratorService/     services/DeployerService/
   index.ts → OrchestratorService    index.ts → DeployerService
   │ config (@config), JobStore      │ config (@config), DeployStore
+  │ MongodbClient (@providers)      │ MongodbClient (@providers)
   │ Fastify /health                 │ Fastify /health
   │ OrchestratorService.routes.ts   │ DeployerService.routes.ts
   ├─ poller.ts                      ├── GitHubClient (@providers)
@@ -222,12 +224,13 @@ services/OrchestratorService/     services/DeployerService/
 |------|------------|
 | `pipeline/ports.env` | Номера портов (`ORCHESTRATOR_PORT`, `DEPLOYER_PORT`, `PIPELINE_UI_PORT`). Единственный источник; compose / Config / Vite / nginx / npm читают этот файл. |
 | `docker-compose.yml` | Include `docker-compose.services.yml` с `env_file: pipeline/ports.env`. |
-| `pipeline/src/config/` | Env → класс `Config` (`GITHUB_REPO`, `CURSOR_*`, `ownerRepo`, интервалы, `DEPLOY_MODE`). Алиас `@config`. Порт процесса — `PORT`, default из `ports.env`. |
+| `pipeline/src/config/` | Env → класс `Config` (`GITHUB_REPO`, `CURSOR_*`, `MONGODB_URI`, `ownerRepo`, интервалы, `DEPLOY_MODE`). Алиас `@config`. Порт процесса — `PORT`, default из `ports.env`. |
 | `pipeline/src/types/` | Общий тип `Role`. Алиас `@types`. |
 | `pipeline/src/providers/index.ts` | Баррель внешних клиентов; алиас `@providers`. |
 | `pipeline/src/providers/GithubProvider/` | REST GitHub: issues, labels, PR `Fixes #`, releases, milestones, каталог labels. Класс `GitHubClient`. |
 | `pipeline/src/providers/CursorProvider/` | Промпт + issue/PR, `Agent.create` cloud, `run.wait()`, `getUsage()`. Класс `CursorClient`. Промпт: `pipeline/prompts/<role>.md`. |
 | `pipeline/src/providers/LogProvider/` | Структурный лог `issue` / `role` / `agentId` / `runId`. Класс `LogClient`. Fastify logger внутри провайдера. |
+| `pipeline/src/providers/MongodbProvider/` | Драйвер MongoDB. Класс `MongodbClient`. Локальный URI и Docker URI не делят базу. |
 | `pipeline/src/cli/ensure-labels.ts` | `npm run ensure-labels`: создать недостающие labels контракта §3 в репо продукта. |
 | `pipeline/src/services/OrchestratorService/` | Точка входа оркестратора (`index.ts`). |
 | `…/OrchestratorService/OrchestratorService.types.ts` | `Job`, `JobStatus`, `UiJobStatus`. |
@@ -236,17 +239,17 @@ services/OrchestratorService/     services/DeployerService/
 | `…/OrchestratorService/schedule-rules.ts` | Календарь milestone, tag `vN.N.N`, gate RM, маркеры в комментариях. |
 | `…/OrchestratorService/dispatch.ts` | Eligible пары `(issue, role)` в тике; роли не гейтят друг друга; skip in-flight и developer из `mvp-queue`. |
 | `…/OrchestratorService/poller.ts` | Тик `POLL_INTERVAL_MS`: список issues → роль → гейты → Cursor → смена labels. |
-| `…/OrchestratorService/jobs.ts` | `jobs.json`, журнал прогонов, замок `(issue, role)`, сброс без удаления, drop после рестарта. |
+| `…/OrchestratorService/jobs.ts` | MongoDB-журнал прогонов, замок `(issue, role)`, сброс без удаления, drop после рестарта, разовый импорт `jobs.json`. |
 | `…/OrchestratorService/schedule.ts` | Тик `SCHEDULE_INTERVAL_MS`: T−1/T, regression-issue, `blocked: no release`. |
-| `…/OrchestratorService/schedule-state.ts` | Не спамить одинаковыми комментариями каждый час. |
+| `…/OrchestratorService/schedule-state.ts` | MongoDB `meta` `_id=schedule`: не спамить одинаковыми комментариями каждый час. |
 | `pipeline/src/services/DeployerService/` | Точка входа deployer (`index.ts`). |
 | `…/DeployerService/DeployerService.routes.ts` | HTTP `GET /api/deploys` для UI. |
 | `…/DeployerService/deploy-poller.ts` | Published Release → compose/stub → labels `deployed`/`deploy-failed`. |
 | `…/DeployerService/deploy-rules.ts` | Что считать деплоябельным Release, маркер в теле. |
 | `…/DeployerService/deploy-run.ts` | `DEPLOY_MODE=stub` или `docker compose up -d` в `/product`. |
-| `…/DeployerService/deploy-store.ts` | `deploys.json` (deployer пишет; UI читает через HTTP). |
+| `…/DeployerService/deploy-store.ts` | MongoDB `deploys` (deployer пишет; UI читает через HTTP). |
 | `pipeline/prompts/*.md` | Контракт с агентом: что писать в маркерах. |
-| `pipeline/test/rules.test.js`, `dispatch.test.js`, `labels.test.js`, `jobs.test.js`, `comments.test.js` | Правила, dispatch, labels, журнал `jobs.json`, комментарий `pipeline:job` (модель / токены). |
+| `pipeline/test/rules.test.js`, `dispatch.test.js`, `labels.test.js`, `jobs.test.js`, `deploys.test.js`, `schedule-state.test.js`, `comments.test.js`, `mongodb.test.js` | Правила, dispatch, labels, журналы MongoDB, комментарий `pipeline:job`, URI MongoDB. |
 | `.vscode/launch.json` | Отладка: **Orchestrator**, **Deployer** (через `run-deployer.mjs`), compound оба. Порты из `pipeline/ports.env`. |
 
 Поток одного feature-тика:
@@ -261,7 +264,7 @@ services/OrchestratorService/     services/DeployerService/
 
 ### 3.1. Сборка и локальный запуск
 
-Прод: `docker compose up` из корня (см. [SETUP](./AGENT_PIPELINE_SETUP.md)). `pipeline/Dockerfile` CMD — оркестратор (`node dist/services/OrchestratorService/index.js`); compose переопределяет `command` для deployer. Env из `pipeline/.env`, `DATA_DIR=/data`, `PROMPTS_DIR=/app/prompts`.
+Прод: `docker compose up` из корня (см. [SETUP](./AGENT_PIPELINE_SETUP.md)). `pipeline/Dockerfile` CMD — оркестратор (`node dist/services/OrchestratorService/index.js`); compose переопределяет `command` для deployer. Env из `pipeline/.env`, `DATA_DIR=/data`, `PROMPTS_DIR=/app/prompts`, `MONGODB_URI=mongodb://pipeline-mongo:27017/pipeline`. Сервис `pipeline-mongo` собирается из `pipeline/mongo/Dockerfile`.
 
 Локально (без Docker), из `pipeline/`:
 
@@ -275,7 +278,7 @@ services/OrchestratorService/     services/DeployerService/
 
 `--use-env-proxy` читает `HTTP_PROXY` / `HTTPS_PROXY` (корпоративный прокси). Не поднимайте локально те же порты, пока они заняты контейнерами.
 
-`.env.local`: `DATA_DIR=./data`, `PROMPTS_DIR=./prompts` (docker-пути `/data` и `/app/prompts` на хосте не существуют). Файл в git не коммитить; шаблон — `pipeline/.env.local.example`.
+`.env.local`: `DATA_DIR=./data`, `PROMPTS_DIR=./prompts`, `MONGODB_URI=mongodb://127.0.0.1:27017/pipeline_local` (docker-пути `/data` и hostname `pipeline-mongo` на хосте не существуют). Файл в git не коммитить; шаблон — `pipeline/.env.local.example`. Нужен локальный `mongod`, не контейнер `pipeline-mongo`.
 
 Новый TS-алиас: `compilerOptions.paths` в `pipeline/tsconfig.json` (`@config`, `@providers`, `@types`) + импорт + сборка обязана остаться `tsc && tsc-alias` (`resolveFullPaths` дописывает `.js` в `dist/`).
 
@@ -314,7 +317,7 @@ services/OrchestratorService/     services/DeployerService/
 3. Ветка в `roleForLabels` — уникальный набор labels.
 4. Промпт `pipeline/prompts/<role>.md` — `CursorClient` грузит `${role}.md`.
 5. В `handleIssue`: pre-labels, гейты, `decide*Outcome`, `apply*Labels`, комментарии.
-6. Если роль должна повторяться — `store.remove` снимает замок по событию (как tester после детей); история в `jobs.json` сохраняется.
+6. Если роль должна повторяться — `store.remove` снимает замок по событию (как tester после детей); история в MongoDB сохраняется.
 7. Тесты dispatch: новая роль стартует вместе с остальными; skip in-flight `(issue, role)`; developer из `mvp-queue` — по этапам, `+` параллельно.
 
 Роль без нового trigger-label не заведётся: полл выбирает работу **только** через labels.
@@ -329,7 +332,7 @@ services/OrchestratorService/     services/DeployerService/
 
 ### 4.5. Деплой
 
-Новый режим — enum `DEPLOY_MODE` в zod + ветка в `deploy-run.ts`. Идемпотентность: `deploys.json` + HTML-маркер в теле Release. Labels `deployed`/`deploy-failed` трогает только deployer.
+Новый режим — enum `DEPLOY_MODE` в zod + ветка в `deploy-run.ts`. Идемпотентность: MongoDB `deploys` + HTML-маркер в теле Release. Labels `deployed`/`deploy-failed` трогает только deployer.
 
 ### 4.6. Новый HTTP-маршрут UI
 
@@ -341,7 +344,7 @@ services/OrchestratorService/     services/DeployerService/
 
 - GitHub: сначала метод в `GitHubClient`, не Octokit «заодно»
 - Cursor Cloud: сначала метод в `CursorClient`, не вызов `@cursor/sdk` из поллера
-- Очередь/БД: сейчас файлы + `synchronized()`; менять, если появятся два писателя на один JSON без этой цепочки
+- Очередь/БД: джобы, деплои и schedule-state в MongoDB (`MongodbClient`)
 - Webhook вместо полла — смена конституции P3
 - Новый TS-алиас — только вместе с `tsc-alias` (см. §3.1)
 
@@ -358,8 +361,8 @@ pipeline/src/providers/<Name>Provider/
   <Name>Provider.utils.ts     чистые хелперы без I/O, если есть
 ```
 
-- Папка: суффикс `Provider` (`GithubProvider`, `CursorProvider`, `LogProvider`)
-- Класс: суффикс `Client` (`GitHubClient`, `CursorClient`, `LogClient`)
+- Папка: суффикс `Provider` (`GithubProvider`, `CursorProvider`, `LogProvider`, `MongodbProvider`)
+- Класс: суффикс `Client` (`GitHubClient`, `CursorClient`, `LogClient`, `MongodbClient`)
 - Снаружи импорт только из `@providers` (`pipeline/src/providers/index.ts`)
 - Провайдеры не импортируют друг друга. Нужный срез полей — в своих
   `*.types.ts`; оркестратор передаёт структурно совместимые объекты

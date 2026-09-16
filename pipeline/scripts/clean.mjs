@@ -2,8 +2,8 @@ import { existsSync, readdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-/** Runtime journal (`jobs.json`, `deploys.json`) lives in dist/data
- * when DATA_DIR=./dist/data — do not wipe it with compiled JS. */
+/** Leftover JSON in dist/data (DATA_DIR=./dist/data) is imported
+ * into MongoDB once — do not wipe the data folder with compiled JS. */
 const KEEP = new Set(["data"]);
 const dist = join(dirname(fileURLToPath(import.meta.url)), "..", "dist");
 

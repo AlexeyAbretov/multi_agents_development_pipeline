@@ -1,12 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 
-import type { Config } from '@config';
+import type { DeployStore } from './deploy-store';
 
-import { DeployStore } from './deploy-store';
-
-export function registerApiRoutes(app: FastifyInstance, config: Config): void {
+export function registerApiRoutes(
+  app: FastifyInstance,
+  store: DeployStore,
+): void {
   app.get('/api/deploys', async () => {
-    const deploys = new DeployStore(config.DATA_DIR).load().deploys;
+    const deploys = await store.list();
 
     return {
       deploys: [...deploys].sort((a, b) => b.at.localeCompare(a.at)),

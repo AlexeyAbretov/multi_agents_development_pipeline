@@ -1,4 +1,24 @@
 services:
+  pipeline-mongo:
+    build:
+      context: ./pipeline/mongo
+    volumes:
+      - pipeline_mongo:/data/db
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mongosh",
+          "--quiet",
+          "--eval",
+          "db.adminCommand('ping')",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
   orchestrator:
     build:
       context: ./pipeline
@@ -10,10 +30,14 @@ services:
       PORT: ${ORCHESTRATOR_PORT}
       DATA_DIR: /data
       PROMPTS_DIR: /app/prompts
+      MONGODB_URI: mongodb://pipeline-mongo:27017/pipeline
     ports:
       - "127.0.0.1:${ORCHESTRATOR_PORT}:${ORCHESTRATOR_PORT}"
     volumes:
       - pipeline_data:/data
+    depends_on:
+      pipeline-mongo:
+        condition: service_healthy
     user: "0"
     dns:
       - 8.8.8.8
@@ -34,12 +58,16 @@ services:
       DATA_DIR: /data
       DEPLOY_COMPOSE_FILE: docker-compose.yml
       WORKSPACE_DIR: /product
+      MONGODB_URI: mongodb://pipeline-mongo:27017/pipeline
     ports:
       - "127.0.0.1:${DEPLOYER_PORT}:${DEPLOYER_PORT}"
     volumes:
       - pipeline_data:/data
       - ${PRODUCT_WORKSPACE_HOST:?set PRODUCT_WORKSPACE_HOST in .env}:/product:ro
       - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      pipeline-mongo:
+        condition: service_healthy
     user: "0"
     dns:
       - 8.8.8.8
@@ -62,3 +90,4 @@ services:
 
 volumes:
   pipeline_data:
+  pipeline_mongo:

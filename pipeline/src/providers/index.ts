@@ -13,3 +13,9 @@ export {
 export { GitHubClient } from './GithubProvider';
 export type { JobLogFields } from './LogProvider';
 export { LogClient } from './LogProvider';
+export type { MongodbUri } from './MongodbProvider';
+export {
+  isDuplicateKeyError,
+  MongodbClient,
+  mongodbDatabaseName,
+} from './MongodbProvider';
