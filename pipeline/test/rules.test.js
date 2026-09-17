@@ -9,6 +9,7 @@ import {
 import {
   childBugStillOpen,
   childBlocksParentReQa,
+  childHasDistinctOpenFixPr,
   classifyTesterBugHandoff,
   analystKind,
   decideAnalystOutcome,
@@ -646,6 +647,22 @@ test("open child PR blocks parent re-QA even after qa-passed", () => {
   assert.equal(
     childBlocksParentReQa(["bug", "needs-human"], "open", false),
     true,
+  );
+});
+
+test("shared parent PR does not count as a distinct child Fixes PR", () => {
+  assert.equal(childHasDistinctOpenFixPr(55, 55), false);
+  assert.equal(childHasDistinctOpenFixPr(57, 55), true);
+  assert.equal(childHasDistinctOpenFixPr(null, 55), false);
+  assert.equal(childHasDistinctOpenFixPr(55, null), true);
+  assert.equal(childHasDistinctOpenFixPr(null, null), false);
+  assert.equal(
+    childBlocksParentReQa(
+      ["bug", "qa-passed"],
+      "open",
+      childHasDistinctOpenFixPr(55, 55),
+    ),
+    false,
   );
 });
 

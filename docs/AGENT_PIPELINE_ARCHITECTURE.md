@@ -92,11 +92,11 @@ flowchart TD
   T[tester на родителе] -->|PIPELINE_BUG_ISSUES: 17,18| Kids["дети: bug + needs-plan\nRelated to #parent"]
   Kids --> A[analyst → developer → tester на детях]
   A --> Wait["родитель остаётся in-qa\nповторный tester skip"]
-  Wait -->|дети closed / qa-passed\nи нет открытого Fixes PR| ReQA[сброс джоба tester → re-QA родителя]
+  Wait -->|дети closed / qa-passed\nнет отдельного Fixes PR| ReQA[сброс джоба tester → re-QA родителя]
   T -->|PIPELINE_BUG_ISSUES: none| Pass[qa-passed]
 ```
 
-Ограничения в `OrchestratorService/rules.ts`: глубина дерева = 1, максимум 2 blocker-issue за прогон, `fix-round` ≤ 3.
+Ограничения в `OrchestratorService/rules.ts`: глубина дерева = 1, максимум 2 blocker-issue за прогон, `fix-round` ≤ 3. Отдельный stacked PR ребёнка (base = ветка родителя) держит re-QA до merge. `Fixes #<ребёнок>` в том же PR, что `Fixes #<родитель>`, после `qa-passed` ребёнка re-QA не блокирует (`childHasDistinctOpenFixPr`).
 
 ### 1.4. Регресс и релиз (календарь)
 

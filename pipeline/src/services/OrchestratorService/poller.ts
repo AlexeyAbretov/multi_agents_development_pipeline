@@ -20,6 +20,7 @@ import { JobStore } from './jobs';
 import {
   analystKind,
   childBlocksParentReQa,
+  childHasDistinctOpenFixPr,
   classifyTesterBugHandoff,
   decideAnalystOutcome,
   decideDeveloperOutcome,
@@ -497,16 +498,29 @@ async function labelMvpTasks(
 
 async function childBugsBlockingReQa(
   github: GitHubClient,
+  parentNumber: number,
   parentBody: string | null,
 ): Promise<number[]> {
   const children = parseChildBugIssues(parentBody);
   const blocking: number[] = [];
 
+  if (children.length === 0) {
+    return blocking;
+  }
+
+  const parentPr = await github.findOpenFixPr(parentNumber);
+
   for (const number of children) {
     const child = await github.getIssue(number);
-    const hasOpenFixPr = await github.hasOpenFixPr(number);
+    const childPr = await github.findOpenFixPr(number);
+    const hasDistinctOpenFixPr = childHasDistinctOpenFixPr(
+      childPr?.number ?? null,
+      parentPr?.number ?? null,
+    );
 
-    if (childBlocksParentReQa(child.labels, child.state, hasOpenFixPr)) {
+    if (
+      childBlocksParentReQa(child.labels, child.state, hasDistinctOpenFixPr)
+    ) {
       blocking.push(number);
     }
   }
@@ -858,7 +872,11 @@ async function handleIssue(
 
   if (isQaRole(role)) {
     try {
-      const blocking = await childBugsBlockingReQa(github, issue.body);
+      const blocking = await childBugsBlockingReQa(
+        github,
+        issue.number,
+        issue.body,
+      );
 
       if (blocking.length > 0) {
         logger.job(
