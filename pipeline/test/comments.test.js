@@ -172,7 +172,10 @@ test("tester prompt names tester and does not name tester-regression", () => {
   assert.match(prompt, /Комментарии issue/);
   assert.match(prompt, /не вызывай `gh`/);
   assert.match(prompt, /gh pr diff/);
-  assert.match(prompt, /не делай `npm install`/);
+  assert.match(prompt, /Визуальный критерий/);
+  assert.match(prompt, /одноразовый мок/);
+  assert.match(prompt, /узкая ширина/);
+  assert.match(prompt, /needs-human/);
   assert.equal(prompt.includes("tester-regression"), false);
 });
 
@@ -181,6 +184,8 @@ test("developer prompt says the plan is already in the message", () => {
 
   assert.match(prompt, /Комментарии issue/);
   assert.match(prompt, /не вызывай `gh`/);
+  assert.match(prompt, /одноразовый мок/);
+  assert.match(prompt, /узкую ширину/);
 });
 
 test("feature/bug prompts stay in the product repo", () => {
@@ -202,4 +207,6 @@ test("tester-regression prompt names that role, not issue-QA", () => {
 
   assert.match(prompt, /роль `tester-regression`/);
   assert.match(prompt, /не issue-QA/i);
+  assert.match(prompt, /одноразовый мок/);
+  assert.match(prompt, /узкая ширина/);
 });
