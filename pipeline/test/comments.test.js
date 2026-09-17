@@ -112,8 +112,9 @@ test("commentsForAgentRole keeps last analyst plan for developer", () => {
   const comments = [
     { body: "human note" },
     { body: "## Результат: analyst\n\nплан v1" },
-    { body: "## Результат: developer\n\nPR" },
+    { body: "## Результат: developer\n\nPR v1" },
     { body: "## Результат: analyst\n\nплан v2" },
+    { body: "## Результат: developer\n\nPR v2\nПРОВЕРЕНО:" },
     { body: "## Результат: tester\n\nqa" },
   ];
 
@@ -123,9 +124,13 @@ test("commentsForAgentRole keeps last analyst plan for developer", () => {
   );
   assert.deepEqual(
     commentsForAgentRole("tester", comments).map((item) => item.body),
-    ["human note", "## Результат: analyst\n\nплан v2"],
+    [
+      "human note",
+      "## Результат: analyst\n\nплан v2",
+      "## Результат: developer\n\nPR v2\nПРОВЕРЕНО:",
+    ],
   );
-  assert.equal(commentsForAgentRole("analyst", comments).length, 5);
+  assert.equal(commentsForAgentRole("analyst", comments).length, 6);
 });
 
 test("readCursorUsage prefers billed counts over live", async () => {
@@ -173,6 +178,8 @@ test("tester prompt names tester and does not name tester-regression", () => {
   assert.match(prompt, /не вызывай `gh`/);
   assert.match(prompt, /gh pr diff/);
   assert.match(prompt, /Визуальный критерий/);
+  assert.match(prompt, /ПРОВЕРЕНО/);
+  assert.match(prompt, /второй мок/);
   assert.match(prompt, /одноразовый мок/);
   assert.match(prompt, /узкая ширина/);
   assert.match(prompt, /needs-human/);
@@ -186,6 +193,7 @@ test("developer prompt says the plan is already in the message", () => {
   assert.match(prompt, /не вызывай `gh`/);
   assert.match(prompt, /одноразовый мок/);
   assert.match(prompt, /узкую ширину/);
+  assert.match(prompt, /ПРОВЕРЕНО/);
 });
 
 test("feature/bug prompts stay in the product repo", () => {

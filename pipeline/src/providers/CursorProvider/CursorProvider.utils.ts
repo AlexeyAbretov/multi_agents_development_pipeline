@@ -12,6 +12,7 @@ import type {
 
 const AGENT_RESULT_HEADER = /^## Результат: /;
 const ANALYST_RESULT_HEADER = /^## Результат: analyst\b/;
+const DEVELOPER_RESULT_HEADER = /^## Результат: developer\b/;
 
 export const loadPrompt = (promptsDir: string, role: Role): string =>
   readFileSync(join(promptsDir, `${role}.md`), 'utf8');
@@ -32,6 +33,13 @@ export function commentsForAgentRole<T extends { body: string }>(
     .reverse()
     .find((comment) => ANALYST_RESULT_HEADER.test(comment.body.trim()));
 
+  const lastDevReport =
+    role === 'tester'
+      ? [...comments]
+          .reverse()
+          .find((comment) => DEVELOPER_RESULT_HEADER.test(comment.body.trim()))
+      : undefined;
+
   const keep = new Set(
     comments.filter(
       (comment) => !AGENT_RESULT_HEADER.test(comment.body.trim()),
@@ -40,6 +48,10 @@ export function commentsForAgentRole<T extends { body: string }>(
 
   if (lastPlan) {
     keep.add(lastPlan);
+  }
+
+  if (lastDevReport) {
+    keep.add(lastDevReport);
   }
 
   return comments.filter((comment) => keep.has(comment));
