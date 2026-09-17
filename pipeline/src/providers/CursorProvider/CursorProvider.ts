@@ -12,8 +12,9 @@ import type {
 } from './CursorProvider.types';
 import {
   buildMessage,
-  formatCursorModel,
+  cursorModelSelection,
   loadPrompt,
+  loggedCursorModel,
   readCursorUsage,
 } from './CursorProvider.utils';
 
@@ -29,10 +30,12 @@ export class CursorClient {
     let agentId: string | null = null;
     let runId: string | null = null;
 
+    const requested = cursorModelSelection(this.config.CURSOR_MODEL);
+
     try {
       await using agent = await Agent.create({
         apiKey: this.config.CURSOR_API_KEY,
-        model: { id: this.config.CURSOR_MODEL },
+        model: requested,
         cloud: {
           repos: [
             {
@@ -63,10 +66,7 @@ export class CursorClient {
       await onStarted({ agentId, runId });
 
       const result = await run.wait();
-      const model = formatCursorModel(
-        result.model ?? agent.model,
-        this.config.CURSOR_MODEL,
-      );
+      const model = loggedCursorModel(result.model ?? agent.model, requested);
       const usage = await readCursorUsage({
         fetchBilled: () => agent.getUsage({ runId: run.id }),
         live: result.usage,
@@ -120,7 +120,7 @@ export class CursorClient {
         status,
         error: `${message}${retryable}`,
         text: null,
-        model: formatCursorModel(undefined, this.config.CURSOR_MODEL),
+        model: loggedCursorModel(undefined, requested),
         usage,
       };
     }

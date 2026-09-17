@@ -10,8 +10,55 @@ import type {
   CursorTokenUsage,
 } from './CursorProvider.types';
 
+const AGENT_RESULT_HEADER = /^## Результат: /;
+const ANALYST_RESULT_HEADER = /^## Результат: analyst\b/;
+
 export const loadPrompt = (promptsDir: string, role: Role): string =>
   readFileSync(join(promptsDir, `${role}.md`), 'utf8');
+
+export function shouldAttachIssueComments(role: Role): boolean {
+  return role === 'analyst' || role === 'developer' || role === 'tester';
+}
+
+export function commentsForAgentRole<T extends { body: string }>(
+  role: Role,
+  comments: T[],
+): T[] {
+  if (role !== 'developer' && role !== 'tester') {
+    return comments;
+  }
+
+  const lastPlan = [...comments]
+    .reverse()
+    .find((comment) => ANALYST_RESULT_HEADER.test(comment.body.trim()));
+
+  const keep = new Set(
+    comments.filter(
+      (comment) => !AGENT_RESULT_HEADER.test(comment.body.trim()),
+    ),
+  );
+
+  if (lastPlan) {
+    keep.add(lastPlan);
+  }
+
+  return comments.filter((comment) => keep.has(comment));
+}
+
+export function cursorModelSelection(modelId: string): CursorModelSelection {
+  if (/fast/i.test(modelId)) {
+    return { id: modelId };
+  }
+
+  if (!/^(composer|grok)/i.test(modelId)) {
+    return { id: modelId };
+  }
+
+  return {
+    id: modelId,
+    params: [{ id: 'fast', value: 'false' }],
+  };
+}
 
 export const buildMessage = (
   rolePrompt: string,
@@ -110,6 +157,16 @@ export function formatCursorModel(
   const extra = params.map((param) => `${param.id}=${param.value}`).join(', ');
 
   return `${id} ${extra}`;
+}
+
+export function loggedCursorModel(
+  live: CursorModelSelection | undefined,
+  requested: CursorModelSelection,
+): string {
+  const id = live?.id || requested.id;
+  const params = live?.params ?? requested.params;
+
+  return formatCursorModel({ id, params }, requested.id);
 }
 
 function hasRecordedUsage(usage: CursorTokenUsage): boolean {

@@ -228,7 +228,7 @@ services/OrchestratorService/     services/DeployerService/
 | `pipeline/src/types/` | Общий тип `Role`. Алиас `@types`. |
 | `pipeline/src/providers/index.ts` | Баррель внешних клиентов; алиас `@providers`. |
 | `pipeline/src/providers/GithubProvider/` | REST GitHub: issues, labels, PR `Fixes #`, releases, milestones, каталог labels. Класс `GitHubClient`. |
-| `pipeline/src/providers/CursorProvider/` | Промпт + issue/PR, `Agent.create` cloud, `run.wait()`, `getUsage()`. Класс `CursorClient`. Промпт: `pipeline/prompts/<role>.md`. |
+| `pipeline/src/providers/CursorProvider/` | Промпт + issue/PR, комментарии issue (analyst — все; developer/tester — последний план аналитика), `Agent.create` cloud (`fast=false` для composer/grok), `run.wait()`, `getUsage()`. Класс `CursorClient`. Промпт: `pipeline/prompts/<role>.md`. |
 | `pipeline/src/providers/LogProvider/` | Структурный лог `issue` / `role` / `agentId` / `runId`. Класс `LogClient`. Fastify logger внутри провайдера. |
 | `pipeline/src/providers/MongodbProvider/` | Драйвер MongoDB. Класс `MongodbClient`. Локальный URI и Docker URI не делят базу. |
 | `pipeline/src/cli/ensure-labels.ts` | `npm run ensure-labels`: создать недостающие labels контракта §3 в репо продукта. |

@@ -1,4 +1,8 @@
 export { CursorClient } from './CursorProvider';
+export {
+  commentsForAgentRole,
+  shouldAttachIssueComments,
+} from './CursorProvider';
 export type {
   GitHubIssue,
   GitHubIssueComment,

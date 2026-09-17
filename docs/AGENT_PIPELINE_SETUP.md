@@ -115,7 +115,9 @@ npm run ensure-labels -- owner/your-product-repo
 2. GitHub App Cursor: доступ к репозиторию продукта (All или Only select).
 3. Cloud Agents → Default Repository — продукт в списке.
 
-`CURSOR_MODEL` по умолчанию `composer-2.5`.
+`CURSOR_MODEL` по умолчанию `composer-2.5`. Для `composer-*` / `grok-*`
+оркестратор передаёт `fast=false`: Cloud Agents иначе биллируют Fast
+(~6× input/output). Явный Fast — id с `fast`, например `composer-2.5-fast`.
 
 Для разработки **самого пайплайна** добавьте в GitHub App доступ к `multi_agents_development_pipeline`.
 

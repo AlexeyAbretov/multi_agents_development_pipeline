@@ -2,6 +2,7 @@ import type { FastifyBaseLogger } from 'fastify';
 
 import type { Config } from '@config';
 import {
+  commentsForAgentRole,
   CursorClient,
   generateAgentResultComment,
   generateJobComment,
@@ -10,6 +11,7 @@ import {
   type GitHubIssueComment,
   type GitHubPull,
   LogClient,
+  shouldAttachIssueComments,
 } from '@providers';
 import type { Role } from '@types';
 
@@ -1080,22 +1082,25 @@ async function handleIssue(
 
   logger.job({ ...fields }, 'cursor agent starting');
 
-  let analystComments: GitHubIssueComment[] | undefined;
+  let issueComments: GitHubIssueComment[] | undefined;
 
-  if (role === 'analyst') {
+  if (shouldAttachIssueComments(role)) {
     try {
-      analystComments = await github.listIssueComments(issue.number);
+      issueComments = commentsForAgentRole(
+        role,
+        await github.listIssueComments(issue.number),
+      );
     } catch (err) {
       logger.error(
         { err, issue: issue.number },
-        'github analyst comments failed',
+        'github issue comments failed',
       );
     }
   }
 
   const result = await cursor.runCloudAgent(
     role,
-    analystComments ? { ...issue, comments: analystComments } : issue,
+    issueComments ? { ...issue, comments: issueComments } : issue,
     async ({ agentId, runId }) => {
       await store.update(job.id, { agentId, runId });
       logger.job(
