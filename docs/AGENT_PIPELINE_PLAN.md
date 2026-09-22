@@ -44,6 +44,7 @@ Merge в `main` — только после явного подтвержден�
 | P17 | `pipeline/17-mvp-analyst` |
 | P18 | `pipeline/18-analyst-retry` |
 | P19 | `pipeline/19-jobs-mongodb` |
+| P20 | `pipeline/20-shared-parent-pr-reqa` |
 
 ## Обзор
 
@@ -68,9 +69,10 @@ P16 `in-dev` снимает `ready-for-dev`         ~1ч
 P17 тип `mvp`: план аналитика → апрув → задачи ~3ч
 P18 повтор analyst после сбоя (`needs-plan`) ~1ч
 P19 джобы в MongoDB (local mongod / Docker)  ~2ч
+P20 re-QA: общий PR родителя и ребёнка       ~1ч
 UI  Таблица джоб и логи орка              ~3ч  (после P2)
                                         ────
-                                        ~50ч
+                                        ~51ч
 ```
 
 Оценка без отладки биллинга Cursor и без полноценного E2E Ollama.
@@ -501,6 +503,26 @@ Issue → план → PR → issue-QA → merge человеком в `main` �
 - [ ] `npm test` в `pipeline/` зелёный
 - [ ] Локальный оркестратор пишет в `pipeline_local`, не в Docker-mongo
 - [ ] `docker compose up` поднимает `pipeline-mongo` и оркестратор отвечает `/health`
+
+---
+
+## P20: Re-QA при общем PR родителя и ребёнка
+
+**Ветка:** `pipeline/20-shared-parent-pr-reqa`
+
+**Цель:** `Fixes #<ребёнок>` в том же открытом PR, что `Fixes #<родитель>`, не держит re-QA после `qa-passed` ребёнка. Отдельный stacked PR ребёнка по-прежнему блокирует до merge.
+
+### Шаги
+
+1. `childHasDistinctOpenFixPr`: одинаковый номер PR родителя и ребёнка → не блок.
+2. `childBugsBlockingReQa` сравнивает `findOpenFixPr` родителя и ребёнка.
+3. Контракт §3 и architecture §1.3: «отдельный» Fixes PR.
+
+### Проверка
+
+- [x] Unit: один PR (55 и 55) → не distinct; разные номера → distinct
+- [x] Unit: `qa-passed` + нет distinct PR → re-QA не блокируется
+- [x] `npm test` в `pipeline/` зелёный
 
 ---
 

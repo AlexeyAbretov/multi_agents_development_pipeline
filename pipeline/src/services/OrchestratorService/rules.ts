@@ -829,13 +829,23 @@ export function childBugStillOpen(
   );
 }
 
-/** Open Fixes PR блокирует re-QA родителя, даже если ребёнок уже qa-passed. */
+/** Отдельный open Fixes PR ребёнка — не тот же номер, что PR родителя. */
+export function childHasDistinctOpenFixPr(
+  childPrNumber: number | null,
+  parentPrNumber: number | null,
+): boolean {
+  return childPrNumber !== null && childPrNumber !== parentPrNumber;
+}
+
+/** Отдельный open Fixes PR блокирует re-QA родителя, даже если ребёнок
+ * уже qa-passed. Тот же PR, что у родителя (`Fixes #parent` +
+ * `Fixes #child`), re-QA не держит. */
 export function childBlocksParentReQa(
   labels: string[],
   state: GitHubIssueState,
-  hasOpenFixPr: boolean,
+  hasDistinctOpenFixPr: boolean,
 ): boolean {
-  return hasOpenFixPr || childBugStillOpen(labels, state);
+  return hasDistinctOpenFixPr || childBugStillOpen(labels, state);
 }
 
 /** Дочерний qa-passed без открытого PR, фикс уже смержен — можно закрыть
